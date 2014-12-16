@@ -1,0 +1,5 @@
+[package]
+
+name = "oxischeme"
+version = "0.0.1"
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
