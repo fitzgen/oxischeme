@@ -3,3 +3,5 @@
 name = "oxischeme"
 version = "0.0.1"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+description = "A Scheme implementation, in rust."
+license = "Apache-2.0"
