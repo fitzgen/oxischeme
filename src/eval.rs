@@ -12,28 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A Scheme implementation, in Rust.
+//! Evaluating values.
 
-use std::io;
+use value;
 
-pub mod value;
-pub mod read;
-pub mod eval;
-pub mod print;
+/// Evaluate the given value.
+pub fn evaluate(val: value::Value) -> value::Value {
+    val
+}
 
-/// The main Read-Eval-Print-Loop.
-pub fn main() {
-    let mut stdout = io::stdio::stdout();
-    let stdin = io::stdio::stdin();
-
-    println!("Welcome to oxischeme!\n");
-
-    print!("oxischeme> ");
-    for val in read::Read::new(stdin) {
-        let evaluated = eval::evaluate(val);
-        print::print(evaluated, &mut stdout).ok().expect("IO ERROR");
-        write!(&mut stdout, "\n");
-        write!(&mut stdout, "oxischeme> ");
-        stdout.flush().ok().expect("IO ERROR");
-    }
+#[test]
+fn test_eval_integer() {
+    assert_eq!(evaluate(value::Value::new_integer(42 as i64)),
+               value::Value::new_integer(42 as i64));
 }

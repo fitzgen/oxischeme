@@ -12,28 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A Scheme implementation, in Rust.
+//! Scheme value implementation.
 
-use std::io;
+/// `Value` is a scheme value.
+#[deriving(Copy, PartialEq, Show)]
+pub enum Value {
+    /// Scheme integers are represented as 64 bit integers.
+    Integer(i64)
+}
 
-pub mod value;
-pub mod read;
-pub mod eval;
-pub mod print;
-
-/// The main Read-Eval-Print-Loop.
-pub fn main() {
-    let mut stdout = io::stdio::stdout();
-    let stdin = io::stdio::stdin();
-
-    println!("Welcome to oxischeme!\n");
-
-    print!("oxischeme> ");
-    for val in read::Read::new(stdin) {
-        let evaluated = eval::evaluate(val);
-        print::print(evaluated, &mut stdout).ok().expect("IO ERROR");
-        write!(&mut stdout, "\n");
-        write!(&mut stdout, "oxischeme> ");
-        stdout.flush().ok().expect("IO ERROR");
+impl Value {
+    /// Create a new integer value.
+    pub fn new_integer(i: i64) -> Value {
+        Value::Integer(i)
     }
 }

@@ -12,28 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! A Scheme implementation, in Rust.
+//! Printing values' text representations.
 
 use std::io;
+use value;
 
-pub mod value;
-pub mod read;
-pub mod eval;
-pub mod print;
-
-/// The main Read-Eval-Print-Loop.
-pub fn main() {
-    let mut stdout = io::stdio::stdout();
-    let stdin = io::stdio::stdin();
-
-    println!("Welcome to oxischeme!\n");
-
-    print!("oxischeme> ");
-    for val in read::Read::new(stdin) {
-        let evaluated = eval::evaluate(val);
-        print::print(evaluated, &mut stdout).ok().expect("IO ERROR");
-        write!(&mut stdout, "\n");
-        write!(&mut stdout, "oxischeme> ");
-        stdout.flush().ok().expect("IO ERROR");
+/// Print the given value's text representation to the given writer.
+pub fn print<W: Writer>(val: value::Value, writer: &mut W) -> io::IoResult<()> {
+    match val {
+        value::Value::Integer(i) => write!(writer, "{}", i),
     }
 }
