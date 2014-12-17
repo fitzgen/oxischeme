@@ -14,13 +14,15 @@
 
 //! Parsing values.
 
+use std::cell::{RefCell};
+use std::fmt::{format};
 use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
 use std::iter::{Peekable};
 use value::{Value, ValueKind, TRUE, FALSE};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
-    reader: BufferedReader<R>
+    reader: BufferedReader<R>,
 }
 
 impl<R: Reader> CharReader<R> {
@@ -60,96 +62,125 @@ fn is_delimiter(c: &char) -> bool {
 }
 
 /// `Read` iteratively parses values from the input `Reader`.
-///
-/// TODO FITZGEN: rather than panicking on bad input, save an error message and
-/// return None or something.
 pub struct Read<R> {
-    chars: Peekable<char, CharReader<R>>
+    chars: RefCell<Peekable<char, CharReader<R>>>,
+    result: Result<(), String>
 }
 
-impl<R: Reader> Read<R> {
+impl<'a, R: Reader> Read<R> {
     /// Create a new `Read` instance from the given `Reader` input source.
     pub fn new(reader: R) -> Read<R> {
         Read {
-            chars: CharReader::new(reader).peekable()
+            chars: RefCell::new(CharReader::new(reader).peekable()),
+            result: Ok(())
         }
+    }
+
+    /// Peek at the next character in our input stream.
+    fn peek(&self) -> Option<char> {
+        match self.chars.borrow_mut().peek() {
+            None    => None,
+            Some(c) => Some(*c)
+        }
+    }
+
+    /// Take the next character from the input stream.
+    fn next(&mut self) -> Option<char> {
+        self.chars.borrow_mut().next()
     }
 
     /// Skip to after the next newline character.
     fn skip_line(&mut self) {
         loop {
-            match self.chars.peek() {
-                None                  => return,
-                Some(c) if *c == '\n' => return,
-                _                     => { },
+            match self.peek() {
+                None       => return,
+                Some('\n') => return,
+                _          => { },
             }
-            self.chars.next();
+            self.next();
         }
     }
 
     /// Trim initial whitespace and skip comments.
     fn trim(&mut self) {
         loop {
-            let skip_line = match self.chars.peek() {
+            let skip_line = match self.peek() {
                 Some(c) if c.is_whitespace() => false,
-                Some(c) if is_comment(c)     => true,
+                Some(c) if is_comment(&c)    => true,
                 _                            => return,
             };
 
             if skip_line {
                 self.skip_line();
             } else {
-                self.chars.next();
+                self.next();
             }
         }
     }
 
+    /// Get the results of parsing thus far. If there was an error parsing, a
+    /// diagnostic message will be the value of the error.
+    pub fn get_result(&'a self) -> &'a Result<(), String> {
+        &self.result
+    }
+
+    /// Report a failure reading values.
+    fn report_failure(&mut self, msg: String) -> Option<Value> {
+        self.result = Err(msg);
+        None
+    }
+
+    /// Report an unexpected character.
+    fn unexpected_character(&mut self, c: &char) -> Option<Value> {
+        self.report_failure(format_args!(format, "Unexpected character: {}", c))
+    }
+
     /// Read a boolean.
     fn read_boolean(&mut self) -> Option<Value> {
-        match self.chars.next() {
+        match self.next() {
             Some('#') => { },
-            Some(c)   => panic!("Unexpected character: {}", c),
+            Some(c)   => return self.unexpected_character(&c),
             None      => panic!("Unexpected EOF"),
         }
 
-        match self.chars.next() {
+        match self.next() {
             Some('t') => Some(TRUE),
             Some('f') => Some(FALSE),
-            Some(c)   => panic!("Unexpected character: {}", c),
+            Some(c)   => return self.unexpected_character(&c),
             None      => panic!("Unexpected EOF"),
         }
     }
 
     /// Read an integer.
     fn read_integer(&mut self) -> Option<Value> {
-        let sign : i64 = match self.chars.peek() {
-            None                 => return None,
-            Some(c) if *c == '-' => -1,
-            _                    => 1,
+        let sign : i64 = match self.peek() {
+            None      => return None,
+            Some('-') => -1,
+            _         => 1,
         };
 
         if sign == -1 {
-            self.chars.next();
+            self.next();
         }
 
-        let mut abs_value : i64 = match self.chars.next() {
+        let mut abs_value : i64 = match self.next() {
             None    => panic!("Unexpected EOF!"),
             Some(c) => match c.to_digit(10) {
-                None    => panic!("Unexpected character: {}", c),
+                None    => return self.unexpected_character(&c),
                 Some(d) => d as i64
             }
         };
 
         loop {
-            match self.chars.peek() {
-                None                       => break,
-                Some(c) if is_delimiter(c) => break,
-                Some(c)                    => match c.to_digit(10) {
-                    None    => panic!("Unexpected character: {}", c),
+            match self.peek() {
+                None                        => break,
+                Some(c) if is_delimiter(&c) => break,
+                Some(c)                     => match c.to_digit(10) {
+                    None    => return self.unexpected_character(&c),
                     Some(d) => abs_value = (abs_value * 10) + (d as i64),
                 }
             }
-            self.chars.next();
+            self.next();
         }
 
         Some(Value::new_integer(abs_value * sign))
@@ -160,11 +191,13 @@ impl<R: Reader> Iterator<Value> for Read<R> {
     fn next(&mut self) -> Option<Value> {
         self.trim();
 
-        let kind = match self.chars.peek() {
-            None                                   => return None,
-            Some(c) if *c == '#'                   => ValueKind::Boolean,
-            Some(c) if c.is_digit(10) || *c == '-' => ValueKind::Integer,
-            Some(c)                                => panic!("Unexpected character: {}", c),
+        let kind = match self.peek() {
+            None                                  => return None,
+            Some('#')                             => ValueKind::Boolean,
+            Some(c) if c.is_digit(10) || c == '-' => ValueKind::Integer,
+            Some(c)                               => {
+                return self.unexpected_character(&c);
+            },
         };
 
         match kind {

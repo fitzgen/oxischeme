@@ -23,19 +23,31 @@ pub mod print;
 
 /// The main Read-Eval-Print-Loop.
 pub fn main() {
-    let mut stdout = io::stdio::stdout();
-    let stdin = io::stdio::stdin();
-
     println!("Welcome to oxischeme!");
     println!("C-c to exit.");
     println!("");
 
-    print!("oxischeme> ");
-    for val in read::Read::new(stdin) {
-        let evaluated = eval::evaluate(val);
-        print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
-        (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
-        (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
-        stdout.flush().ok().expect("IO ERROR!");
+    loop {
+        let mut stdout = io::stdio::stdout();
+        let stdin = io::stdio::stdin();
+        let mut reader = read::Read::new(stdin);
+
+        print!("oxischeme> ");
+        for val in reader {
+            let evaluated = eval::evaluate(val);
+            print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+            (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+            (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
+            stdout.flush().ok().expect("IO ERROR!");
+        }
+
+        match *reader.get_result() {
+            Ok(_) => return,
+            Err(ref msg) => {
+                (write!(&mut stdout, "{}", msg)).ok().expect("IO ERROR!");
+                (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+                stdout.flush().ok().expect("IO ERROR!");
+            }
+        }
     }
 }
