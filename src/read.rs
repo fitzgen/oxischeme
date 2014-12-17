@@ -14,67 +14,92 @@
 
 //! Parsing values.
 
-use std::io;
+use std::io::{BufferedReader, IoError, IoErrorKind};
+use std::iter::{Peekable};
 use value;
 
-/// `Read` iteratively parses s-expressions from the input `Reader`.
-///
-/// TODO FITZGEN: build this on top of a Peekable iterator<(line, column, char)>
-/// instead of BufferedReader directly.
+/// `CharReader` reads characters one at a time from the given input `Reader`.
+struct CharReader<R> {
+    reader: BufferedReader<R>
+}
+
+impl<R: Reader> CharReader<R> {
+    /// Create a new `CharReader` instance.
+    pub fn new(reader: R) -> CharReader<R> {
+        CharReader {
+            reader: BufferedReader::new(reader)
+        }
+    }
+}
+
+impl<R: Reader> Iterator<char> for CharReader<R> {
+    /// Returns `Some(c)` for each character `c` from the input reader. Upon
+    /// reaching EOF, returns `None`.
+    fn next(&mut self) -> Option<char> {
+        match self.reader.read_char() {
+            Ok(c)                   => Some(c),
+            Err(ref e) if is_eof(e) => None,
+            Err(e)                  => panic!("IO ERROR! {}", e),
+        }
+    }
+}
+
+/// Return true if the error is reaching the end of file, false otherwise.
+fn is_eof(err : &IoError) -> bool {
+    err.kind == IoErrorKind::EndOfFile
+}
+
+/// Return true if the character is the start of a comment, false otherwise.
+fn is_comment(c: &char) -> bool {
+    *c == ';'
+}
+
+/// Return true if the character is a delimiter between tokens.
+fn is_delimiter(c: &char) -> bool {
+    c.is_whitespace() || is_comment(c)
+}
+
+/// `Read` iteratively parses values from the input `Reader`.
 ///
 /// TODO FITZGEN: rather than panicking on bad input, save an error message and
 /// return None or something.
 pub struct Read<R> {
-    reader: io::BufferedReader<R>
-}
-
-enum CharType {
-    Character(char),
-    WhiteSpace,
-    Comment,
-    EOF
-}
-
-fn is_eof(err : &io::IoError) -> bool {
-    err.kind == io::IoErrorKind::EndOfFile
+    chars: Peekable<char, CharReader<R>>
 }
 
 impl<R: Reader> Read<R> {
     /// Create a new `Read` instance from the given `Reader` input source.
     pub fn new(reader: R) -> Read<R> {
-        Read { reader: io::BufferedReader::new(reader) }
-    }
-
-    // Read a character in from our BufferedReader and translate it into the
-    // character types we care about.
-    fn read_char(&mut self) -> CharType {
-        match self.reader.read_char() {
-            Ok(c) if c.is_whitespace() => CharType::WhiteSpace,
-            Ok(c) if c == ';'          => CharType::Comment,
-            Ok(c)                      => CharType::Character(c),
-            Err(ref e) if is_eof(e)    => CharType::EOF,
-            Err(e)                     => panic!("IO ERROR! {}", e),
+        Read {
+            chars: CharReader::new(reader).peekable()
         }
     }
 
-    // Skip to the end of the current line of input.
+    /// Skip to after the next newline character.
     fn skip_line(&mut self) {
-        match self.reader.read_line() {
-            Ok(_)                   => return,
-            Err(ref e) if is_eof(e) => return,
-            Err(e)                  => panic!("IO ERROR! {}", e),
+        loop {
+            match self.chars.peek() {
+                None                  => return,
+                Some(c) if *c == '\n' => return,
+                _                     => { },
+            }
+            self.chars.next();
         }
     }
 
-    // Trim initial whitespace and skip comments. Return the first character of
-    // the next value found, or None if we hit EOF.
-    fn trim(&mut self) -> Option<char> {
+    /// Trim initial whitespace and skip comments.
+    fn trim(&mut self) {
         loop {
-            match self.read_char() {
-                CharType::WhiteSpace   => continue,
-                CharType::Comment      => self.skip_line(),
-                CharType::EOF          => return None,
-                CharType::Character(c) => return Some(c),
+            let skip_line = match self.chars.peek() {
+                Some(c) if c.is_whitespace() => false,
+                Some(c) if is_comment(c)     => true,
+                _                            => return,
+            };
+
+            if skip_line {
+                self.skip_line();
+            } else {
+                self.chars.next();
             }
         }
     }
@@ -82,30 +107,35 @@ impl<R: Reader> Read<R> {
 
 impl<R: Reader> Iterator<value::Value> for Read<R> {
     fn next(&mut self) -> Option<value::Value> {
-        let mut sign = 1;
-        let mut abs_value : i64 = 0;
+        self.trim();
 
-        match self.trim() {
-            None      => panic!("Unexpected EOF"),
-            Some('-') => sign = -1,
-            Some(c)   => match c.to_digit(10) {
-                None    => panic!("Unexpected character: {}", c),
-                Some(d) => abs_value = d as i64,
-            },
+        let sign : i64 = match self.chars.peek() {
+            Some(c) if *c == '-' => -1,
+            _                    => 1,
+        };
+
+        if sign == -1 {
+            self.chars.next();
         }
 
-        loop {
-            match self.read_char() {
-                CharType::WhiteSpace | CharType::EOF => break,
-                CharType::Comment                    => {
-                    self.skip_line();
-                    break;
-                },
-                CharType::Character(c)               => match c.to_digit(10) {
-                    None    => panic!("Unexpected character: {}", c),
-                    Some(d) => abs_value = (abs_value * 10) + (d as i64)
-                },
+        let mut abs_value : i64 = match self.chars.next() {
+            None    => panic!("Unexpected EOF!"),
+            Some(c) => match c.to_digit(10) {
+                None    => panic!("Unexpected character: {}", c),
+                Some(d) => d as i64
             }
+        };
+
+        loop {
+            match self.chars.peek() {
+                None                       => break,
+                Some(c) if is_delimiter(c) => break,
+                Some(c)                    => match c.to_digit(10) {
+                    None    => panic!("Unexpected character: {}", c),
+                    Some(d) => abs_value = (abs_value * 10) + (d as i64),
+                }
+            }
+            self.chars.next();
         }
 
         Some(value::Value::new_integer(abs_value * sign))

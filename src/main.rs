@@ -26,14 +26,16 @@ pub fn main() {
     let mut stdout = io::stdio::stdout();
     let stdin = io::stdio::stdin();
 
-    println!("Welcome to oxischeme!\n");
+    println!("Welcome to oxischeme!");
+    println!("C-c to exit.");
+    println!("");
 
     print!("oxischeme> ");
     for val in read::Read::new(stdin) {
         let evaluated = eval::evaluate(val);
-        print::print(evaluated, &mut stdout).ok().expect("IO ERROR");
-        write!(&mut stdout, "\n");
-        write!(&mut stdout, "oxischeme> ");
-        stdout.flush().ok().expect("IO ERROR");
+        print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+        (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+        (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
+        stdout.flush().ok().expect("IO ERROR!");
     }
 }
