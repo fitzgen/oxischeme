@@ -14,9 +14,9 @@
 
 //! Parsing values.
 
-use std::io::{BufferedReader, IoError, IoErrorKind};
+use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
 use std::iter::{Peekable};
-use value;
+use value::{Value, ValueKind, TRUE, FALSE};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -103,12 +103,25 @@ impl<R: Reader> Read<R> {
             }
         }
     }
-}
 
-impl<R: Reader> Iterator<value::Value> for Read<R> {
-    fn next(&mut self) -> Option<value::Value> {
-        self.trim();
+    /// Read a boolean.
+    fn read_boolean(&mut self) -> Option<Value> {
+        match self.chars.next() {
+            Some('#') => { },
+            Some(c)   => panic!("Unexpected character: {}", c),
+            None      => panic!("Unexpected EOF"),
+        }
 
+        match self.chars.next() {
+            Some('t') => Some(TRUE),
+            Some('f') => Some(FALSE),
+            Some(c)   => panic!("Unexpected character: {}", c),
+            None      => panic!("Unexpected EOF"),
+        }
+    }
+
+    /// Read an integer.
+    fn read_integer(&mut self) -> Option<Value> {
         let sign : i64 = match self.chars.peek() {
             None                 => return None,
             Some(c) if *c == '-' => -1,
@@ -139,17 +152,57 @@ impl<R: Reader> Iterator<value::Value> for Read<R> {
             self.chars.next();
         }
 
-        Some(value::Value::new_integer(abs_value * sign))
+        Some(Value::new_integer(abs_value * sign))
     }
+}
+
+impl<R: Reader> Iterator<Value> for Read<R> {
+    fn next(&mut self) -> Option<Value> {
+        self.trim();
+
+        let kind = match self.chars.peek() {
+            None                                   => return None,
+            Some(c) if *c == '#'                   => ValueKind::Boolean,
+            Some(c) if c.is_digit(10) || *c == '-' => ValueKind::Integer,
+            Some(c)                                => panic!("Unexpected character: {}", c),
+        };
+
+        match kind {
+            ValueKind::Boolean => self.read_boolean(),
+            ValueKind::Integer => self.read_integer(),
+        }
+    }
+}
+
+/// Create a `Read` instance from a byte vector.
+pub fn read_from_bytes(bytes: Vec<u8>) -> Read<MemReader> {
+    Read::new(MemReader::new(bytes))
+}
+
+/// Create a `Read` instance from a `String`.
+pub fn read_from_string(string: String) -> Read<MemReader> {
+    read_from_bytes(string.into_bytes())
+}
+
+/// Create a `Read` instance from a `&str`.
+pub fn read_from_str(str: &str) -> Read<MemReader> {
+    read_from_string(str.to_string())
 }
 
 #[test]
 fn test_read_integers() {
-    use std::io::MemReader;
-    let input = MemReader::new("5 -5 789 -987".to_string().into_bytes());
-    let results : Vec<value::Value> = Read::new(input).collect();
-    assert_eq!(results, vec!(value::Value::new_integer(5),
-                             value::Value::new_integer(-5),
-                             value::Value::new_integer(789),
-                             value::Value::new_integer(-987)))
+    let input = "5 -5 789 -987";
+    let results : Vec<Value> = read_from_str(input).collect();
+    assert_eq!(results, vec!(Value::new_integer(5),
+                             Value::new_integer(-5),
+                             Value::new_integer(789),
+                             Value::new_integer(-987)))
+}
+
+#[test]
+fn test_read_booleans() {
+    let input = "#t #f";
+    let results : Vec<Value> = read_from_str(input).collect();
+    assert_eq!(results, vec!(Value::new_boolean(true),
+                             Value::new_boolean(false)))
 }

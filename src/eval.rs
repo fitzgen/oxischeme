@@ -14,15 +14,21 @@
 
 //! Evaluating values.
 
-use value;
+use value::{Value};
 
 /// Evaluate the given value.
-pub fn evaluate(val: value::Value) -> value::Value {
+pub fn evaluate(val: Value) -> Value {
     val
 }
 
 #[test]
 fn test_eval_integer() {
-    assert_eq!(evaluate(value::Value::new_integer(42 as i64)),
-               value::Value::new_integer(42 as i64));
+    assert_eq!(evaluate(Value::new_integer(42 as i64)),
+               Value::new_integer(42 as i64));
+}
+
+#[test]
+fn test_eval_boolean() {
+    assert_eq!(evaluate(Value::new_boolean(true)),
+               Value::new_boolean(true));
 }

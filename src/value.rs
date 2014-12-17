@@ -14,11 +14,20 @@
 
 //! Scheme value implementation.
 
+/// Enumeration of the different kinds of scheme values.
+#[deriving(Copy, PartialEq, Show)]
+pub enum ValueKind {
+    Integer,
+    Boolean,
+}
+
 /// `Value` is a scheme value.
 #[deriving(Copy, PartialEq, Show)]
 pub enum Value {
     /// Scheme integers are represented as 64 bit integers.
-    Integer(i64)
+    Integer(i64),
+    /// Scheme booleans are represented with bool.
+    Boolean(bool),
 }
 
 impl Value {
@@ -26,4 +35,14 @@ impl Value {
     pub fn new_integer(i: i64) -> Value {
         Value::Integer(i)
     }
+
+    /// Create a new boolean value.
+    pub fn new_boolean(b: bool) -> Value {
+        Value::Boolean(b)
+    }
 }
+
+/// The `#t` singleton value.
+pub static TRUE : Value = Value::Boolean(true);
+/// The `#f` singleton value.
+pub static FALSE : Value = Value::Boolean(false);
