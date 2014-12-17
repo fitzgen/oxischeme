@@ -110,6 +110,7 @@ impl<R: Reader> Iterator<value::Value> for Read<R> {
         self.trim();
 
         let sign : i64 = match self.chars.peek() {
+            None                 => return None,
             Some(c) if *c == '-' => -1,
             _                    => 1,
         };
@@ -140,4 +141,15 @@ impl<R: Reader> Iterator<value::Value> for Read<R> {
 
         Some(value::Value::new_integer(abs_value * sign))
     }
+}
+
+#[test]
+fn test_read_integers() {
+    use std::io::MemReader;
+    let input = MemReader::new("5 -5 789 -987".to_string().into_bytes());
+    let results : Vec<value::Value> = Read::new(input).collect();
+    assert_eq!(results, vec!(value::Value::new_integer(5),
+                             value::Value::new_integer(-5),
+                             value::Value::new_integer(789),
+                             value::Value::new_integer(-987)))
 }
