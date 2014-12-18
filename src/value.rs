@@ -17,6 +17,8 @@
 /// `Value` is a scheme value.
 #[deriving(Copy, PartialEq, Show)]
 pub enum Value {
+    /// The empty list: `()`.
+    EmptyList,
     /// Scheme integers are represented as 64 bit integers.
     Integer(i64),
     /// Scheme booleans are represented with `bool`.
@@ -46,3 +48,5 @@ impl Value {
 pub static TRUE : Value = Value::Boolean(true);
 /// The `#f` singleton value.
 pub static FALSE : Value = Value::Boolean(false);
+/// The `()` singleton value.
+pub static EMPTY_LIST : Value = Value::EmptyList;

@@ -20,8 +20,9 @@ use value::{Value};
 /// Print the given value's text representation to the given writer.
 pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
     match val {
-        Value::Integer(i) => write!(writer, "{}", i),
-        Value::Boolean(b) => write!(writer, "{}", if b { "#t" } else { "#f" }),
+        Value::EmptyList    => write!(writer, "()"),
+        Value::Integer(i)   => write!(writer, "{}", i),
+        Value::Boolean(b)   => write!(writer, "{}", if b { "#t" } else { "#f" }),
         Value::Character(c) => match c {
             '\n' => write!(writer, "#\\newline"),
             '\t' => write!(writer, "#\\tab"),
