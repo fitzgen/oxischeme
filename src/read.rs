@@ -18,7 +18,7 @@ use std::cell::{RefCell};
 use std::fmt::{format};
 use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
 use std::iter::{Peekable};
-use value::{Value, ValueKind, TRUE, FALSE};
+use value::{Value, TRUE, FALSE};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -56,9 +56,19 @@ fn is_comment(c: &char) -> bool {
     *c == ';'
 }
 
-/// Return true if the character is a delimiter between tokens.
+/// Return true if the character is a delimiter between tokens, false otherwise.
 fn is_delimiter(c: &char) -> bool {
     c.is_whitespace() || is_comment(c)
+}
+
+/// Return true if we have EOF (`None`) or a delimiting character, false
+/// otherwise.
+fn is_eof_or_delimiter(oc: &Option<char>) -> bool {
+    match *oc {
+        None                           => true,
+        Some(ref c) if is_delimiter(c) => true,
+        _                              => false,
+    }
 }
 
 /// `Read` iteratively parses values from the input `Reader`.
@@ -77,7 +87,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Peek at the next character in our input stream.
-    fn peek(&self) -> Option<char> {
+    fn peek_char(&self) -> Option<char> {
         match self.chars.borrow_mut().peek() {
             None    => None,
             Some(c) => Some(*c)
@@ -85,26 +95,26 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Take the next character from the input stream.
-    fn next(&mut self) -> Option<char> {
+    fn next_char(&mut self) -> Option<char> {
         self.chars.borrow_mut().next()
     }
 
     /// Skip to after the next newline character.
     fn skip_line(&mut self) {
         loop {
-            match self.peek() {
+            match self.peek_char() {
                 None       => return,
                 Some('\n') => return,
                 _          => { },
             }
-            self.next();
+            self.next_char();
         }
     }
 
     /// Trim initial whitespace and skip comments.
     fn trim(&mut self) {
         loop {
-            let skip_line = match self.peek() {
+            let skip_line = match self.peek_char() {
                 Some(c) if c.is_whitespace() => false,
                 Some(c) if is_comment(&c)    => true,
                 _                            => return,
@@ -113,7 +123,7 @@ impl<'a, R: Reader> Read<R> {
             if skip_line {
                 self.skip_line();
             } else {
-                self.next();
+                self.next_char();
             }
         }
     }
@@ -135,35 +145,77 @@ impl<'a, R: Reader> Read<R> {
         self.report_failure(format_args!(format, "Unexpected character: {}", c))
     }
 
-    /// Read a boolean.
-    fn read_boolean(&mut self) -> Option<Value> {
-        match self.next() {
-            Some('#') => { },
-            Some(c)   => return self.unexpected_character(&c),
-            None      => panic!("Unexpected EOF"),
-        }
+    /// Report a bad character literal, e.g. `#\bad`.
+    fn bad_character_literal(&mut self) -> Option<Value> {
+        self.report_failure("Bad character value".to_string())
+    }
 
-        match self.next() {
-            Some('t') => Some(TRUE),
-            Some('f') => Some(FALSE),
-            Some(c)   => return self.unexpected_character(&c),
-            None      => panic!("Unexpected EOF"),
+    /// Read a character value, after the starting '#' and '\' characters have
+    /// already been eaten.
+    fn read_character(&mut self) -> Option<Value> {
+        match [self.next_char(), self.peek_char()] {
+            // Normal character, e.g. `#\f`.
+            [Some(c), d] if is_eof_or_delimiter(&d) => Some(Value::new_character(c)),
+
+            // Newline character: `#\newline`.
+            [Some('n'), Some('e')] => match [self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.peek_char()] {
+                [Some('e'),
+                 Some('w'),
+                 Some('l'),
+                 Some('i'),
+                 Some('n'),
+                 Some('e'),
+                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\n')),
+                _                              => self.bad_character_literal(),
+            },
+
+            // Space character: `#\space`.
+            [Some('s'), Some('p')] => match [self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.next_char(),
+                                             self.peek_char()] {
+                [Some('p'),
+                 Some('a'),
+                 Some('c'),
+                 Some('e'),
+                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character(' ')),
+                _                              => self.bad_character_literal(),
+            },
+
+            // Tab character: `#\tab`.
+            [Some('t'), Some('a')] => match [self.next_char(),
+                                             self.next_char(),
+                                             self.peek_char()] {
+                [Some('a'),
+                 Some('b'),
+                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\t')),
+                _                              => self.bad_character_literal(),
+            },
+
+            _ => self.bad_character_literal(),
         }
     }
 
     /// Read an integer.
     fn read_integer(&mut self) -> Option<Value> {
-        let sign : i64 = match self.peek() {
+        let sign : i64 = match self.peek_char() {
             None      => return None,
             Some('-') => -1,
             _         => 1,
         };
 
         if sign == -1 {
-            self.next();
+            self.next_char();
         }
 
-        let mut abs_value : i64 = match self.next() {
+        let mut abs_value : i64 = match self.next_char() {
             None    => panic!("Unexpected EOF!"),
             Some(c) => match c.to_digit(10) {
                 None    => return self.unexpected_character(&c),
@@ -172,7 +224,7 @@ impl<'a, R: Reader> Read<R> {
         };
 
         loop {
-            match self.peek() {
+            match self.peek_char() {
                 None                        => break,
                 Some(c) if is_delimiter(&c) => break,
                 Some(c)                     => match c.to_digit(10) {
@@ -180,7 +232,7 @@ impl<'a, R: Reader> Read<R> {
                     Some(d) => abs_value = (abs_value * 10) + (d as i64),
                 }
             }
-            self.next();
+            self.next_char();
         }
 
         Some(Value::new_integer(abs_value * sign))
@@ -191,18 +243,21 @@ impl<R: Reader> Iterator<Value> for Read<R> {
     fn next(&mut self) -> Option<Value> {
         self.trim();
 
-        let kind = match self.peek() {
-            None                                  => return None,
-            Some('#')                             => ValueKind::Boolean,
-            Some(c) if c.is_digit(10) || c == '-' => ValueKind::Integer,
-            Some(c)                               => {
-                return self.unexpected_character(&c);
+        match self.peek_char() {
+            None                                  => None,
+            Some(c) if c.is_digit(10) || c == '-' => self.read_integer(),
+            Some('#')                             => {
+                self.next_char();
+                // Deterimine if this is a boolean or a character.
+                match self.next_char() {
+                    None       => None,
+                    Some('t')  => Some(TRUE),
+                    Some('f')  => Some(FALSE),
+                    Some('\\') => self.read_character(),
+                    Some(c)    => self.unexpected_character(&c),
+                }
             },
-        };
-
-        match kind {
-            ValueKind::Boolean => self.read_boolean(),
-            ValueKind::Integer => self.read_integer(),
+            Some(c)                               => self.unexpected_character(&c),
         }
     }
 }
@@ -238,4 +293,17 @@ fn test_read_booleans() {
     let results : Vec<Value> = read_from_str(input).collect();
     assert_eq!(results, vec!(Value::new_boolean(true),
                              Value::new_boolean(false)))
+}
+
+#[test]
+fn test_read_characters() {
+    let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
+    let results : Vec<Value> = read_from_str(input).collect();
+    assert_eq!(results, vec!(Value::new_character('a'),
+                             Value::new_character('0'),
+                             Value::new_character('-'),
+                             Value::new_character(' '),
+                             Value::new_character('\t'),
+                             Value::new_character('\n'),
+                             Value::new_character('\n')));
 }

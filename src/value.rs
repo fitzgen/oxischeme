@@ -14,20 +14,15 @@
 
 //! Scheme value implementation.
 
-/// Enumeration of the different kinds of scheme values.
-#[deriving(Copy, PartialEq, Show)]
-pub enum ValueKind {
-    Integer,
-    Boolean,
-}
-
 /// `Value` is a scheme value.
 #[deriving(Copy, PartialEq, Show)]
 pub enum Value {
     /// Scheme integers are represented as 64 bit integers.
     Integer(i64),
-    /// Scheme booleans are represented with bool.
+    /// Scheme booleans are represented with `bool`.
     Boolean(bool),
+    /// Scheme characters are `char`s.
+    Character(char),
 }
 
 impl Value {
@@ -39,6 +34,11 @@ impl Value {
     /// Create a new boolean value.
     pub fn new_boolean(b: bool) -> Value {
         Value::Boolean(b)
+    }
+
+    /// Create a new character value.
+    pub fn new_character(c: char) -> Value {
+        Value::Character(c)
     }
 }
 

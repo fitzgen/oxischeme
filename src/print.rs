@@ -22,5 +22,11 @@ pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
     match val {
         Value::Integer(i) => write!(writer, "{}", i),
         Value::Boolean(b) => write!(writer, "{}", if b { "#t" } else { "#f" }),
+        Value::Character(c) => match c {
+            '\n' => write!(writer, "#\\newline"),
+            '\t' => write!(writer, "#\\tab"),
+            ' '  => write!(writer, "#\\space"),
+            _    => write!(writer, "#\\{}", c),
+        }
     }
 }
