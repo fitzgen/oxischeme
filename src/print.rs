@@ -15,12 +15,17 @@
 //! Printing values' text representations.
 
 use std::io::{IoResult};
-use value::{Value};
+use value::{Value, ConsPtr};
 
 /// Print the given value's text representation to the given writer.
 pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
     match val {
         Value::EmptyList    => write!(writer, "()"),
+        Value::Pair(cons)   => {
+            try!(write!(writer, "("));
+            try!(print_pair(cons, writer));
+            write!(writer, ")")
+        },
         Value::Integer(i)   => write!(writer, "{}", i),
         Value::Boolean(b)   => write!(writer, "{}", if b { "#t" } else { "#f" }),
         Value::Character(c) => match c {
@@ -29,5 +34,21 @@ pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
             ' '  => write!(writer, "#\\space"),
             _    => write!(writer, "#\\{}", c),
         }
+    }
+}
+
+/// TODO FITZGEN
+fn print_pair<W: Writer>(cons: ConsPtr, writer: &mut W) -> IoResult<()> {
+    try!(print(cons.car(), writer));
+    match cons.cdr() {
+        Value::EmptyList => Ok(()),
+        Value::Pair(cdr) => {
+            try!(write!(writer, " "));
+            print_pair(cdr, writer)
+        },
+        val              => {
+            try!(write!(writer, " . "));
+            print(val, writer)
+        },
     }
 }

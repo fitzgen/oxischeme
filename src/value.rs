@@ -14,11 +14,151 @@
 
 //! Scheme value implementation.
 
-/// `Value` is a scheme value.
+use std::cmp;
+use std::fmt;
+use std::iter::{range};
+use std::ptr;
+
+/// TODO FITZGEN
+#[deriving(PartialEq)]
+struct Cons {
+    car: Value,
+    cdr: Value,
+}
+
+impl Cons {
+    /// TODO FITZGEN
+    pub fn new() -> Cons {
+        Cons {
+            car: Value::EmptyList,
+            cdr: Value::EmptyList,
+        }
+    }
+}
+
+type FreeList = Vec<uint>;
+
+/// TODO FITZGEN
+fn new_free_list(limit: uint) -> FreeList {
+    range(0, limit).collect()
+}
+
+/// TODO FITZGEN
+pub struct Heap {
+    pool: Vec<Cons>,
+    free: FreeList,
+}
+
+/// TODO FITZGEN
+pub static DEFAULT_HEAP_CAPACITY : uint = 1 << 12;
+
+impl Heap {
+    /// TODO FITZGEN
+    pub fn new() -> Heap {
+        Heap::with_capacity(DEFAULT_HEAP_CAPACITY)
+    }
+
+    /// TODO FITZGEN
+    pub fn with_capacity(capacity: uint) -> Heap {
+        assert!(capacity > 0);
+        Heap {
+            pool: range(0, capacity).map(|_| Cons::new()).collect(),
+            free: new_free_list(capacity),
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn capacity(&self) -> uint {
+        self.pool.capacity()
+    }
+
+    /// TODO FITZGEN
+    ///
+    /// Panics if we run out of memory in this `Heap`.
+    pub fn allocate_cons(&mut self) -> ConsPtr {
+        match self.free.pop() {
+            None       => panic!("Heap::allocate_cons out of memory!"),
+            Some(idx)  => {
+                let self_ptr : *const Heap = &*self;
+                ConsPtr::new(self_ptr, idx)
+            },
+        }
+    }
+}
+
+/// TODO FITZGEN
+#[allow(raw_pointer_deriving)]
+#[deriving(Copy)]
+pub struct ConsPtr {
+    heap: *const Heap,
+    index: uint,
+}
+
+impl ConsPtr {
+    /// TODO FITZGEN
+    fn new(heap: *const Heap, index: uint) -> ConsPtr {
+        unsafe {
+            assert!(index < ptr::read(heap).capacity());
+        }
+        ConsPtr {
+            heap: heap,
+            index: index,
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn car(&self) -> Value {
+        unsafe {
+            ptr::read(self.heap).pool[self.index].car
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn cdr(&self) -> Value {
+        unsafe {
+            ptr::read(self.heap).pool[self.index].cdr
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn set_car(&mut self, car: Value) {
+        unsafe {
+            ptr::read(self.heap).pool[self.index].car = car;
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn set_cdr(&mut self, cdr: Value) {
+        unsafe {
+            ptr::read(self.heap).pool[self.index].cdr = cdr;
+        }
+    }
+}
+
+impl fmt::Show for ConsPtr {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "ConsPtr({})", self.index)
+    }
+}
+
+impl cmp::PartialEq for ConsPtr {
+    fn eq(&self, other: &ConsPtr) -> bool {
+        self.index == other.index && self.heap.to_uint() == other.heap.to_uint()
+    }
+}
+
+/// `Value` represents a scheme value of any type.
+///
+/// Note that `PartialEq` is object identity, not structural identity. In other
+/// words, it is equivalent to the scheme function `eq?`, not the scheme
+/// function `equal?`.
 #[deriving(Copy, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
+    /// The scheme pair type is a pointer into our `Heap` to a GC-managed `Cons`
+    /// cell.
+    Pair(ConsPtr),
     /// Scheme integers are represented as 64 bit integers.
     Integer(i64),
     /// Scheme booleans are represented with `bool`.
@@ -42,11 +182,28 @@ impl Value {
     pub fn new_character(c: char) -> Value {
         Value::Character(c)
     }
-}
 
-/// The `#t` singleton value.
-pub static TRUE : Value = Value::Boolean(true);
-/// The `#f` singleton value.
-pub static FALSE : Value = Value::Boolean(false);
-/// The `()` singleton value.
-pub static EMPTY_LIST : Value = Value::EmptyList;
+    /// TODO FITZGEN
+    pub fn new_pair(heap: &mut Heap, car: Value, cdr: Value) -> Value {
+        let mut cons = heap.allocate_cons();
+        cons.set_car(car);
+        cons.set_cdr(cdr);
+        Value::Pair(cons)
+    }
+
+    /// TODO FITZGEN
+    pub fn car(&self) -> Option<Value> {
+        match *self {
+            Value::Pair(ref cons) => Some(cons.car()),
+            _                     => None,
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn cdr(&self) -> Option<Value> {
+        match *self {
+            Value::Pair(ref cons) => Some(cons.cdr()),
+            _                     => None,
+        }
+    }
+}
