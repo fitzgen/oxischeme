@@ -17,7 +17,6 @@
 use std::cmp;
 use std::fmt;
 use std::iter::{range};
-use std::ptr;
 
 /// TODO FITZGEN
 #[deriving(PartialEq)]
@@ -79,7 +78,7 @@ impl Heap {
         match self.free.pop() {
             None       => panic!("Heap::allocate_cons out of memory!"),
             Some(idx)  => {
-                let self_ptr : *const Heap = &*self;
+                let self_ptr : *mut Heap = self;
                 ConsPtr::new(self_ptr, idx)
             },
         }
@@ -90,15 +89,17 @@ impl Heap {
 #[allow(raw_pointer_deriving)]
 #[deriving(Copy)]
 pub struct ConsPtr {
-    heap: *const Heap,
+    heap: *mut Heap,
     index: uint,
 }
 
 impl ConsPtr {
     /// TODO FITZGEN
-    fn new(heap: *const Heap, index: uint) -> ConsPtr {
+    fn new(heap: *mut Heap, index: uint) -> ConsPtr {
         unsafe {
-            assert!(index < ptr::read(heap).capacity());
+            let heap_ref = heap.as_ref()
+                .expect("ConsPtr::new should be passed a valid Heap.");
+            assert!(index < heap_ref.capacity());
         }
         ConsPtr {
             heap: heap,
@@ -109,28 +110,36 @@ impl ConsPtr {
     /// TODO FITZGEN
     pub fn car(&self) -> Value {
         unsafe {
-            ptr::read(self.heap).pool[self.index].car
+            let heap = self.heap.as_ref()
+                .expect("ConsPtr::car should always have a Heap.");
+            heap.pool[self.index].car
         }
     }
 
     /// TODO FITZGEN
     pub fn cdr(&self) -> Value {
         unsafe {
-            ptr::read(self.heap).pool[self.index].cdr
+            let heap = self.heap.as_ref()
+                .expect("ConsPtr::cdr should always have a Heap.");
+            heap.pool[self.index].cdr
         }
     }
 
     /// TODO FITZGEN
     pub fn set_car(&mut self, car: Value) {
         unsafe {
-            ptr::read(self.heap).pool[self.index].car = car;
+            let heap = self.heap.as_mut()
+                .expect("ConsPtr::set_car should always have access to the heap.");
+            heap.pool[self.index].car = car;
         }
     }
 
     /// TODO FITZGEN
     pub fn set_cdr(&mut self, cdr: Value) {
         unsafe {
-            ptr::read(self.heap).pool[self.index].cdr = cdr;
+            let heap = self.heap.as_mut()
+                .expect("ConsPtr::set_cdr should always have access to the heap.");
+            heap.pool[self.index].cdr = cdr;
         }
     }
 }
