@@ -311,15 +311,21 @@ impl<'a, R: Reader> Read<R> {
 
                     // Improper list.
                     Some('.') => {
+                        println!("found . so reading improper list");
+                        self.next_char();
                         let cdr = match self.next() {
                             None    => return self.unexpected_eof(),
                             Some(v) => v,
                         };
 
+                        println!("read cdr");
+
                         self.trim();
                         if self.expect_character(')').is_err() {
                             return None;
                         }
+
+                        println!("found closing paren");
 
                         unsafe {
                             let heap = self.heap.as_mut()
@@ -417,12 +423,22 @@ fn test_read_characters() {
 }
 
 #[test]
-fn test_read_pairs() {
-    let input = "() (1 2 3) (1 (2) ((3))) (5 . 6)";
+fn test_read_comments() {
+    let input = "1 ;; this is a comment\n2";
     let mut heap = Heap::new();
     let results : Vec<Value> = read_from_str(input, &mut heap).collect();
-    println!("results = {}", results);
-    assert_eq!(results.len(), 4);
+
+    assert_eq!(results.len(), 2);
+    assert_eq!(results, vec!(Value::new_integer(1),
+                             Value::new_integer(2)));
+}
+
+#[test]
+fn test_read_pairs() {
+    let input = "() (1 2 3) (1 (2) ((3)))";
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    assert_eq!(results.len(), 3);
 
     assert_eq!(results[0], Value::EmptyList);
 
@@ -455,8 +471,15 @@ fn test_read_pairs() {
     assert_eq!(v2.cdr().expect("v2.cdr")
                  .cdr().expect("v2.cdr.cdr")
                  .car().expect("v2.cdr.cdr.car")
+                 .car().expect("v2.cdr.cdr.car.car")
                  .car(),
                Some(Value::new_integer(3)));
+    assert_eq!(v2.cdr().expect("v2.cdr")
+                 .cdr().expect("v2.cdr.cdr")
+                 .car().expect("v2.cdr.cdr.car")
+                 .car().expect("v2.cdr.cdr.car.car")
+                 .cdr(),
+               Some(Value::EmptyList));
     assert_eq!(v2.cdr().expect("v2.cdr")
                  .cdr().expect("v2.cdr.cdr")
                  .car().expect("v2.cdr.cdr.car")
@@ -466,8 +489,40 @@ fn test_read_pairs() {
                  .cdr().expect("v2.cdr.cdr")
                  .cdr(),
                Some(Value::EmptyList));
+}
+
+#[test]
+fn test_read_improper_lists() {
+    let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+
+    println!("results = {}", results);
+    assert_eq!(results.len(), 4);
+
+    let v0 = &results[0];
+    assert_eq!(v0.car(), Some(Value::new_integer(1)));
+    assert_eq!(v0.cdr(), Some(Value::new_integer(2)));
+
+    let v1 = &results[1];
+    assert_eq!(v1.car(), Some(Value::new_integer(3)));
+    assert_eq!(v1.cdr(), Some(Value::EmptyList));
+
+    let v2 = &results[2];
+    assert_eq!(v2.car(), Some(Value::new_integer(4)));
+    assert_eq!(v2.cdr().expect("v2.cdr")
+                 .car(),
+               Some(Value::new_integer(5)));
+    assert_eq!(v2.cdr().expect("v2.cdr")
+                 .cdr(),
+               Some(Value::new_integer(6)));
 
     let v3 = &results[3];
-    assert_eq!(v3.car(), Some(Value::new_integer(5)));
-    assert_eq!(v3.cdr(), Some(Value::new_integer(6)));
+    assert_eq!(v3.car(), Some(Value::new_integer(1)));
+    assert_eq!(v3.cdr().expect("v3.cdr")
+                 .car(),
+              Some(Value::new_integer(2)));
+    assert_eq!(v3.cdr().expect("v3.cdr")
+                 .cdr(),
+              Some(Value::new_integer(3)));
 }
