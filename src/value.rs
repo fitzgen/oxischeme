@@ -33,6 +33,8 @@ use std::fmt;
 use std::iter::{range};
 use std::ops::{Deref, DerefMut};
 
+use context::{Context};
+
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
@@ -326,5 +328,20 @@ impl Value {
             Value::Pair(ref cons) => Some(cons.cdr()),
             _                     => None,
         }
+    }
+}
+
+/// A helper utility to create a cons list from the given values.
+pub fn list(ctx: &mut Context, values: &[Value]) -> Value {
+    list_helper(ctx, &mut values.iter())
+}
+
+fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context, values: &mut T) -> Value {
+    match values.next() {
+        None      => Value::EmptyList,
+        Some(car) => {
+            let cdr = list_helper(ctx, values);
+            Value::new_pair(ctx.heap(), *car, cdr)
+        },
     }
 }

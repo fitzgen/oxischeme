@@ -20,7 +20,7 @@ use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
 use std::iter::{Peekable};
 
 use context::{Context};
-use value::{Value};
+use value::{Value, list};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -423,6 +423,21 @@ impl<'a, R: Reader> Read<R> {
 
         return Some(self.ctx().get_or_create_symbol(str));
     }
+
+    /// Read a quoted form from input, e.g. `'(1 2 3)`.
+    fn read_quoted(&mut self) -> Option<Value> {
+        if self.expect_character('\'').is_err() {
+            None
+        }
+
+        match self.next() {
+            None      => self.unexpected_eof(),
+            Some(val) => Some(list(self.ctx(), &mut [
+                self.ctx().get_or_create_symbol("quote".to_string()),
+                val
+            ])),
+        }
+    }
 }
 
 impl<R: Reader> Iterator<Value> for Read<R> {
@@ -435,6 +450,7 @@ impl<R: Reader> Iterator<Value> for Read<R> {
 
         match self.peek_char() {
             None                             => None,
+            Some('\'')                       => self.read_quoted(),
             Some('-')                        => {
                 self.next_char();
                 match self.peek_char() {
@@ -443,7 +459,7 @@ impl<R: Reader> Iterator<Value> for Read<R> {
                     },
                     _                         => self.read_symbol(Some('-')),
                 }
-            }
+            },
             Some(c) if c.is_digit(10)        => self.read_integer(false),
             Some('#')                        => self.read_bool_or_char(),
             Some('"')                        => self.read_string(),
@@ -680,4 +696,23 @@ fn test_read_same_symbol() {
     // We should only allocate one StringPtr and share it between both parses of
     // the same symbol.
     assert_eq!(results[0], results[1]);
+}
+
+#[test]
+fn test_read_quoted() {
+    let input = "'foo";
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    assert_eq!(results.len(), 1);
+
+    match results[0].car() {
+        Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
+                                               "quote".to_string()),
+        _                        => assert!(false),
+    }
+    match results[0].cdr().expect("results[0].cdr").car() {
+        Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
+                                               "foo".to_string()),
+        _                        => assert!(false),
+    }
 }
