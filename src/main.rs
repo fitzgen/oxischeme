@@ -27,10 +27,12 @@ pub fn main() {
     println!("C-c to exit.");
     println!("");
 
+    let mut heap = value::Heap::new();
+
     loop {
         let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
-        let mut reader = read::Read::new(stdin);
+        let mut reader = read::Read::new(stdin, &mut heap);
 
         print!("oxischeme> ");
         for val in reader {
