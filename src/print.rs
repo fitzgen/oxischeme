@@ -31,6 +31,7 @@ pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
             try!(write!(writer, "{}", str.deref()));
             write!(writer, "\"")
         },
+        Value::Symbol(s)    => write!(writer, "{}", s.deref()),
         Value::Integer(i)   => write!(writer, "{}", i),
         Value::Boolean(b)   => write!(writer, "{}", if b { "#t" } else { "#f" }),
         Value::Character(c) => match c {

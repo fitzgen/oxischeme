@@ -17,16 +17,15 @@
 //! ## Allocation Strategy
 //!
 //! Scheme has a variety of types that must be allocated on the heap: cons
-//! cells, strings (currently unimplemented), and vectors (currently
-//! unimplemented). Oxischeme's current allocation strategy is deliberately as
-//! simple as possible. We represent the heap as a pre-allocated vector of cons
-//! cells. We keep track of un-allocated cons cells with a "free list" of
-//! indices into the pre-allocated vector of cons cells. Whenever we need to
-//! allocate a new cons cell, we remove an entry from this list and return a
-//! pointer to the cons cell at that entry's index. Garbage collection
-//! (currently unimplemented) will add new entries to the free list whenever
-//! objects are reclaimed. If we run out of space in the pre-allocated vector,
-//! we panic.
+//! cells, strings, and vectors (currently unimplemented). Oxischeme's current
+//! allocation strategy is deliberately as simple as possible. We represent the
+//! heap as a pre-allocated vector of cons cells. We keep track of un-allocated
+//! cons cells with a "free list" of indices into the pre-allocated vector of
+//! cons cells. Whenever we need to allocate a new cons cell, we remove an entry
+//! from this list and return a pointer to the object at that entry's index.
+//! Garbage collection (currently unimplemented) will add new entries to the
+//! free list whenever objects are reclaimed. If we run out of space in the
+//! pre-allocated vector, we panic.
 
 use std::cmp;
 use std::default::{Default};
@@ -130,9 +129,9 @@ pub struct ArenaPtr<T> {
 }
 
 // XXX: We have to manually declar that ArenaPtr<T> is copy-able because if we
-// use the `#[deriving(Copy)]` it wants T to be copy-able as well, despite the
-// fact that we only need to copy our pointer to the Arena<T>, not any T or the
-// Arena itself.
+// use `#[deriving(Copy)]` it wants T to be copy-able as well, despite the fact
+// that we only need to copy our pointer to the Arena<T>, not any T or the Arena
+// itself.
 impl <T> ::std::kinds::Copy for ArenaPtr<T> { }
 
 impl<T: Default> ArenaPtr<T> {
@@ -193,9 +192,8 @@ pub type ConsPtr = ArenaPtr<Cons>;
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;
 
-/// The scheme heap, containing all allocated cons cells and strings. The first
-/// step of running any Scheme program involves first creating an instance of
-/// `Heap` and reserving memory within which to run the Scheme program.
+/// The scheme heap, containing all allocated cons cells and strings (including
+/// symbols).
 pub struct Heap {
     cons_cells: Arena<Cons>,
     strings: Arena<String>,
@@ -257,6 +255,10 @@ pub enum Value {
     /// The scheme string type is a pointer to a GC-managed `String`.
     String(StringPtr),
 
+    /// Scheme symbols are also implemented as a pointer to a GC-managed
+    /// `String`.
+    Symbol(StringPtr),
+
     /// Scheme integers are represented as 64 bit integers.
     Integer(i64),
 
@@ -298,6 +300,11 @@ impl Value {
         value.clear();
         value.push_str(str.as_slice());
         Value::String(value)
+    }
+
+    /// Create a new symbol value with the given string.
+    pub fn new_symbol(str: StringPtr) -> Value {
+        Value::Symbol(str)
     }
 }
 

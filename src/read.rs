@@ -18,7 +18,9 @@ use std::cell::{RefCell};
 use std::fmt::{format};
 use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
 use std::iter::{Peekable};
-use value::{Heap, Value};
+
+use context::{Context};
+use value::{Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -71,20 +73,46 @@ fn is_eof_or_delimiter(oc: &Option<char>) -> bool {
     }
 }
 
+fn is_symbol_initial(c: &char) -> bool {
+    c.is_alphabetic() || is_symbol_special_initial(c) || is_symbol_peculiar(c)
+}
+
+fn is_symbol_peculiar(c: &char) -> bool {
+    *c == '+' || *c == '-' || *c == '…'
+}
+
+fn is_symbol_special_initial(c: &char) -> bool {
+    *c == '!' || *c == '$' || *c == '%' || *c == '&' || *c == '*' ||
+        *c == '/' || *c == ':' || *c == '<' || *c == '=' || *c == '>' ||
+        *c == '?' || *c == '~' || *c == '_' || *c == '^'
+}
+
+fn is_symbol_subsequent(c: &char) -> bool {
+    is_symbol_initial(c) || c.is_digit(10) || *c == '.' || *c == '+' || *c == '-'
+}
+
 /// `Read` iteratively parses values from the input `Reader`.
 pub struct Read<R> {
     chars: RefCell<Peekable<char, CharReader<R>>>,
     result: Result<(), String>,
-    heap: *mut Heap,
+    context: *mut Context,
 }
 
 impl<'a, R: Reader> Read<R> {
     /// Create a new `Read` instance from the given `Reader` input source.
-    pub fn new(reader: R, heap: *mut Heap) -> Read<R> {
+    pub fn new(reader: R, ctx: *mut Context) -> Read<R> {
         Read {
             chars: RefCell::new(CharReader::new(reader).peekable()),
             result: Ok(()),
-            heap: heap
+            context: ctx
+        }
+    }
+
+    /// Get the current context.
+    fn ctx(&'a self) -> &'a mut Context {
+        unsafe {
+            self.context.as_mut()
+                .expect("Read<R> should always have a valid Context")
         }
     }
 
@@ -260,16 +288,8 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read an integer.
-    fn read_integer(&mut self) -> Option<Value> {
-        let sign : i64 = match self.peek_char() {
-            None      => return None,
-            Some('-') => -1,
-            _         => 1,
-        };
-
-        if sign == -1 {
-            self.next_char();
-        }
+    fn read_integer(&mut self, is_negative: bool) -> Option<Value> {
+        let sign : i64 = if is_negative { -1 } else { 1 };
 
         let mut abs_value : i64 = match self.next_char() {
             None    => return self.unexpected_eof(),
@@ -328,11 +348,7 @@ impl<'a, R: Reader> Read<R> {
                             return None;
                         }
 
-                        unsafe {
-                            let heap = self.heap.as_mut()
-                                .expect("Read<R> should always have a Heap.");
-                            return Some(Value::new_pair(heap, car, cdr));
-                        };
+                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
                     },
 
                     // Proper list.
@@ -341,11 +357,8 @@ impl<'a, R: Reader> Read<R> {
                             None    => return self.unexpected_eof(),
                             Some(v) => v,
                         };
-                        unsafe {
-                            let heap = self.heap.as_mut()
-                                .expect("Read<R> should always have a Heap.");
-                            return Some(Value::new_pair(heap, car, cdr));
-                        };
+
+                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
                     },
                 };
             },
@@ -363,11 +376,7 @@ impl<'a, R: Reader> Read<R> {
         loop {
             match self.next_char() {
                 None       => return self.unterminated_string(),
-                Some('"')  => unsafe {
-                    let heap = self.heap.as_mut()
-                        .expect("Read<R> should always have a Heap.");
-                    return Some(Value::new_string(heap, str))
-                },
+                Some('"')  => return Some(Value::new_string(self.ctx().heap(), str)),
                 Some('\\') => {
                     match self.next_char() {
                         Some('n')  => str.push('\n'),
@@ -382,6 +391,38 @@ impl<'a, R: Reader> Read<R> {
             }
         }
     }
+
+    /// Read a symbol in from the input. Optionally supply a prefix character
+    /// that was already read from the symbol.
+    fn read_symbol(&mut self, prefix: Option<char>) -> Option<Value> {
+        let mut str = String::new();
+
+        if prefix.is_some() {
+            str.push(prefix.unwrap());
+        } else {
+            match self.next_char() {
+                Some(c) if is_symbol_initial(&c) => str.push(c),
+                Some(c)                          => {
+                    return self.unexpected_character(&c);
+                },
+                None                             => {
+                    return self.unexpected_eof();
+                },
+            };
+        }
+
+        loop {
+            match self.peek_char() {
+                Some(c) if is_symbol_subsequent(&c) => {
+                    self.next_char();
+                    str.push(c)
+                },
+                _                                   => break,
+            };
+        }
+
+        return Some(self.ctx().get_or_create_symbol(str));
+    }
 }
 
 impl<R: Reader> Iterator<Value> for Read<R> {
@@ -393,39 +434,49 @@ impl<R: Reader> Iterator<Value> for Read<R> {
         self.trim();
 
         match self.peek_char() {
-            None                                  => None,
-            Some(c) if c.is_digit(10) || c == '-' => self.read_integer(),
-            Some('#')                             => self.read_bool_or_char(),
-            Some('"')                             => self.read_string(),
-            Some('(')                             => {
+            None                             => None,
+            Some('-')                        => {
+                self.next_char();
+                match self.peek_char() {
+                    Some(c) if c.is_digit(10) => {
+                        self.read_integer(true)
+                    },
+                    _                         => self.read_symbol(Some('-')),
+                }
+            }
+            Some(c) if c.is_digit(10)        => self.read_integer(false),
+            Some('#')                        => self.read_bool_or_char(),
+            Some('"')                        => self.read_string(),
+            Some('(')                        => {
                 self.next_char();
                 self.read_pair()
             },
-            Some(c)                               => self.unexpected_character(&c),
+            Some(c) if is_symbol_initial(&c) => self.read_symbol(None),
+            Some(c)                          => self.unexpected_character(&c),
         }
     }
 }
 
 /// Create a `Read` instance from a byte vector.
-pub fn read_from_bytes(bytes: Vec<u8>, heap: *mut Heap) -> Read<MemReader> {
-    Read::new(MemReader::new(bytes), heap)
+pub fn read_from_bytes(bytes: Vec<u8>, ctx: *mut Context) -> Read<MemReader> {
+    Read::new(MemReader::new(bytes), ctx)
 }
 
 /// Create a `Read` instance from a `String`.
-pub fn read_from_string(string: String, heap: *mut Heap) -> Read<MemReader> {
-    read_from_bytes(string.into_bytes(), heap)
+pub fn read_from_string(string: String, ctx: *mut Context) -> Read<MemReader> {
+    read_from_bytes(string.into_bytes(), ctx)
 }
 
 /// Create a `Read` instance from a `&str`.
-pub fn read_from_str(str: &str, heap: *mut Heap) -> Read<MemReader> {
-    read_from_string(str.to_string(), heap)
+pub fn read_from_str(str: &str, ctx: *mut Context) -> Read<MemReader> {
+    read_from_string(str.to_string(), ctx)
 }
 
 #[test]
 fn test_read_integers() {
     let input = "5 -5 789 -987";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results, vec!(Value::new_integer(5),
                              Value::new_integer(-5),
                              Value::new_integer(789),
@@ -435,8 +486,8 @@ fn test_read_integers() {
 #[test]
 fn test_read_booleans() {
     let input = "#t #f";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results, vec!(Value::new_boolean(true),
                              Value::new_boolean(false)))
 }
@@ -444,8 +495,8 @@ fn test_read_booleans() {
 #[test]
 fn test_read_characters() {
     let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results, vec!(Value::new_character('a'),
                              Value::new_character('0'),
                              Value::new_character('-'),
@@ -458,8 +509,8 @@ fn test_read_characters() {
 #[test]
 fn test_read_comments() {
     let input = "1 ;; this is a comment\n2";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
 
     assert_eq!(results.len(), 2);
     assert_eq!(results, vec!(Value::new_integer(1),
@@ -469,8 +520,8 @@ fn test_read_comments() {
 #[test]
 fn test_read_pairs() {
     let input = "() (1 2 3) (1 (2) ((3)))";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results.len(), 3);
 
     assert_eq!(results[0], Value::EmptyList);
@@ -527,8 +578,8 @@ fn test_read_pairs() {
 #[test]
 fn test_read_improper_lists() {
     let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results.len(), 4);
 
     let v0 = &results[0];
@@ -561,8 +612,8 @@ fn test_read_improper_lists() {
 #[test]
 fn test_read_string() {
     let input = "\"\" \"hello\" \"\\\"\"";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
     assert_eq!(results.len(), 3);
 
     match results[0] {
@@ -579,4 +630,54 @@ fn test_read_string() {
         Value::String(str) => assert_eq!(str.deref().deref(), "\"".to_string()),
         _                  => assert!(false),
     }
+}
+
+#[test]
+fn test_read_symbols() {
+    let input = "foo + - * ? !";
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    assert_eq!(results.len(), 6);
+
+    match results[0] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "foo".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[1] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "+".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[2] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "-".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[3] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "*".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[4] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "?".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[5] {
+        Value::Symbol(str) => assert_eq!(str.deref().deref(), "!".to_string()),
+        _                  => assert!(false),
+    }
+}
+
+#[test]
+fn test_read_same_symbol() {
+    let input = "foo foo";
+    let mut ctx = Context::new();
+    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    assert_eq!(results.len(), 2);
+
+    // We should only allocate one StringPtr and share it between both parses of
+    // the same symbol.
+    assert_eq!(results[0], results[1]);
 }

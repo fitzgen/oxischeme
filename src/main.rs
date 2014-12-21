@@ -16,6 +16,7 @@
 
 use std::io;
 
+pub mod context;
 pub mod value;
 pub mod read;
 pub mod eval;
@@ -27,12 +28,12 @@ pub fn main() {
     println!("C-c to exit.");
     println!("");
 
-    let mut heap = value::Heap::new();
+    let mut ctx = context::Context::new();
 
     loop {
         let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
-        let mut reader = read::Read::new(stdin, &mut heap);
+        let mut reader = read::Read::new(stdin, &mut ctx);
 
         print!("oxischeme> ");
         for val in reader {
