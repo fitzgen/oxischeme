@@ -26,6 +26,11 @@ pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
             try!(print_pair(cons, writer));
             write!(writer, ")")
         },
+        Value::String(str)  => {
+            try!(write!(writer, "\""));
+            try!(write!(writer, "{}", str.deref()));
+            write!(writer, "\"")
+        },
         Value::Integer(i)   => write!(writer, "{}", i),
         Value::Boolean(b)   => write!(writer, "{}", if b { "#t" } else { "#f" }),
         Value::Character(c) => match c {

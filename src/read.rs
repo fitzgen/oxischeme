@@ -160,7 +160,7 @@ impl<'a, R: Reader> Read<R> {
                     format_args!(format, "Expected '{}', but found EOF.", c));
                 Err(())
             },
-            Some(d) if d != ')' => {
+            Some(d) if d != c => {
                 self.report_failure(
                     format_args!(format, "Expected '{}', found: '{}'", c, d));
                 Err(())
@@ -177,6 +177,11 @@ impl<'a, R: Reader> Read<R> {
     /// Report a bad character literal, e.g. `#\bad`.
     fn bad_character_literal(&mut self) -> Option<Value> {
         self.report_failure("Bad character value".to_string())
+    }
+
+    /// Report an unterminated string literal.
+    fn unterminated_string(&mut self) -> Option<Value> {
+        self.report_failure("Unterminated string literal".to_string())
     }
 
     /// Read a character value, after the starting '#' and '\' characters have
@@ -346,6 +351,37 @@ impl<'a, R: Reader> Read<R> {
             },
         };
     }
+
+    /// Read a string in from the input.
+    fn read_string(&mut self) -> Option<Value> {
+        if self.expect_character('"').is_err() {
+            return None;
+        }
+
+        let mut str = String::new();
+
+        loop {
+            match self.next_char() {
+                None       => return self.unterminated_string(),
+                Some('"')  => unsafe {
+                    let heap = self.heap.as_mut()
+                        .expect("Read<R> should always have a Heap.");
+                    return Some(Value::new_string(heap, str))
+                },
+                Some('\\') => {
+                    match self.next_char() {
+                        Some('n')  => str.push('\n'),
+                        Some('t')  => str.push('\t'),
+                        Some('\\') => str.push('\\'),
+                        Some('"')  => str.push('"'),
+                        Some(c)    => return self.unexpected_character(&c),
+                        None       => return self.unterminated_string(),
+                    }
+                },
+                Some(c)    => str.push(c),
+            }
+        }
+    }
 }
 
 impl<R: Reader> Iterator<Value> for Read<R> {
@@ -360,6 +396,7 @@ impl<R: Reader> Iterator<Value> for Read<R> {
             None                                  => None,
             Some(c) if c.is_digit(10) || c == '-' => self.read_integer(),
             Some('#')                             => self.read_bool_or_char(),
+            Some('"')                             => self.read_string(),
             Some('(')                             => {
                 self.next_char();
                 self.read_pair()
@@ -519,4 +556,27 @@ fn test_read_improper_lists() {
     assert_eq!(v3.cdr().expect("v3.cdr")
                  .cdr(),
               Some(Value::new_integer(3)));
+}
+
+#[test]
+fn test_read_string() {
+    let input = "\"\" \"hello\" \"\\\"\"";
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap).collect();
+    assert_eq!(results.len(), 3);
+
+    match results[0] {
+        Value::String(str) => assert_eq!(str.deref().deref(), "".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[1] {
+        Value::String(str) => assert_eq!(str.deref().deref(), "hello".to_string()),
+        _                  => assert!(false),
+    }
+
+    match results[2] {
+        Value::String(str) => assert_eq!(str.deref().deref(), "\"".to_string()),
+        _                  => assert!(false),
+    }
 }

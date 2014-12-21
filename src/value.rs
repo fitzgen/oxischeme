@@ -29,23 +29,28 @@
 //! we panic.
 
 use std::cmp;
+use std::default::{Default};
 use std::fmt;
 use std::iter::{range};
+use std::ops::{Deref, DerefMut};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[deriving(PartialEq)]
-struct Cons {
+///
+/// You cannot directly create a cons cell, you must allocate one on the heap
+/// with an `Arena` and get back a `ConsPtr`.
+#[deriving(Copy, PartialEq)]
+pub struct Cons {
     car: Value,
     cdr: Value,
 }
 
-impl Cons {
+impl Default for Cons {
     /// Create a new cons pair, with both `car` and `cdr` initialized to
     /// `Value::EmptyList`.
-    pub fn new() -> Cons {
+    fn default() -> Cons {
         Cons {
             car: Value::EmptyList,
             cdr: Value::EmptyList,
@@ -53,32 +58,45 @@ impl Cons {
     }
 }
 
+impl Cons {
+    /// Get the car of this cons cell.
+    pub fn car(&self) -> Value {
+        self.car
+    }
+
+    /// Get the cdr of this cons cell.
+    pub fn cdr(&self) -> Value {
+        self.cdr
+    }
+
+    /// Set the car of this cons cell.
+    pub fn set_car(&mut self, car: Value) {
+        self.car = car;
+    }
+
+    /// Set the cdr of this cons cell.
+    pub fn set_cdr(&mut self, cdr: Value) {
+        self.cdr = cdr;
+    }
+}
+
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
 type FreeList = Vec<uint>;
 
-/// The scheme heap, containing all allocated cons cells. The first step of
-/// running any scheme program involves first creating an instance of `Heap`.
-pub struct Heap {
-    pool: Vec<Cons>,
+/// An arena from which to allocate objects from.
+pub struct Arena<T> {
+    pool: Vec<T>,
     free: FreeList,
 }
 
-/// The default heap capacity.
-pub static DEFAULT_HEAP_CAPACITY : uint = 1 << 12;
-
-impl Heap {
-    /// Create a new `Heap` with the default capacity.
-    pub fn new() -> Heap {
-        Heap::with_capacity(DEFAULT_HEAP_CAPACITY)
-    }
-
-    /// Create a new `Heap` with the capacity to allocate the given number of
-    /// cons cells.
-    pub fn with_capacity(capacity: uint) -> Heap {
+impl<T: Default> Arena<T> {
+    /// Create a new `Arena` with the capacity to allocate the given number of
+    /// `T` instances.
+    pub fn new(capacity: uint) -> Arena<T> {
         assert!(capacity > 0);
-        Heap {
-            pool: range(0, capacity).map(|_| Cons::new()).collect(),
+        Arena {
+            pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
         }
     }
@@ -88,112 +106,163 @@ impl Heap {
         self.pool.capacity()
     }
 
-    /// Allocate a new cons cell and return a pointer to it.
+    /// Allocate a new `T` instance and return a pointer to it.
     ///
     /// ## Panics
     ///
-    /// Panics if the number of cons cells allocated is already equal to this
-    /// heap's capacity and no more cons cells can be allocated.
-    pub fn allocate_cons(&mut self) -> ConsPtr {
+    /// Panics if the number of `T` instances allocated is already equal to this
+    /// `Arena`'s capacity and no more `T` instances can be allocated.
+    pub fn allocate(&mut self) -> ArenaPtr<T> {
         match self.free.pop() {
-            None       => panic!("Heap::allocate_cons out of memory!"),
-            Some(idx)  => {
-                let self_ptr : *mut Heap = self;
-                ConsPtr::new(self_ptr, idx)
+            None      => panic!("Arena::allocate: out of memory!"),
+            Some(idx) => {
+                let self_ptr : *mut Arena<T> = self;
+                ArenaPtr::new(self_ptr, idx)
             },
         }
     }
 }
 
-/// A pointer to a cons cell on the heap.
-#[allow(raw_pointer_deriving)]
-#[deriving(Copy)]
-pub struct ConsPtr {
-    heap: *mut Heap,
+/// A pointer to a `T` instance in an arena.
+pub struct ArenaPtr<T> {
+    arena: *mut Arena<T>,
     index: uint,
 }
 
-impl ConsPtr {
-    /// Create a new `ConsPtr` to the cons cell at the given index in the heap.
-    fn new(heap: *mut Heap, index: uint) -> ConsPtr {
+// XXX: We have to manually declar that ArenaPtr<T> is copy-able because if we
+// use the `#[deriving(Copy)]` it wants T to be copy-able as well, despite the
+// fact that we only need to copy our pointer to the Arena<T>, not any T or the
+// Arena itself.
+impl <T> ::std::kinds::Copy for ArenaPtr<T> { }
+
+impl<T: Default> ArenaPtr<T> {
+    /// Create a new `ArenaPtr` to the `T` instance at the given index in the
+    /// provided arena. **Not** publicly exposed, and should only be called by
+    /// `Arena::allocate`.
+    fn new(arena: *mut Arena<T>, index: uint) -> ArenaPtr<T> {
         unsafe {
-            let heap_ref = heap.as_ref()
-                .expect("ConsPtr::new should be passed a valid Heap.");
-            assert!(index < heap_ref.capacity());
+            let arena_ref = arena.as_ref()
+                .expect("ArenaPtr<T>::new should be passed a valid Arena.");
+            assert!(index < arena_ref.capacity());
         }
-        ConsPtr {
-            heap: heap,
+        ArenaPtr {
+            arena: arena,
             index: index,
         }
     }
+}
 
-    /// Get the car of this cons cell.
-    pub fn car(&self) -> Value {
+impl<T> Deref<T> for ArenaPtr<T> {
+    fn deref<'a>(&'a self) -> &'a T {
         unsafe {
-            let heap = self.heap.as_ref()
-                .expect("ConsPtr::car should always have a Heap.");
-            heap.pool[self.index].car
-        }
-    }
-
-    /// Get the cdr of this cons cell.
-    pub fn cdr(&self) -> Value {
-        unsafe {
-            let heap = self.heap.as_ref()
-                .expect("ConsPtr::cdr should always have a Heap.");
-            heap.pool[self.index].cdr
-        }
-    }
-
-    /// Set the car of this cons cell.
-    pub fn set_car(&mut self, car: Value) {
-        unsafe {
-            let heap = self.heap.as_mut()
-                .expect("ConsPtr::set_car should always have access to the heap.");
-            heap.pool[self.index].car = car;
-        }
-    }
-
-    /// Set the cdr of this cons cell.
-    pub fn set_cdr(&mut self, cdr: Value) {
-        unsafe {
-            let heap = self.heap.as_mut()
-                .expect("ConsPtr::set_cdr should always have access to the heap.");
-            heap.pool[self.index].cdr = cdr;
+            let arena = self.arena.as_ref()
+                .expect("ArenaPtr::deref should always have an Arena.");
+            &arena.pool[self.index]
         }
     }
 }
 
-impl fmt::Show for ConsPtr {
+impl<T> DerefMut<T> for ArenaPtr<T> {
+    fn deref_mut<'a>(&'a mut self) -> &'a mut T {
+        unsafe {
+            let arena = self.arena.as_mut()
+                .expect("ArenaPtr::deref_mut should always have an Arena.");
+            &mut arena.pool[self.index]
+        }
+    }
+}
+
+impl<T> fmt::Show for ArenaPtr<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ConsPtr({})", self.index)
+        write!(f, "ArenaPtr({}, {})", self.arena.to_uint(), self.index)
     }
 }
 
-impl cmp::PartialEq for ConsPtr {
+impl<T> cmp::PartialEq for ArenaPtr<T> {
     /// Note that `PartialEq` implements pointer object identity, not structural
     /// comparison. In other words, it is equivalent to the scheme function
     /// `eq?`, not the scheme function `equal?`
-    fn eq(&self, other: &ConsPtr) -> bool {
-        self.index == other.index && self.heap.to_uint() == other.heap.to_uint()
+    fn eq(&self, other: &ArenaPtr<T>) -> bool {
+        self.index == other.index && self.arena.to_uint() == other.arena.to_uint()
+    }
+}
+
+/// A pointer to a cons cell on the heap.
+pub type ConsPtr = ArenaPtr<Cons>;
+
+/// A pointer to a string on the heap.
+pub type StringPtr = ArenaPtr<String>;
+
+/// The scheme heap, containing all allocated cons cells and strings. The first
+/// step of running any Scheme program involves first creating an instance of
+/// `Heap` and reserving memory within which to run the Scheme program.
+pub struct Heap {
+    cons_cells: Arena<Cons>,
+    strings: Arena<String>,
+}
+
+/// The default capacity of cons cells.
+pub static DEFAULT_CONS_CAPACITY : uint = 1 << 12;
+
+/// The default capacity of strings.
+pub static DEFAULT_STRINGS_CAPACITY : uint = 1 << 12;
+
+impl Heap {
+    /// Create a new `Heap` with the default capacity.
+    pub fn new() -> Heap {
+        Heap::with_arenas(Arena::new(DEFAULT_CONS_CAPACITY),
+                          Arena::new(DEFAULT_STRINGS_CAPACITY))
+    }
+
+    /// Create a new `Heap` using the given arenas for allocating cons cells and
+    /// strings within.
+    pub fn with_arenas(cons_cells: Arena<Cons>, strings: Arena<String>) -> Heap {
+        Heap {
+            cons_cells: cons_cells,
+            strings: strings
+        }
+    }
+
+    /// Allocate a new cons cell and return a pointer to it.
+    ///
+    /// ## Panics
+    ///
+    /// Panics if the `Arena` for cons cells has already reached capacity.
+    pub fn allocate_cons(&mut self) -> ConsPtr {
+        self.cons_cells.allocate()
+    }
+
+    /// Allocate a new string and return a pointer to it.
+    ///
+    /// ## Panics
+    ///
+    /// Panics if the `Arena` for strings has already reached capacity.
+    pub fn allocate_string(&mut self) -> StringPtr {
+        self.strings.allocate()
     }
 }
 
 /// `Value` represents a scheme value of any type.
 ///
 /// Note that `PartialEq` is object identity, not structural comparison, same as
-/// with [`ConsPtr`](struct.ConsPtr.html).
+/// with [`ArenaPtr`](struct.ArenaPtr.html).
 #[deriving(Copy, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
-    /// The scheme pair type is a pointer into our `Heap` to a GC-managed `Cons`
-    /// cell.
+
+    /// The scheme pair type is a pointer to a GC-managed `Cons` cell.
     Pair(ConsPtr),
+
+    /// The scheme string type is a pointer to a GC-managed `String`.
+    String(StringPtr),
+
     /// Scheme integers are represented as 64 bit integers.
     Integer(i64),
+
     /// Scheme booleans are represented with `bool`.
     Boolean(bool),
+
     /// Scheme characters are `char`s.
     Character(char),
 }
@@ -221,6 +290,14 @@ impl Value {
         cons.set_car(car);
         cons.set_cdr(cdr);
         Value::Pair(cons)
+    }
+
+    /// Create a new string value with the given string.
+    pub fn new_string(heap: &mut Heap, str: String) -> Value {
+        let mut value = heap.allocate_string();
+        value.clear();
+        value.push_str(str.as_slice());
+        Value::String(value)
     }
 }
 
