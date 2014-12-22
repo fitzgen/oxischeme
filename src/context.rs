@@ -66,7 +66,7 @@ impl<'a> Context {
     }
 }
 
-/// Getters for well known symbols.
+/// ## Getters for well known symbols.
 impl Context {
     pub fn quote_symbol(&mut self) -> Value {
         self.get_or_create_symbol("quote".to_string())
@@ -74,5 +74,9 @@ impl Context {
 
     pub fn if_symbol(&mut self) -> Value {
         self.get_or_create_symbol("if".to_string())
+    }
+
+    pub fn begin_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("begin".to_string())
     }
 }

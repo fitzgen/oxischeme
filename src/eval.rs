@@ -42,6 +42,7 @@ pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
 
     let quote = ctx.quote_symbol();
     let if_symbol = ctx.if_symbol();
+    let begin = ctx.begin_symbol();
 
     match pair_val.car() {
         // Quoted forms.
@@ -71,10 +72,37 @@ pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
             return Err("Improperly formed if expression".to_string());
         },
 
+        // `(begin ...)` sequences.
+        v if v == begin => {
+            return evaluate_sequence(ctx, pair_val.cdr());
+        },
+
         _                  => {
             return Err(format_args!(format, "Cannot evaluate: {}", val));
         },
     };
+}
+
+/// Evaluate each expression in the given cons list `exprs` and return the value
+/// of the last expression.
+fn evaluate_sequence(ctx: &mut Context, exprs: Value) -> SchemeResult {
+    let mut e = exprs;
+    loop {
+        match e {
+            Value::EmptyList  => return Ok(Value::EmptyList),
+            Value::Pair(pair) => {
+                let v = try!(evaluate(ctx, pair.car()));
+                if pair.cdr() == Value::EmptyList {
+                    return Ok(v);
+                } else {
+                    e = pair.cdr();
+                }
+            },
+            _                 => {
+                return Err("Bad sequence of expressions".to_string());
+            },
+        }
+    }
 }
 
 #[test]
@@ -119,7 +147,7 @@ fn test_eval_if_consequent() {
     ];
     let if_form = list(&mut ctx, &mut items);
     assert_eq!(evaluate(&mut ctx, if_form),
-               Ok(Value::new_integer(1)))
+               Ok(Value::new_integer(1)));
 }
 
 #[test]
@@ -135,5 +163,20 @@ fn test_eval_if_alternative() {
     ];
     let if_form = list(&mut ctx, &mut items);
     assert_eq!(evaluate(&mut ctx, if_form),
-               Ok(Value::new_integer(2)))
+               Ok(Value::new_integer(2)));
+}
+
+#[test]
+fn test_eval_begin() {
+    use value::list;
+
+    let mut ctx = Context::new();
+    let mut items = [
+        ctx.begin_symbol(),
+        Value::new_integer(1),
+        Value::new_integer(2)
+    ];
+    let begin_form = list(&mut ctx, &mut items);
+    assert_eq!(evaluate(&mut ctx, begin_form),
+               Ok(Value::new_integer(2)));
 }

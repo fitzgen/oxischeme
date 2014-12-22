@@ -392,7 +392,7 @@ fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context,
     }
 }
 
-/// The 28 car/cdr compositions.
+/// ## The 28 car/cdr compositions.
 impl Cons {
     pub fn cddr(&self) -> SchemeResult {
         self.cdr.cdr().ok_or("bad cddr".to_string())
