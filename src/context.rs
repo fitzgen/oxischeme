@@ -65,3 +65,14 @@ impl<'a> Context {
         return Value::new_symbol(symbol);
     }
 }
+
+/// Getters for well known symbols.
+impl Context {
+    pub fn quote_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("quote".to_string())
+    }
+
+    pub fn if_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("if".to_string())
+    }
+}

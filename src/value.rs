@@ -337,14 +337,52 @@ impl Value {
             _              => false,
         }
     }
+
+    /// Return true if this value is an atom, false otherwise.
+    pub fn is_atom(&self) -> bool {
+        !self.is_pair()
+    }
+
+    /// Convert this symbol value to a `StringPtr` to the symbol's string name.
+    pub fn to_symbol(&self) -> Option<StringPtr> {
+        match *self {
+            Value::Symbol(sym) => Some(sym),
+            _                  => None,
+        }
+    }
+
+    /// Convert this pair value to a `ConsPtr` to the cons cell this pair is
+    /// referring to.
+    pub fn to_pair(&self) -> Option<ConsPtr> {
+        match *self {
+            Value::Pair(cons) => Some(cons),
+            _                 => None,
+        }
+    }
+
+    /// Assuming that this value is a proper list, get the length of the list.
+    pub fn len(&self) -> Result<u64, ()> {
+        match *self {
+            Value::EmptyList => Ok(0),
+            Value::Pair(p)   => {
+                let cdr_len = try!(p.cdr().len());
+                Ok(cdr_len + 1)
+            },
+            _                => Err(()),
+        }
+    }
 }
+
+/// Either a Scheme `Value`, or a `String` containing an error message.
+pub type SchemeResult = Result<Value, String>;
 
 /// A helper utility to create a cons list from the given values.
 pub fn list(ctx: &mut Context, values: &[Value]) -> Value {
     list_helper(ctx, &mut values.iter())
 }
 
-fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context, values: &mut T) -> Value {
+fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context,
+                                           values: &mut T) -> Value {
     match values.next() {
         None      => Value::EmptyList,
         Some(car) => {
@@ -353,3 +391,34 @@ fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context, values: &mut T) ->
         },
     }
 }
+
+/// The 28 car/cdr compositions.
+impl Cons {
+    pub fn cddr(&self) -> SchemeResult {
+        self.cdr.cdr().ok_or("bad cddr".to_string())
+    }
+
+    pub fn cdddr(&self) -> SchemeResult {
+        let cddr = try!(self.cddr());
+        cddr.cdr().ok_or("bad cdddr".to_string())
+    }
+
+    // TODO FITZGEN: cddddr
+
+    pub fn cadr(&self) -> SchemeResult {
+        self.cdr.car().ok_or("bad cadr".to_string())
+    }
+
+    pub fn caddr(&self) -> SchemeResult {
+        let cddr = try!(self.cddr());
+        cddr.car().ok_or("bad caddr".to_string())
+    }
+
+    pub fn cadddr(&self) -> SchemeResult {
+        let cdddr = try!(self.cdddr());
+        cdddr.car().ok_or("bad caddr".to_string())
+    }
+
+    // TODO FITZGEN ...
+}
+
