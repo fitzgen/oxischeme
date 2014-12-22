@@ -14,21 +14,72 @@
 
 //! Evaluating values.
 
+use std::fmt::{format};
+use context::{Context};
 use value::{Value};
 
+fn is_auto_quoting(val: &Value) -> bool {
+    match *val {
+        Value::EmptyList    => false,
+        Value::Pair(_)      => false,
+        Value::Symbol(_)    => false,
+        Value::String(_)    => true,
+        Value::Integer(_)   => true,
+        Value::Boolean(_)   => true,
+        Value::Character(_) => true,
+    }
+}
+
+fn is_quoted(ctx: &mut Context, val: &Value) -> bool {
+    let quote_symbol = ctx.get_or_create_symbol("quote".to_string());
+    match val.car() {
+        Some(s) if s == quote_symbol => {
+            val.cdr().unwrap().is_pair()
+        },
+        _                                                 => false,
+    }
+}
+
+pub type SchemeResult = Result<Value, String>;
+
 /// Evaluate the given value.
-pub fn evaluate(val: Value) -> Value {
-    val
+pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
+    if is_auto_quoting(&val) {
+        return Ok(val);
+    }
+
+    if is_quoted(ctx, &val) {
+        return Ok(val.cdr().unwrap().car().unwrap());
+    }
+
+    return Err(format_args!(format, "Value is not quoted or auto-quoting: {}", val))
 }
 
 #[test]
 fn test_eval_integer() {
-    assert_eq!(evaluate(Value::new_integer(42 as i64)),
-               Value::new_integer(42 as i64));
+    let mut ctx = Context::new();
+    assert_eq!(evaluate(&mut ctx, Value::new_integer(42)),
+               Ok(Value::new_integer(42)));
 }
 
 #[test]
 fn test_eval_boolean() {
-    assert_eq!(evaluate(Value::new_boolean(true)),
-               Value::new_boolean(true));
+    let mut ctx = Context::new();
+    assert_eq!(evaluate(&mut ctx, Value::new_boolean(true)),
+               Ok(Value::new_boolean(true)));
+}
+
+#[test]
+fn test_eval_quoted() {
+    use value::list;
+
+    let mut ctx = Context::new();
+    let val = Value::new_integer(5);
+    let mut items = [
+        ctx.get_or_create_symbol("quote".to_string()),
+        val
+    ];
+    let quoted = list(&mut ctx, &mut items);
+    assert_eq!(evaluate(&mut ctx, quoted),
+               Ok(val));
 }

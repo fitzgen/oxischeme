@@ -329,6 +329,14 @@ impl Value {
             _                     => None,
         }
     }
+
+    /// Return true if this value is a pair, false otherwise.
+    pub fn is_pair(&self) -> bool {
+        match *self {
+            Value::Pair(_) => true,
+            _              => false,
+        }
+    }
 }
 
 /// A helper utility to create a cons list from the given values.

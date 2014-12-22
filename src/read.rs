@@ -427,16 +427,16 @@ impl<'a, R: Reader> Read<R> {
     /// Read a quoted form from input, e.g. `'(1 2 3)`.
     fn read_quoted(&mut self) -> Option<Value> {
         if self.expect_character('\'').is_err() {
-            None
+            return None;
         }
 
-        match self.next() {
+        return match self.next() {
             None      => self.unexpected_eof(),
             Some(val) => Some(list(self.ctx(), &mut [
                 self.ctx().get_or_create_symbol("quote".to_string()),
                 val
             ])),
-        }
+        };
     }
 }
 

@@ -37,8 +37,14 @@ pub fn main() {
 
         print!("oxischeme> ");
         for val in reader {
-            let evaluated = eval::evaluate(val);
-            print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+            match eval::evaluate(&mut ctx, val) {
+                Ok(evaluated) => {
+                    print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+                },
+                Err(e) => {
+                    (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
+                },
+            };
             (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
             (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
             stdout.flush().ok().expect("IO ERROR!");
