@@ -224,3 +224,38 @@ fn test_eval_begin() {
     assert_eq!(evaluate(&mut ctx, begin_form),
                Ok(Value::new_integer(2)));
 }
+
+#[test]
+fn test_eval_variables() {
+    use value::list;
+
+    let mut ctx = Context::new();
+
+    let define_symbol = ctx.define_symbol();
+    let set_bang_symbol = ctx.set_bang_symbol();
+    let foo_symbol = ctx.get_or_create_symbol("foo".to_string());
+
+    let mut def_items = [
+        define_symbol,
+        foo_symbol,
+        Value::new_integer(2)
+    ];
+    let def_form = list(&mut ctx, &mut def_items);
+    evaluate(&mut ctx, def_form).ok().expect("Should be able to define");
+
+    let def_val = evaluate(&mut ctx, foo_symbol).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(def_val, Value::new_integer(2));
+
+    let mut set_items = [
+        set_bang_symbol,
+        foo_symbol,
+        Value::new_integer(1)
+    ];
+    let set_form = list(&mut ctx, &mut set_items);
+    evaluate(&mut ctx, set_form).ok().expect("Should be able to define");
+
+    let set_val = evaluate(&mut ctx, foo_symbol).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(set_val, Value::new_integer(1));
+}
