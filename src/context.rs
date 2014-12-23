@@ -19,8 +19,8 @@
 
 use std::collections::{HashMap};
 use std::mem;
-use environment::{Environment};
-use heap::{Heap, StringPtr};
+
+use heap::{Heap, StringPtr, EnvironmentPtr};
 use value::{Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
@@ -28,7 +28,7 @@ use value::{Value};
 pub struct Context {
     heap: *mut Heap,
     symbol_table: HashMap<String, StringPtr>,
-    environment: Environment
+    environment: EnvironmentPtr
 }
 
 impl<'a> Context {
@@ -41,10 +41,16 @@ impl<'a> Context {
 
     /// Create a new `Context` instance using the given `Heap`.
     pub fn with_heap(heap: *mut Heap) -> Context {
-        Context {
-            heap: heap,
-            environment: Environment::new(),
-            symbol_table: HashMap::new()
+        unsafe {
+            let mut heap_ref = heap.as_mut()
+                .expect("Context::with_heap should always have a Heap");
+            let env = heap_ref.allocate_environment();
+
+            return Context {
+                heap: heap,
+                environment: env,
+                symbol_table: HashMap::new()
+            };
         }
     }
 
@@ -57,8 +63,8 @@ impl<'a> Context {
 
     /// Get the current environment. This is the dynamic environment, not the
     /// lexical environment.
-    pub fn env(&'a mut self) -> &'a mut Environment {
-        &mut self.environment
+    pub fn env(&self) -> EnvironmentPtr {
+        self.environment
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`

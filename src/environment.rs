@@ -14,6 +14,7 @@
 
 //! The implementation of the Scheme environment that binds symbols to values.
 
+use std::default::{Default};
 use std::fmt::{format};
 use std::collections::{HashMap};
 use value::{SchemeResult, Value};
@@ -51,5 +52,11 @@ impl Environment {
         let val = try!(self.bindings.get(sym).ok_or(
             format_args!(format, "Reference to undefined identifier: {}", sym)));
         return Ok(*val);
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Environment {
+        Environment::new()
     }
 }
