@@ -16,13 +16,13 @@
 
 use std::io;
 
-mod environment;
-
 pub mod context;
-pub mod value;
-pub mod read;
+pub mod environment;
 pub mod eval;
+pub mod heap;
 pub mod print;
+pub mod read;
+pub mod value;
 
 /// The main Read-Eval-Print-Loop.
 pub fn main() {

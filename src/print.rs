@@ -15,7 +15,8 @@
 //! Printing values' text representations.
 
 use std::io::{IoResult};
-use value::{Value, ConsPtr};
+use heap::{ConsPtr};
+use value::{Value};
 
 /// Print the given value's text representation to the given writer.
 pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {

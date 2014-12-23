@@ -20,7 +20,8 @@
 use std::collections::{HashMap};
 use std::mem;
 use environment::{Environment};
-use value::{Heap, StringPtr, Value};
+use heap::{Heap, StringPtr};
+use value::{Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
 /// and the symbol table.
