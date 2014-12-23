@@ -34,17 +34,23 @@ pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
             return Ok(val);
         }
 
+        if let Value::Symbol(sym) = val {
+            return ctx.env().lookup(sym.deref());
+        }
+
         return Err(format_args!(format, "Cannot evaluate: {}", val));
     }
 
-    let pair_val = val.to_pair()
+    let pair = val.to_pair()
         .expect("If a value is not an atom, then it must be a pair.");
 
     let quote = ctx.quote_symbol();
     let if_symbol = ctx.if_symbol();
     let begin = ctx.begin_symbol();
+    let define = ctx.define_symbol();
+    let set_bang = ctx.set_bang_symbol();
 
-    match pair_val.car() {
+    match pair.car() {
         // Quoted forms.
         v if v == quote => {
             if let Some(Value::EmptyList) = val.cdr().unwrap().cdr() {
@@ -57,15 +63,15 @@ pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
         // If expressions.
         v if v == if_symbol => {
             if let Ok(4) = val.len() {
-                let condition_form = try!(pair_val.cadr());
+                let condition_form = try!(pair.cadr());
                 let condition_val = try!(evaluate(ctx, condition_form));
 
                 if condition_val == Value::new_boolean(false) {
-                    let alternative_form = try!(pair_val.cadddr());
+                    let alternative_form = try!(pair.cadddr());
                     return evaluate(ctx, alternative_form);
                 }
 
-                let consequent_form = try!(pair_val.caddr());
+                let consequent_form = try!(pair.caddr());
                 return evaluate(ctx, consequent_form);
             }
 
@@ -74,7 +80,45 @@ pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
 
         // `(begin ...)` sequences.
         v if v == begin => {
-            return evaluate_sequence(ctx, pair_val.cdr());
+            return evaluate_sequence(ctx, pair.cdr());
+        },
+
+        // Definitions. These are only supposed to be allowed at the top level
+        // and at the beginning of a body, but we are punting on that
+        // restriction for now.
+        v if v == define => {
+            if let Ok(3) = val.len() {
+                let sym = try!(pair.cadr());
+
+                if let Some(str) = sym.to_symbol() {
+                    let def_value_form = try!(pair.caddr());
+                    let def_value = try!(evaluate(ctx, def_value_form));
+                    ctx.env().define(str.deref().clone(), def_value);
+                    return Ok(ctx.unspecified_symbol());
+                }
+
+                return Err("Can only define symbols".to_string());
+            }
+
+            return Err("Improperly formed definition".to_string());
+        },
+
+        // `set!` assignment.
+        v if v == set_bang => {
+            if let Ok(3) = val.len() {
+                let sym = try!(pair.cadr());
+
+                if let Some(str) = sym.to_symbol() {
+                    let new_value_form = try!(pair.caddr());
+                    let new_value = try!(evaluate(ctx, new_value_form));
+                    try!(ctx.env().update(str.deref().clone(), new_value));
+                    return Ok(ctx.unspecified_symbol());
+                }
+
+                return Err("Can only set! symbols".to_string());
+            }
+
+            return Err("Improperly formed set! expression".to_string());
         },
 
         _                  => {

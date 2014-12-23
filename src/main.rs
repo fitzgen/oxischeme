@@ -16,6 +16,8 @@
 
 use std::io;
 
+mod environment;
+
 pub mod context;
 pub mod value;
 pub mod read;

@@ -19,13 +19,15 @@
 
 use std::collections::{HashMap};
 use std::mem;
+use environment::{Environment};
 use value::{Heap, StringPtr, Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
 /// and the symbol table.
 pub struct Context {
     heap: *mut Heap,
-    symbol_table: HashMap<String, StringPtr>
+    symbol_table: HashMap<String, StringPtr>,
+    environment: Environment
 }
 
 impl<'a> Context {
@@ -40,6 +42,7 @@ impl<'a> Context {
     pub fn with_heap(heap: *mut Heap) -> Context {
         Context {
             heap: heap,
+            environment: Environment::new(),
             symbol_table: HashMap::new()
         }
     }
@@ -49,6 +52,12 @@ impl<'a> Context {
         unsafe {
             self.heap.as_mut().expect("Context::heap should always have a Heap")
         }
+    }
+
+    /// Get the current environment. This is the dynamic environment, not the
+    /// lexical environment.
+    pub fn env(&'a mut self) -> &'a mut Environment {
+        &mut self.environment
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`
@@ -78,5 +87,17 @@ impl Context {
 
     pub fn begin_symbol(&mut self) -> Value {
         self.get_or_create_symbol("begin".to_string())
+    }
+
+    pub fn define_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("define".to_string())
+    }
+
+    pub fn set_bang_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("set!".to_string())
+    }
+
+    pub fn unspecified_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("unspecified".to_string())
     }
 }
