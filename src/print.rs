@@ -40,7 +40,8 @@ pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
             '\t' => write!(writer, "#\\tab"),
             ' '  => write!(writer, "#\\space"),
             _    => write!(writer, "#\\{}", c),
-        }
+        },
+        Value::Procedure(p) => write!(writer, "Procedure({})", p),
     }
 }
 

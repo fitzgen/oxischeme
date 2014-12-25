@@ -28,7 +28,7 @@ use value::{Value};
 pub struct Context {
     heap: *mut Heap,
     symbol_table: HashMap<String, StringPtr>,
-    environment: EnvironmentPtr
+    global_environment: EnvironmentPtr
 }
 
 impl<'a> Context {
@@ -48,7 +48,7 @@ impl<'a> Context {
 
             return Context {
                 heap: heap,
-                environment: env,
+                global_environment: env,
                 symbol_table: HashMap::new()
             };
         }
@@ -61,10 +61,9 @@ impl<'a> Context {
         }
     }
 
-    /// Get the current environment. This is the dynamic environment, not the
-    /// lexical environment.
-    pub fn env(&self) -> EnvironmentPtr {
-        self.environment
+    /// Get the global environment.
+    pub fn global_env(&self) -> EnvironmentPtr {
+        self.global_environment
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`
@@ -106,5 +105,9 @@ impl Context {
 
     pub fn unspecified_symbol(&mut self) -> Value {
         self.get_or_create_symbol("unspecified".to_string())
+    }
+
+    pub fn lambda_symbol(&mut self) -> Value {
+        self.get_or_create_symbol("lambda".to_string())
     }
 }

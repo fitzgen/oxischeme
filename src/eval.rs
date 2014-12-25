@@ -16,6 +16,8 @@
 
 use std::fmt::{format};
 use context::{Context};
+use environment::{Environment};
+use heap::{EnvironmentPtr};
 use value::{SchemeResult, Value};
 
 fn is_auto_quoting(val: &Value) -> bool {
@@ -27,118 +29,220 @@ fn is_auto_quoting(val: &Value) -> bool {
     }
 }
 
-/// Evaluate the given value.
-pub fn evaluate(ctx: &mut Context, val: Value) -> SchemeResult {
-    if val.is_atom() {
-        if is_auto_quoting(&val) {
-            return Ok(val);
-        }
-
-        if let Value::Symbol(sym) = val {
-            return ctx.env().lookup(sym.deref());
-        }
-
-        return Err(format_args!(format, "Cannot evaluate: {}", val));
-    }
-
-    let pair = val.to_pair()
-        .expect("If a value is not an atom, then it must be a pair.");
-
-    let quote = ctx.quote_symbol();
-    let if_symbol = ctx.if_symbol();
-    let begin = ctx.begin_symbol();
-    let define = ctx.define_symbol();
-    let set_bang = ctx.set_bang_symbol();
-
-    match pair.car() {
-        // Quoted forms.
-        v if v == quote => {
-            if let Some(Value::EmptyList) = val.cdr().unwrap().cdr() {
-                return Ok(val.cdr().unwrap().car().unwrap());
-            }
-
-            return Err("Wrong number of parts in quoted form".to_string());
-        },
-
-        // If expressions.
-        v if v == if_symbol => {
-            if let Ok(4) = val.len() {
-                let condition_form = try!(pair.cadr());
-                let condition_val = try!(evaluate(ctx, condition_form));
-
-                if condition_val == Value::new_boolean(false) {
-                    let alternative_form = try!(pair.cadddr());
-                    return evaluate(ctx, alternative_form);
-                }
-
-                let consequent_form = try!(pair.caddr());
-                return evaluate(ctx, consequent_form);
-            }
-
-            return Err("Improperly formed if expression".to_string());
-        },
-
-        // `(begin ...)` sequences.
-        v if v == begin => {
-            return evaluate_sequence(ctx, pair.cdr());
-        },
-
-        // Definitions. These are only supposed to be allowed at the top level
-        // and at the beginning of a body, but we are punting on that
-        // restriction for now.
-        v if v == define => {
-            if let Ok(3) = val.len() {
-                let sym = try!(pair.cadr());
-
-                if let Some(str) = sym.to_symbol() {
-                    let def_value_form = try!(pair.caddr());
-                    let def_value = try!(evaluate(ctx, def_value_form));
-                    ctx.env().define(str.deref().clone(), def_value);
-                    return Ok(ctx.unspecified_symbol());
-                }
-
-                return Err("Can only define symbols".to_string());
-            }
-
-            return Err("Improperly formed definition".to_string());
-        },
-
-        // `set!` assignment.
-        v if v == set_bang => {
-            if let Ok(3) = val.len() {
-                let sym = try!(pair.cadr());
-
-                if let Some(str) = sym.to_symbol() {
-                    let new_value_form = try!(pair.caddr());
-                    let new_value = try!(evaluate(ctx, new_value_form));
-                    try!(ctx.env().update(str.deref().clone(), new_value));
-                    return Ok(ctx.unspecified_symbol());
-                }
-
-                return Err("Can only set! symbols".to_string());
-            }
-
-            return Err("Improperly formed set! expression".to_string());
-        },
-
-        _                  => {
-            return Err(format_args!(format, "Cannot evaluate: {}", val));
-        },
-    };
+/// Evaluate the given form in the global environment.
+pub fn evaluate_in_global_env(ctx: &mut Context, form: Value) -> SchemeResult {
+    let env = ctx.global_env();
+    evaluate(ctx, env, form)
 }
 
-/// Evaluate each expression in the given cons list `exprs` and return the value
-/// of the last expression.
-fn evaluate_sequence(ctx: &mut Context, exprs: Value) -> SchemeResult {
+/// Evaluate the given form in the given environment.
+pub fn evaluate(ctx: &mut Context,
+                env: EnvironmentPtr,
+                form: Value) -> SchemeResult {
+    // NB: We use a loop to trampoline tail calls to `evaluate` to ensure that tail
+    // calls don't take up more stack space. Instead of doing
+    //
+    //   return evaluate(ctx, new_env, new_form);
+    //
+    // we just do
+    //
+    //   env_ = new_env;
+    //   form_ = new_form;
+    //   continue;
+    let mut env_ = env;
+    let mut form_ = form;
+    loop {
+        if form_.is_atom() {
+            return evaluate_atom(env_, form_);
+        }
+
+        let pair = form_.to_pair()
+            .expect("If a value is not an atom, then it must be a pair.");
+
+        let quote = ctx.quote_symbol();
+        let if_symbol = ctx.if_symbol();
+        let begin = ctx.begin_symbol();
+        let define = ctx.define_symbol();
+        let set_bang = ctx.set_bang_symbol();
+        let lambda = ctx.lambda_symbol();
+
+        match pair.car() {
+            // Quoted forms.
+            v if v == quote => return evaluate_quoted(form_),
+
+            // Definitions. These are only supposed to be allowed at the top level
+            // and at the beginning of a body, but we are punting on that
+            // restriction for now.
+            v if v == define => return evaluate_definition(ctx, env_, form_),
+
+            // `set!` assignment.
+            v if v == set_bang => return evaluate_set(ctx, env_, form_),
+
+            // Lambda forms.
+            v if v == lambda => return evaluate_lambda(ctx, env_, form_),
+
+            // If expressions.
+            v if v == if_symbol => {
+                let length = try!(form_.len().ok().ok_or(
+                    "Improperly formed if expression".to_string()));
+                if length != 4 {
+                    return Err("Improperly formed if expression".to_string());
+                }
+
+                let condition_form = try!(pair.cadr());
+                let condition_val = try!(evaluate(ctx, env_, condition_form));
+
+                form_ = try!(if condition_val == Value::new_boolean(false) {
+                    // Alternative.
+                    pair.cadddr()
+                } else {
+                    // Consequent.
+                    pair.caddr()
+                });
+                continue;
+            },
+
+            // `(begin ...)` sequences.
+            v if v == begin => {
+                form_ = try!(evaluate_sequence(ctx, env_, pair.cdr()));
+                continue;
+            },
+
+            // Procedure invocations.
+            procedure        => {
+                // Ensure that the form is a proper list.
+                try!(form_.len().ok().ok_or("Bad invocation form".to_string()));
+
+                let proc_val = try!(evaluate(ctx, env_, procedure));
+                let proc_ptr = try!(proc_val.to_procedure().ok_or(
+                    format_args!(format,
+                                 "Expected a procedure, found {}",
+                                 proc_val)));
+                let args = try!(evaluate_list(ctx, env_, pair.cdr()));
+
+                env_ = try!(Environment::extend(ctx.heap(),
+                                                proc_ptr.get_env(),
+                                                proc_ptr.get_params(),
+                                                args));
+                form_ = try!(evaluate_sequence(ctx,
+                                               env_,
+                                               proc_ptr.get_body()));
+                continue;
+            },
+        };
+    }
+}
+
+/// Evaluate a `lambda` form.
+fn evaluate_lambda(ctx: &mut Context,
+                   env: EnvironmentPtr,
+                   form: Value) -> SchemeResult {
+    let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
+    if length < 3 {
+        return Err("Lambda is missing body".to_string());
+    }
+
+    let pair = form.to_pair().unwrap();
+    let params = pair.cadr().ok().expect("Must be here since length >= 3");
+    let body = pair.cddr().ok().expect("Must be here since length >= 3");
+    return Ok(Value::new_procedure(ctx.heap(), params, body, env));
+}
+
+/// Evaluate a `set!` form.
+fn evaluate_set(ctx: &mut Context,
+                env: EnvironmentPtr,
+                form: Value) -> SchemeResult {
+    let mut env_ = env;
+    if let Ok(3) = form.len() {
+        let pair = form.to_pair().unwrap();
+        let sym = try!(pair.cadr());
+
+        if let Some(str) = sym.to_symbol() {
+            let new_value_form = try!(pair.caddr());
+            let new_value = try!(evaluate(ctx, env, new_value_form));
+            try!(env_.update(str.deref().clone(), new_value));
+            return Ok(ctx.unspecified_symbol());
+        }
+
+        return Err("Can only set! symbols".to_string());
+    }
+
+    return Err("Improperly formed set! expression".to_string());
+}
+
+/// Evaluate a `define` form.
+fn evaluate_definition(ctx: &mut Context,
+                       env: EnvironmentPtr,
+                       form: Value) -> SchemeResult {
+    let mut env_ = env;
+    if let Ok(3) = form.len() {
+        let pair = form.to_pair().unwrap();
+        let sym = try!(pair.cadr());
+
+        if let Some(str) = sym.to_symbol() {
+            let def_value_form = try!(pair.caddr());
+            let def_value = try!(evaluate(ctx, env, def_value_form));
+            env_.define(str.deref().clone(), def_value);
+            return Ok(ctx.unspecified_symbol());
+        }
+
+        return Err("Can only define symbols".to_string());
+    }
+
+    return Err("Improperly formed definition".to_string());
+}
+
+/// Evaluate a quoted form.
+fn evaluate_quoted(form: Value) -> SchemeResult {
+    if let Some(Value::EmptyList) = form.cdr().unwrap().cdr() {
+        return Ok(form.cdr().unwrap().car().unwrap());
+    }
+
+    return Err("Wrong number of parts in quoted form".to_string());
+}
+
+/// Evaluate an atom (ie anything that is not a list).
+fn evaluate_atom(env: EnvironmentPtr, form: Value) -> SchemeResult {
+    if is_auto_quoting(&form) {
+        return Ok(form);
+    }
+
+    if let Value::Symbol(sym) = form {
+        return env.lookup(sym.deref());
+    }
+
+    return Err(format_args!(format, "Cannot evaluate: {}", form));
+}
+
+/// Evaluate each given form, returning the resulting list of values.
+fn evaluate_list(ctx: &mut Context,
+                 env: EnvironmentPtr,
+                 forms: Value) -> SchemeResult {
+    match forms {
+        Value::EmptyList  => Ok(Value::EmptyList),
+        Value::Pair(cons) => {
+            let val = try!(evaluate(ctx, env, cons.car()));
+            let rest = try!(evaluate_list(ctx, env, cons.cdr()));
+            Ok(Value::new_pair(ctx.heap(), val, rest))
+        },
+        _                 => Err("Improper list".to_string()),
+    }
+}
+
+/// Evaluate each expression in the given cons list `exprs` except for the last
+/// expression, whose form is returned (so it can be trampolined to maintain
+/// TCO).
+fn evaluate_sequence(ctx: &mut Context,
+                     env: EnvironmentPtr,
+                     exprs: Value) -> SchemeResult {
     let mut e = exprs;
     loop {
         match e {
-            Value::EmptyList  => return Ok(Value::EmptyList),
             Value::Pair(pair) => {
-                let v = try!(evaluate(ctx, pair.car()));
                 if pair.cdr() == Value::EmptyList {
-                    return Ok(v);
+                    return Ok(pair.car());
                 } else {
+                    try!(evaluate(ctx, env, pair.car()));
                     e = pair.cdr();
                 }
             },
@@ -152,14 +256,14 @@ fn evaluate_sequence(ctx: &mut Context, exprs: Value) -> SchemeResult {
 #[test]
 fn test_eval_integer() {
     let mut ctx = Context::new();
-    assert_eq!(evaluate(&mut ctx, Value::new_integer(42)),
+    assert_eq!(evaluate_in_global_env(&mut ctx, Value::new_integer(42)),
                Ok(Value::new_integer(42)));
 }
 
 #[test]
 fn test_eval_boolean() {
     let mut ctx = Context::new();
-    assert_eq!(evaluate(&mut ctx, Value::new_boolean(true)),
+    assert_eq!(evaluate_in_global_env(&mut ctx, Value::new_boolean(true)),
                Ok(Value::new_boolean(true)));
 }
 
@@ -174,7 +278,7 @@ fn test_eval_quoted() {
         val
     ];
     let quoted = list(&mut ctx, &mut items);
-    assert_eq!(evaluate(&mut ctx, quoted),
+    assert_eq!(evaluate_in_global_env(&mut ctx, quoted),
                Ok(val));
 }
 
@@ -190,7 +294,7 @@ fn test_eval_if_consequent() {
         Value::new_integer(2)
     ];
     let if_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate(&mut ctx, if_form),
+    assert_eq!(evaluate_in_global_env(&mut ctx, if_form),
                Ok(Value::new_integer(1)));
 }
 
@@ -206,7 +310,7 @@ fn test_eval_if_alternative() {
         Value::new_integer(2)
     ];
     let if_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate(&mut ctx, if_form),
+    assert_eq!(evaluate_in_global_env(&mut ctx, if_form),
                Ok(Value::new_integer(2)));
 }
 
@@ -221,7 +325,7 @@ fn test_eval_begin() {
         Value::new_integer(2)
     ];
     let begin_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate(&mut ctx, begin_form),
+    assert_eq!(evaluate_in_global_env(&mut ctx, begin_form),
                Ok(Value::new_integer(2)));
 }
 
@@ -241,9 +345,10 @@ fn test_eval_variables() {
         Value::new_integer(2)
     ];
     let def_form = list(&mut ctx, &mut def_items);
-    evaluate(&mut ctx, def_form).ok().expect("Should be able to define");
+    evaluate_in_global_env(&mut ctx, def_form).ok()
+        .expect("Should be able to define");
 
-    let def_val = evaluate(&mut ctx, foo_symbol).ok()
+    let def_val = evaluate_in_global_env(&mut ctx, foo_symbol).ok()
         .expect("Should be able to get a defined symbol's value");
     assert_eq!(def_val, Value::new_integer(2));
 
@@ -253,9 +358,42 @@ fn test_eval_variables() {
         Value::new_integer(1)
     ];
     let set_form = list(&mut ctx, &mut set_items);
-    evaluate(&mut ctx, set_form).ok().expect("Should be able to define");
+    evaluate_in_global_env(&mut ctx, set_form).ok()
+        .expect("Should be able to define");
 
-    let set_val = evaluate(&mut ctx, foo_symbol).ok()
+    let set_val = evaluate_in_global_env(&mut ctx, foo_symbol).ok()
         .expect("Should be able to get a defined symbol's value");
     assert_eq!(set_val, Value::new_integer(1));
+}
+
+#[test]
+fn test_eval_and_call_lambda() {
+    use read::read_from_file;
+
+    let mut ctx = Context::new();
+    let mut reader = read_from_file("./tests/test_eval_and_call_lambda.scm",
+                                    &mut ctx)
+        .ok()
+        .expect("Should be able to read from a file");
+    let form = reader.next().expect("Should have a lambda form");
+    let result = evaluate_in_global_env(&mut ctx, form)
+        .ok()
+        .expect("Should be able to evaluate a lambda.");
+    assert_eq!(result, Value::new_integer(5));
+}
+
+#[test]
+fn test_eval_closures() {
+    use read::read_from_file;
+
+    let mut ctx = Context::new();
+    let mut reader = read_from_file("./tests/test_eval_closures.scm",
+                                    &mut ctx)
+        .ok()
+        .expect("Should be able to read from a file");
+    let form = reader.next().expect("Should have a lambda form");
+    let result = evaluate_in_global_env(&mut ctx, form)
+        .ok()
+        .expect("Should be able to evaluate closures");
+    assert_eq!(result, Value::new_integer(1));
 }
