@@ -26,9 +26,10 @@
 use std::cmp;
 use std::default::{Default};
 use std::fmt;
+use std::ptr;
 
 use environment::{Environment};
-use value::{Cons};
+use value::{Cons, Procedure};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
@@ -79,7 +80,7 @@ pub struct ArenaPtr<T> {
     index: uint,
 }
 
-// XXX: We have to manually declar that ArenaPtr<T> is copy-able because if we
+// XXX: We have to manually declare that ArenaPtr<T> is copy-able because if we
 // use `#[deriving(Copy)]` it wants T to be copy-able as well, despite the fact
 // that we only need to copy our pointer to the Arena<T>, not any T or the Arena
 // itself.
@@ -98,6 +99,14 @@ impl<T: Default> ArenaPtr<T> {
         ArenaPtr {
             arena: arena,
             index: index,
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn null() -> ArenaPtr<T> {
+        ArenaPtr {
+            arena: ptr::null_mut(),
+            index: 0,
         }
     }
 }
@@ -146,12 +155,16 @@ pub type StringPtr = ArenaPtr<String>;
 /// A pointer to an `Environment` on the heap.
 pub type EnvironmentPtr = ArenaPtr<Environment>;
 
+/// A pointer to a `Procedure` on the heap.
+pub type ProcedurePtr = ArenaPtr<Procedure>;
+
 /// The scheme heap, containing all allocated cons cells and strings (including
 /// strings for symbols).
 pub struct Heap {
     cons_cells: Arena<Cons>,
     strings: Arena<String>,
     environments: Arena<Environment>,
+    procedures: Arena<Procedure>,
 }
 
 /// The default capacity of cons cells.
@@ -163,23 +176,29 @@ pub static DEFAULT_STRINGS_CAPACITY : uint = 1 << 12;
 /// The default capacity of environments.
 pub static DEFAULT_ENVIRONMENTS_CAPACITY : uint = 1 << 12;
 
+/// The default capacity of environments.
+pub static DEFAULT_PROCEDURES_CAPACITY : uint = 1 << 12;
+
 impl Heap {
     /// Create a new `Heap` with the default capacity.
     pub fn new() -> Heap {
         Heap::with_arenas(Arena::new(DEFAULT_CONS_CAPACITY),
                           Arena::new(DEFAULT_STRINGS_CAPACITY),
-                          Arena::new(DEFAULT_ENVIRONMENTS_CAPACITY))
+                          Arena::new(DEFAULT_ENVIRONMENTS_CAPACITY),
+                          Arena::new(DEFAULT_PROCEDURES_CAPACITY))
     }
 
     /// Create a new `Heap` using the given arenas for allocating cons cells and
     /// strings within.
     pub fn with_arenas(cons_cells: Arena<Cons>,
                        strings: Arena<String>,
-                       envs: Arena<Environment>) -> Heap {
+                       envs: Arena<Environment>,
+                       procs: Arena<Procedure>) -> Heap {
         Heap {
             cons_cells: cons_cells,
             strings: strings,
             environments: envs,
+            procedures: procs,
         }
     }
 
@@ -208,5 +227,14 @@ impl Heap {
     /// Panics if the `Arena` for environments has already reached capacity.
     pub fn allocate_environment(&mut self) -> EnvironmentPtr {
         self.environments.allocate()
+    }
+
+    /// Allocate a new `Procedure` and return a pointer to it.
+    ///
+    /// ## Panics
+    ///
+    /// Panics if the `Arena` for environments has already reached capacity.
+    pub fn allocate_procedure(&mut self) -> ProcedurePtr {
+        self.procedures.allocate()
     }
 }

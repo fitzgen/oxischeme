@@ -39,7 +39,7 @@ pub fn main() {
 
         print!("oxischeme> ");
         for val in reader {
-            match eval::evaluate(&mut ctx, val) {
+            match eval::evaluate_in_global_env(&mut ctx, val) {
                 Ok(evaluated) => {
                     print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
                 },

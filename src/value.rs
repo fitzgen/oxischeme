@@ -16,16 +16,13 @@
 
 use std::default::{Default};
 
-use heap::{ConsPtr, Heap, StringPtr};
+use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, Heap, ProcedurePtr, StringPtr};
 use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-///
-/// You cannot directly create a cons cell, you must allocate one on the heap
-/// with an `Arena` and get back a `ConsPtr`.
 #[deriving(Copy, PartialEq)]
 pub struct Cons {
     car: Value,
@@ -33,8 +30,8 @@ pub struct Cons {
 }
 
 impl Default for Cons {
-    /// Create a new cons pair, with both `car` and `cdr` initialized to
-    /// `Value::EmptyList`.
+    /// Do not use this method, instead allocate cons cells on the heap with
+    /// `Heap::allocate_cons` and get back a `ConsPtr`.
     fn default() -> Cons {
         Cons {
             car: Value::EmptyList,
@@ -65,6 +62,58 @@ impl Cons {
     }
 }
 
+/// TODO FITZGEN
+#[deriving(Copy)]
+pub struct Procedure {
+    params: Value,
+    body: Value,
+    env: EnvironmentPtr,
+}
+
+impl Procedure {
+    /// TODO FITZGEN
+    pub fn get_params(&self) -> Value {
+        self.params
+    }
+
+    /// TODO FITZGEN
+    pub fn get_body(&self) -> Value {
+        self.body
+    }
+
+    /// TODO FITZGEN
+    pub fn get_env(&self) -> EnvironmentPtr {
+        self.env
+    }
+
+    /// TODO FITZGEN
+    pub fn set_params(&mut self, params: Value) {
+        self.params = params;
+    }
+
+    /// TODO FITZGEN
+    pub fn set_body(&mut self, body: Value) {
+        self.body = body;
+    }
+
+    /// TODO FITZGEN
+    pub fn set_env(&mut self, env: EnvironmentPtr) {
+        self.env = env;
+    }
+}
+
+impl Default for Procedure {
+    /// Do not use this method, instead allocate procedures on the heap with
+    /// `Heap::allocate_procedure` and get back a `ProcedurePtr`.
+    fn default() -> Procedure {
+        Procedure {
+            params: Value::EmptyList,
+            body: Value::EmptyList,
+            env: ArenaPtr::null(),
+        }
+    }
+}
+
 /// `Value` represents a scheme value of any type.
 ///
 /// Note that `PartialEq` is object identity, not structural comparison, same as
@@ -92,6 +141,9 @@ pub enum Value {
 
     /// Scheme characters are `char`s.
     Character(char),
+
+    /// A Scheme procedure is a pointer to a GC-managed `Procedure`.
+    Procedure(ProcedurePtr),
 }
 
 /// # `Value` Constructors
@@ -117,6 +169,18 @@ impl Value {
         cons.set_car(car);
         cons.set_cdr(cdr);
         Value::Pair(cons)
+    }
+
+    /// Create a new procedure with the given parameter list and body.
+    pub fn new_procedure(heap: &mut Heap,
+                         params: Value,
+                         body: Value,
+                         env: EnvironmentPtr) -> Value {
+        let mut procedure = heap.allocate_procedure();
+        procedure.set_params(params);
+        procedure.set_body(body);
+        procedure.set_env(env);
+        Value::Procedure(procedure)
     }
 
     /// Create a new string value with the given string.
@@ -180,6 +244,14 @@ impl Value {
         match *self {
             Value::Pair(cons) => Some(cons),
             _                 => None,
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn to_procedure(&self) -> Option<ProcedurePtr> {
+        match *self {
+            Value::Procedure(p) => Some(p),
+            _                   => None,
         }
     }
 
