@@ -16,7 +16,8 @@
 
 use std::cell::{RefCell};
 use std::fmt::{format};
-use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
+use std::io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader,
+              Open, Read};
 use std::iter::{Peekable};
 
 use context::{Context};
@@ -486,6 +487,13 @@ pub fn read_from_string(string: String, ctx: *mut Context) -> Read<MemReader> {
 /// Create a `Read` instance from a `&str`.
 pub fn read_from_str(str: &str, ctx: *mut Context) -> Read<MemReader> {
     read_from_string(str.to_string(), ctx)
+}
+
+/// Create a `Read` instance from the file at `path_name`.
+pub fn read_from_file(path_name: &str, ctx: *mut Context) -> IoResult<Read<File>> {
+    let path = Path::new(path_name);
+    let file = try!(File::open_mode(&path, Open, Read));
+    Ok(Read::new(file, ctx))
 }
 
 #[test]
