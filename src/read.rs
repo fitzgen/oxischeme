@@ -16,7 +16,7 @@
 
 use std::cell::{RefCell};
 use std::fmt::{format};
-use std::io::{BufferedReader, IoError, IoErrorKind, MemReader};
+use std::io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
 use std::iter::{Peekable};
 
 use context::{Context};
@@ -488,6 +488,13 @@ pub fn read_from_str(str: &str, ctx: *mut Context) -> Read<MemReader> {
     read_from_string(str.to_string(), ctx)
 }
 
+/// Create a `Read` instance from the file at `path_name`.
+pub fn read_from_file(path_name: &str, ctx: *mut Context) -> IoResult<Read<File>> {
+    let path = Path::new(path_name);
+    let file = try!(File::open(&path));
+    Ok(Read::new(file, ctx))
+}
+
 #[test]
 fn test_read_integers() {
     let input = "5 -5 789 -987";
@@ -715,4 +722,18 @@ fn test_read_quoted() {
                                                "foo".to_string()),
         _                        => assert!(false),
     }
+}
+
+#[test]
+fn test_read_from_file() {
+    let mut ctx = Context::new();
+    let reader = read_from_file("./tests/test_read_from_file.scm", &mut ctx)
+        .ok()
+        .expect("Should be able to read from a file");
+    let results : Vec<Value> = reader.collect();
+    assert_eq!(results.len(), 1);
+    assert_eq!(results[0].to_symbol().expect("Should be a symbol")
+                         .deref()
+                         .deref(),
+               "hello".to_string());
 }
