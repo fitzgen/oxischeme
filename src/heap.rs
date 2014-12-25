@@ -102,7 +102,8 @@ impl<T: Default> ArenaPtr<T> {
         }
     }
 
-    /// TODO FITZGEN
+    /// Get the null ArenaPtr<T>. Should never actually be used, but sometimes
+    /// it is needed for initializing a struct's default, uninitialized form.
     pub fn null() -> ArenaPtr<T> {
         ArenaPtr {
             arena: ptr::null_mut(),

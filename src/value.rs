@@ -62,7 +62,8 @@ impl Cons {
     }
 }
 
-/// TODO FITZGEN
+/// Procedures are represented by their parameter list, body, and a pointer to
+/// their definition environment.
 #[deriving(Copy)]
 pub struct Procedure {
     params: Value,
@@ -71,32 +72,32 @@ pub struct Procedure {
 }
 
 impl Procedure {
-    /// TODO FITZGEN
+    /// Get this procedure's parameters.
     pub fn get_params(&self) -> Value {
         self.params
     }
 
-    /// TODO FITZGEN
+    /// Get this procedure's body.
     pub fn get_body(&self) -> Value {
         self.body
     }
 
-    /// TODO FITZGEN
+    /// Get this procedure's environment.
     pub fn get_env(&self) -> EnvironmentPtr {
         self.env
     }
 
-    /// TODO FITZGEN
+    /// Set this procedure's parameters.
     pub fn set_params(&mut self, params: Value) {
         self.params = params;
     }
 
-    /// TODO FITZGEN
+    /// Set this procedure's body.
     pub fn set_body(&mut self, body: Value) {
         self.body = body;
     }
 
-    /// TODO FITZGEN
+    /// Set this procedure's environment.
     pub fn set_env(&mut self, env: EnvironmentPtr) {
         self.env = env;
     }
@@ -230,7 +231,7 @@ impl Value {
         !self.is_pair()
     }
 
-    /// Convert this symbol value to a `StringPtr` to the symbol's string name.
+    /// Coerce this symbol value to a `StringPtr` to the symbol's string name.
     pub fn to_symbol(&self) -> Option<StringPtr> {
         match *self {
             Value::Symbol(sym) => Some(sym),
@@ -238,7 +239,7 @@ impl Value {
         }
     }
 
-    /// Convert this pair value to a `ConsPtr` to the cons cell this pair is
+    /// Coerce this pair value to a `ConsPtr` to the cons cell this pair is
     /// referring to.
     pub fn to_pair(&self) -> Option<ConsPtr> {
         match *self {
@@ -247,7 +248,8 @@ impl Value {
         }
     }
 
-    /// TODO FITZGEN
+    /// Coerce this procedure value to a `ProcedurePtr` to the `Procedure` this
+    /// value is referring to.
     pub fn to_procedure(&self) -> Option<ProcedurePtr> {
         match *self {
             Value::Procedure(p) => Some(p),

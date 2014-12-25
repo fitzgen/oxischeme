@@ -35,7 +35,8 @@ impl Environment {
         }
     }
 
-    /// TODO FITZGEN
+    /// Extend the given environment with the names and associated values
+    /// supplied, resulting in a new environment.
     pub fn extend(heap: &mut Heap,
                   parent: EnvironmentPtr,
                   names: Value,
@@ -80,7 +81,11 @@ impl Environment {
         }
     }
 
-    /// TODO FITZGEN
+    /// Set the parent of this environment. When looking up bindings, if this
+    /// environment doesn't have the target binding, and this environment has a
+    /// parent environment, we will recurse to the parent and do a lookup in
+    /// that environment, and so on until either there are no more environments
+    /// or we find the binding.
     pub fn set_parent(&mut self, parent: EnvironmentPtr) {
         self.parent = Some(parent);
     }
