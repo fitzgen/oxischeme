@@ -141,7 +141,7 @@ impl<T> fmt::Show for ArenaPtr<T> {
 impl<T> cmp::PartialEq for ArenaPtr<T> {
     /// Note that `PartialEq` implements pointer object identity, not structural
     /// comparison. In other words, it is equivalent to the scheme function
-    /// `eq?`, not the scheme function `equal?`
+    /// `eq?`, not the scheme function `equal?`.
     fn eq(&self, other: &ArenaPtr<T>) -> bool {
         self.index == other.index && self.arena.to_uint() == other.arena.to_uint()
     }
@@ -237,5 +237,67 @@ impl Heap {
     /// Panics if the `Arena` for environments has already reached capacity.
     pub fn allocate_procedure(&mut self) -> ProcedurePtr {
         self.procedures.allocate()
+    }
+}
+
+/// # Garbage Collection
+///
+/// TODO FITZGEN talk about `trace` API protocol.
+
+/// TODO FITZGEN
+pub trait Trace {
+    /// TODO FITZGEN
+    fn trace(&self, callback: &mut |GcThing|);
+}
+
+/// TODO FITZGEN
+#[deriving(Copy)]
+pub enum GcThing {
+    /// TODO FITZGEN
+    Cons(ConsPtr),
+
+    /// TODO FITZGEN
+    String(StringPtr),
+
+    /// TODO FITZGEN
+    Environment(EnvironmentPtr),
+
+    /// TODO FITZGEN
+    Procedure(ProcedurePtr),
+}
+
+/// ## `GcThing` Constructors
+impl GcThing {
+    /// TODO FITZGEN
+    pub fn from_string_ptr(str: StringPtr) -> GcThing {
+        GcThing::String(str)
+    }
+
+    /// TODO FITZGEN
+    pub fn from_cons_ptr(cons: ConsPtr) -> GcThing {
+        GcThing::Cons(cons)
+    }
+
+    /// TODO FITZGEN
+    pub fn from_procedure_ptr(procedure: ProcedurePtr) -> GcThing {
+        GcThing::Procedure(procedure)
+    }
+
+    /// TODO FITZGEN
+    pub fn from_environment_ptr(env: EnvironmentPtr) -> GcThing {
+        GcThing::Environment(env)
+    }
+}
+
+impl Trace for GcThing {
+    /// TODO FITZGEN
+    fn trace(&self, callback: &mut |GcThing|) {
+        match *self {
+            GcThing::Cons(cons)       => cons.trace(callback),
+            GcThing::Environment(env) => env.trace(callback),
+            GcThing::Procedure(p)     => p.trace(callback),
+            // Strings don't hold any strong references to other `GcThing`s.
+            GcThing::String(_)        => { },
+        };
     }
 }

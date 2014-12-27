@@ -16,7 +16,8 @@
 
 use std::default::{Default};
 
-use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, Heap, ProcedurePtr, StringPtr};
+use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, GcThing, Heap, ProcedurePtr,
+           StringPtr, Trace};
 use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
@@ -59,6 +60,20 @@ impl Cons {
     /// Set the cdr of this cons cell.
     pub fn set_cdr(&mut self, cdr: Value) {
         self.cdr = cdr;
+    }
+}
+
+/// TODO FITZGEN
+impl Trace for Cons {
+    /// TODO FITZGEN
+    fn trace(&self, callback: &mut |GcThing|) {
+        if let Some(car) = self.car.to_gc_thing() {
+            (*callback)(car);
+        }
+
+        if let Some(cdr) = self.cdr.to_gc_thing() {
+            (*callback)(cdr);
+        }
     }
 }
 
@@ -112,6 +127,21 @@ impl Default for Procedure {
             body: Value::EmptyList,
             env: ArenaPtr::null(),
         }
+    }
+}
+
+impl Trace for Procedure {
+    /// TODO FITZGEN
+    fn trace(&self, callback: &mut |GcThing|) {
+        if let Some(params) = self.params.to_gc_thing() {
+            (*callback)(params);
+        }
+
+        if let Some(body) = self.body.to_gc_thing() {
+            (*callback)(body);
+        }
+
+        (*callback)(GcThing::from_environment_ptr(self.env));
     }
 }
 
@@ -266,6 +296,17 @@ impl Value {
                 Ok(cdr_len + 1)
             },
             _                => Err(()),
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn to_gc_thing(&self) -> Option<GcThing> {
+        match *self {
+            Value::String(str)  => Some(GcThing::from_string_ptr(str)),
+            Value::Symbol(sym)  => Some(GcThing::from_string_ptr(sym)),
+            Value::Pair(cons)   => Some(GcThing::from_cons_ptr(cons)),
+            Value::Procedure(p) => Some(GcThing::from_procedure_ptr(p)),
+            _                   => None,
         }
     }
 }

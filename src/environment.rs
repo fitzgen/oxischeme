@@ -17,7 +17,7 @@
 use std::default::{Default};
 use std::fmt::{format};
 use std::collections::{HashMap};
-use heap::{EnvironmentPtr, Heap};
+use heap::{EnvironmentPtr, GcThing, Heap, Trace};
 use value::{SchemeResult, Value};
 
 /// The `Environment` associates symbols with values.
@@ -126,5 +126,20 @@ impl Environment {
 impl Default for Environment {
     fn default() -> Environment {
         Environment::new()
+    }
+}
+
+impl Trace for Environment {
+    /// TODO FITZGEN
+    fn trace(&self, callback: &mut |GcThing|) {
+        for val in self.bindings.values() {
+            if let Some(gc_thing) = val.to_gc_thing() {
+                (*callback)(gc_thing);
+            }
+        }
+
+        if let Some(parent) = self.parent {
+            (*callback)(GcThing::from_environment_ptr(parent));
+        }
     }
 }
