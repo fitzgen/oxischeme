@@ -16,15 +16,15 @@
 
 use std::default::{Default};
 
-use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, GcThing, Heap, ProcedurePtr,
-           StringPtr, Trace};
+use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, GcThing, Heap, IterGcThing,
+           ProcedurePtr, StringPtr, Trace};
 use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[deriving(Copy, PartialEq)]
+#[deriving(Copy, Eq, Hash, PartialEq)]
 pub struct Cons {
     car: Value,
     cdr: Value,
@@ -66,20 +66,24 @@ impl Cons {
 /// TODO FITZGEN
 impl Trace for Cons {
     /// TODO FITZGEN
-    fn trace(&self, callback: &mut |GcThing|) {
+    fn trace(&self) -> IterGcThing {
+        let mut results = vec!();
+
         if let Some(car) = self.car.to_gc_thing() {
-            (*callback)(car);
+            results.push(car);
         }
 
         if let Some(cdr) = self.cdr.to_gc_thing() {
-            (*callback)(cdr);
+            results.push(cdr);
         }
+
+        results.into_iter()
     }
 }
 
 /// Procedures are represented by their parameter list, body, and a pointer to
 /// their definition environment.
-#[deriving(Copy)]
+#[deriving(Copy, Hash)]
 pub struct Procedure {
     params: Value,
     body: Value,
@@ -132,24 +136,27 @@ impl Default for Procedure {
 
 impl Trace for Procedure {
     /// TODO FITZGEN
-    fn trace(&self, callback: &mut |GcThing|) {
+    fn trace(&self) -> IterGcThing {
+        let mut results = vec!();
+
         if let Some(params) = self.params.to_gc_thing() {
-            (*callback)(params);
+            results.push(params);
         }
 
         if let Some(body) = self.body.to_gc_thing() {
-            (*callback)(body);
+            results.push(body);
         }
 
-        (*callback)(GcThing::from_environment_ptr(self.env));
+        results.push(GcThing::from_environment_ptr(self.env));
+        results.into_iter()
     }
 }
 
 /// `Value` represents a scheme value of any type.
 ///
-/// Note that `PartialEq` is object identity, not structural comparison, same as
-/// with [`ArenaPtr`](struct.ArenaPtr.html).
-#[deriving(Copy, PartialEq, Show)]
+/// Note that `Eq` and `PartialEq` are object identity, not structural
+/// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
+#[deriving(Copy, Eq, Hash, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,

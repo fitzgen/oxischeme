@@ -48,6 +48,10 @@ pub fn main() {
                 },
             };
             (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+
+            let heap = ctx.heap();
+            heap.collect_garbage(&ctx);
+
             (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
             stdout.flush().ok().expect("IO ERROR!");
         }

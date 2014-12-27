@@ -20,7 +20,7 @@
 use std::collections::{HashMap};
 use std::mem;
 
-use heap::{Heap, StringPtr, EnvironmentPtr};
+use heap::{EnvironmentPtr, GcThing, Heap, IterGcThing, StringPtr, Trace};
 use value::{Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
@@ -55,7 +55,7 @@ impl<'a> Context {
     }
 
     /// Get the context's heap.
-    pub fn heap(&'a mut self) -> &'a mut Heap {
+    pub fn heap(&'a self) -> &'a mut Heap {
         unsafe {
             self.heap.as_mut().expect("Context::heap should always have a Heap")
         }
@@ -109,5 +109,17 @@ impl Context {
 
     pub fn lambda_symbol(&mut self) -> Value {
         self.get_or_create_symbol("lambda".to_string())
+    }
+}
+
+impl Trace for Context {
+    /// TODO FITZGEN
+    fn trace(&self) -> IterGcThing {
+        let mut results: Vec<GcThing> = self.symbol_table
+            .values()
+            .map(|s| GcThing::from_string_ptr(*s))
+            .collect();
+        results.push(GcThing::from_environment_ptr(self.global_env()));
+        results.into_iter()
     }
 }

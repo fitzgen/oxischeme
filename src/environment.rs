@@ -14,10 +14,12 @@
 
 //! The implementation of the Scheme environment that binds symbols to values.
 
+use std::collections::{HashMap};
 use std::default::{Default};
 use std::fmt::{format};
-use std::collections::{HashMap};
-use heap::{EnvironmentPtr, GcThing, Heap, Trace};
+use std::hash;
+
+use heap::{EnvironmentPtr, GcThing, Heap, IterGcThing, Trace};
 use value::{SchemeResult, Value};
 
 /// The `Environment` associates symbols with values.
@@ -123,6 +125,15 @@ impl Environment {
     }
 }
 
+impl hash::Hash for Environment {
+    fn hash(&self, state: &mut hash::sip::SipState) {
+        self.parent.hash(state);
+        for item in self.bindings.iter() {
+            item.hash(state);
+        }
+    }
+}
+
 impl Default for Environment {
     fn default() -> Environment {
         Environment::new()
@@ -131,15 +142,19 @@ impl Default for Environment {
 
 impl Trace for Environment {
     /// TODO FITZGEN
-    fn trace(&self, callback: &mut |GcThing|) {
+    fn trace(&self) -> IterGcThing {
+        let mut results = vec!();
+
         for val in self.bindings.values() {
             if let Some(gc_thing) = val.to_gc_thing() {
-                (*callback)(gc_thing);
+                results.push(gc_thing);
             }
         }
 
         if let Some(parent) = self.parent {
-            (*callback)(GcThing::from_environment_ptr(parent));
+            results.push(GcThing::from_environment_ptr(parent));
         }
+
+        results.into_iter()
     }
 }

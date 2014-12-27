@@ -24,10 +24,13 @@
 //! pre-allocated vector, we panic.
 
 use std::cmp;
+use std::collections::{HashSet};
 use std::default::{Default};
 use std::fmt;
 use std::ptr;
+use std::vec::{IntoIter};
 
+use context::{Context};
 use environment::{Environment};
 use value::{Cons, Procedure};
 
@@ -75,6 +78,8 @@ impl<T: Default> Arena<T> {
 }
 
 /// A pointer to a `T` instance in an arena.
+#[allow(raw_pointer_deriving)]
+#[deriving(Hash)]
 pub struct ArenaPtr<T> {
     arena: *mut Arena<T>,
     index: uint,
@@ -84,7 +89,7 @@ pub struct ArenaPtr<T> {
 // use `#[deriving(Copy)]` it wants T to be copy-able as well, despite the fact
 // that we only need to copy our pointer to the Arena<T>, not any T or the Arena
 // itself.
-impl <T> ::std::kinds::Copy for ArenaPtr<T> { }
+impl<T> ::std::kinds::Copy for ArenaPtr<T> { }
 
 impl<T: Default> ArenaPtr<T> {
     /// Create a new `ArenaPtr` to the `T` instance at the given index in the
@@ -146,6 +151,8 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
         self.index == other.index && self.arena.to_uint() == other.arena.to_uint()
     }
 }
+
+impl<T> cmp::Eq for ArenaPtr<T> { }
 
 /// A pointer to a cons cell on the heap.
 pub type ConsPtr = ArenaPtr<Cons>;
@@ -244,14 +251,46 @@ impl Heap {
 ///
 /// TODO FITZGEN talk about `trace` API protocol.
 
+pub type IterGcThing = IntoIter<GcThing>;
+
 /// TODO FITZGEN
 pub trait Trace {
     /// TODO FITZGEN
-    fn trace(&self, callback: &mut |GcThing|);
+    fn trace(&self) -> IterGcThing;
+}
+
+impl Heap {
+    /// TODO FTIZGEN
+    pub fn collect_garbage(&mut self, ctx: &Context) {
+        let mut marked = HashSet::new();
+        let mut pending_trace: Vec<GcThing> = ctx.trace().collect();
+
+        while !pending_trace.is_empty() {
+            let mut newly_pending_trace = vec!();
+
+            for thing in pending_trace.drain() {
+                if !marked.contains(&thing) {
+                    marked.insert(thing);
+                    for referent in thing.trace() {
+                        newly_pending_trace.push(referent);
+                    }
+                }
+            }
+
+            for thing in newly_pending_trace.drain() {
+                pending_trace.push(thing);
+            }
+        }
+
+        println!("-----------------------------------------------------------");
+        for thing in marked.iter() {
+            println!("FITZGEN: traced {}", thing);
+        }
+    }
 }
 
 /// TODO FITZGEN
-#[deriving(Copy)]
+#[deriving(Copy, Eq, Hash, PartialEq, Show)]
 pub enum GcThing {
     /// TODO FITZGEN
     Cons(ConsPtr),
@@ -291,13 +330,13 @@ impl GcThing {
 
 impl Trace for GcThing {
     /// TODO FITZGEN
-    fn trace(&self, callback: &mut |GcThing|) {
+    fn trace(&self) -> IterGcThing {
         match *self {
-            GcThing::Cons(cons)       => cons.trace(callback),
-            GcThing::Environment(env) => env.trace(callback),
-            GcThing::Procedure(p)     => p.trace(callback),
+            GcThing::Cons(cons)       => cons.trace(),
+            GcThing::Environment(env) => env.trace(),
+            GcThing::Procedure(p)     => p.trace(),
             // Strings don't hold any strong references to other `GcThing`s.
-            GcThing::String(_)        => { },
-        };
+            GcThing::String(_)        => vec!().into_iter(),
+        }
     }
 }
