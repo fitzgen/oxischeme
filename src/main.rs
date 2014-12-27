@@ -38,10 +38,10 @@ pub fn main() {
         let mut reader = read::Read::new(stdin, &mut ctx);
 
         print!("oxischeme> ");
-        for val in reader {
-            match eval::evaluate_in_global_env(&mut ctx, val) {
-                Ok(evaluated) => {
-                    print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+        for form in reader {
+            match eval::evaluate_in_global_env(&mut ctx, form) {
+                Ok(val) => {
+                    print::print(val, &mut stdout).ok().expect("IO ERROR!");
                 },
                 Err(e) => {
                     (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");

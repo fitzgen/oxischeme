@@ -71,9 +71,18 @@ impl<T: Default> Arena<T> {
             None      => panic!("Arena::allocate: out of memory!"),
             Some(idx) => {
                 let self_ptr : *mut Arena<T> = self;
-                ArenaPtr::new(self_ptr, idx)
+                let res = ArenaPtr::new(self_ptr, idx);
+                println!("FITZGEN: allocated {}", &res);
+                res
             },
         }
+    }
+
+    /// TODO FITZGEN
+    pub fn sweep(&mut self, live: HashSet<uint>) {
+        self.free = range(0, self.capacity())
+            .filter(|n| !live.contains(n))
+            .collect();
     }
 }
 
@@ -262,6 +271,8 @@ pub trait Trace {
 impl Heap {
     /// TODO FTIZGEN
     pub fn collect_garbage(&mut self, ctx: &Context) {
+        // Trace the heap graph and mark everything that is reachable.
+
         let mut marked = HashSet::new();
         let mut pending_trace: Vec<GcThing> = ctx.trace().collect();
 
@@ -286,6 +297,27 @@ impl Heap {
         for thing in marked.iter() {
             println!("FITZGEN: traced {}", thing);
         }
+
+        // Divide the marked set by arena, and sweep each arena.
+
+        let mut live_strings = HashSet::new();
+        let mut live_envs = HashSet::new();
+        let mut live_cons_cells = HashSet::new();
+        let mut live_procs = HashSet::new();
+
+        for thing in marked.into_iter() {
+            match thing {
+                GcThing::String(p)      => live_strings.insert(p.index),
+                GcThing::Environment(p) => live_envs.insert(p.index),
+                GcThing::Cons(p)        => live_cons_cells.insert(p.index),
+                GcThing::Procedure(p)   => live_procs.insert(p.index),
+            };
+        }
+
+        self.strings.sweep(live_strings);
+        self.environments.sweep(live_envs);
+        self.cons_cells.sweep(live_cons_cells);
+        self.procedures.sweep(live_procs);
     }
 }
 
