@@ -16,8 +16,9 @@
 
 use std::default::{Default};
 
-use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, GcThing, Heap, IterGcThing,
-           ProcedurePtr, StringPtr, Trace};
+use environment::{EnvironmentPtr};
+use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, StringPtr,
+           ToGcThing, Trace};
 use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
@@ -80,6 +81,18 @@ impl Trace for Cons {
         results.into_iter()
     }
 }
+
+/// A pointer to a cons cell on the heap.
+pub type ConsPtr = ArenaPtr<Cons>;
+
+impl ToGcThing for ConsPtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_cons_ptr(*self))
+    }
+}
+
+/// TODO FITZGEN
+pub type RootedConsPtr = Rooted<ConsPtr>;
 
 /// Procedures are represented by their parameter list, body, and a pointer to
 /// their definition environment.
@@ -152,6 +165,17 @@ impl Trace for Procedure {
     }
 }
 
+/// A pointer to a `Procedure` on the heap.
+pub type ProcedurePtr = ArenaPtr<Procedure>;
+impl ToGcThing for ProcedurePtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_procedure_ptr(*self))
+    }
+}
+
+/// TODO FITZGEN
+pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
+
 /// `Value` represents a scheme value of any type.
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
@@ -206,7 +230,7 @@ impl Value {
         let mut cons = heap.allocate_cons();
         cons.set_car(car);
         cons.set_cdr(cdr);
-        Value::Pair(cons)
+        Value::Pair(*cons)
     }
 
     /// Create a new procedure with the given parameter list and body.
@@ -305,9 +329,11 @@ impl Value {
             _                => Err(()),
         }
     }
+}
 
+impl ToGcThing for Value {
     /// TODO FITZGEN
-    pub fn to_gc_thing(&self) -> Option<GcThing> {
+    fn to_gc_thing(&self) -> Option<GcThing> {
         match *self {
             Value::String(str)  => Some(GcThing::from_string_ptr(str)),
             Value::Symbol(sym)  => Some(GcThing::from_string_ptr(sym)),

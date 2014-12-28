@@ -19,7 +19,7 @@ use std::default::{Default};
 use std::fmt::{format};
 use std::hash;
 
-use heap::{EnvironmentPtr, GcThing, Heap, IterGcThing, Trace};
+use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, ToGcThing, Trace};
 use value::{SchemeResult, Value};
 
 /// The `Environment` associates symbols with values.
@@ -158,3 +158,15 @@ impl Trace for Environment {
         results.into_iter()
     }
 }
+
+/// A pointer to an `Environment` on the heap.
+pub type EnvironmentPtr = ArenaPtr<Environment>;
+
+impl ToGcThing for EnvironmentPtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_environment_ptr(*self))
+    }
+}
+
+/// TODO FITZGEN
+pub type RootedEnvironmentPtr = Rooted<EnvironmentPtr>;

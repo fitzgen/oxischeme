@@ -14,6 +14,8 @@
 
 //! A Scheme implementation, in Rust.
 
+#![feature(unsafe_destructor)]
+
 use std::io;
 
 pub mod context;

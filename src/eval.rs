@@ -15,11 +15,12 @@
 //! Evaluating values.
 
 use std::fmt::{format};
+
 use context::{Context};
-use environment::{Environment};
-use heap::{EnvironmentPtr};
+use environment::{Environment, EnvironmentPtr};
 use value::{SchemeResult, Value};
 
+/// TODO FITZGEN
 fn is_auto_quoting(val: &Value) -> bool {
     match *val {
         Value::EmptyList    => false,

@@ -12,27 +12,63 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Scheme has a variety of types that must be allocated on the heap: cons
-//! cells, strings, and vectors (currently unimplemented). Oxischeme's current
-//! allocation strategy is deliberately as simple as possible. We represent the
-//! heap as a pre-allocated vector of cons cells. We keep track of un-allocated
-//! cons cells with a "free list" of indices into the pre-allocated vector of
-//! cons cells. Whenever we need to allocate a new cons cell, we remove an entry
-//! from this list and return a pointer to the object at that entry's index.
-//! Garbage collection (currently unimplemented) will add new entries to the
-//! free list whenever objects are reclaimed. If we run out of space in the
-//! pre-allocated vector, we panic.
+//! The `heap` module provides memory management for our Scheme implementation.
+//!
+//! ## Allocation
+//!
+//! Scheme has a variety of types that must be allocated on the heap: cons cells,
+//! strings, procedures, and vectors (currently unimplemented). Oxischeme's
+//! current allocation strategy is deliberately as simple as possible. We
+//! represent the heap as a set of "arenas", one arena for each type that must be
+//! allocated on the heap. An "arena" is a pre-allocated vector of objects. We
+//! keep track of an arena's un-used objects with a "free list" of indices into
+//! its vector. When we allocate a new object, we remove an entry from the free
+//! list and return a pointer to the object at that entry's index. Garbage
+//! collection adds new entries to the free list when reclaiming dead
+//! objects. When allocating, if the arena's vector is already at capacity (ie,
+//! the free list is empty), we panic.
+//!
+//! ## Garbage Collection
+//!
+//! Any type that is heap-allocated must be *garbage collected* so that the
+//! memory of no-longer used instances of that type can be reclaimed for
+//! reuse. This provides the illusion of infinite memory, and frees Scheme
+//! programmers from manually managing allocations and frees. We refer to
+//! GC-managed types as "GC things". Note that a GC thing does not need to be a
+//! Scheme value type: environments are also managed by the GC, but are not a
+//! first class Scheme value.
+//!
+//! Any structure that has references to a garbage collected type must
+//! *participate in garbage collection* by telling the garbage collector about
+//! all of the GC things it is holding alive. Participation is implemented via
+//! the `Trace` trait. Note that the set of types that participate in garbage
+//! collection is not the same as the set of all GC things. Some GC things do not
+//! participate in garbage collection: strings do not hold references to any
+//! other GC things.
+//!
+//! A "GC root" is a GC participant that is always reachable. For example, the
+//! global environment is a root because global variables must always be
+//! accessible.
+//!
+//! We use a simple *mark and sweep* garbage collection algorithm. In the mark
+//! phase, we start from the roots and recursively trace every reachable object
+//! in the heap graph, adding them to our "marked" set. If a GC thing is not
+//! reachable, then it is impossible for the Scheme program to use it in the
+//! future, and it is safe for the garbage collector to reclaim it. The
+//! unreachable objects are the set of GC things that are not in the marked
+//! set. We find these unreachable objects and return them to their respective
+//! arena's free list in the sweep phase.
 
 use std::cmp;
-use std::collections::{HashSet};
+use std::collections::{HashMap, HashSet};
 use std::default::{Default};
 use std::fmt;
 use std::ptr;
 use std::vec::{IntoIter};
 
 use context::{Context};
-use environment::{Environment};
-use value::{Cons, Procedure};
+use environment::{Environment, EnvironmentPtr};
+use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
@@ -163,17 +199,67 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
 
 impl<T> cmp::Eq for ArenaPtr<T> { }
 
-/// A pointer to a cons cell on the heap.
-pub type ConsPtr = ArenaPtr<Cons>;
+/// TODO FITZGEN
+pub trait ToGcThing {
+    /// TODO FITZGEN
+    fn to_gc_thing(&self) -> Option<GcThing>;
+}
+
+/// TODO FITZGEN
+pub struct Rooted<T> {
+    heap: *mut Heap,
+    ptr: T,
+}
+
+impl<T: ToGcThing> Rooted<T> {
+    /// TODO FITZGEN
+    pub fn new(heap: &mut Heap, ptr: T) -> Rooted<T> {
+        if let Some(r) = ptr.to_gc_thing() {
+            heap.add_root(r);
+        }
+        Rooted {
+            heap: heap,
+            ptr: ptr,
+        }
+    }
+}
+
+impl<T> Deref<T> for Rooted<T> {
+    fn deref<'a>(&'a self) -> &'a T {
+        &self.ptr
+    }
+}
+
+impl<T> DerefMut<T> for Rooted<T> {
+    fn deref_mut<'a>(&'a mut self) -> &'a mut T {
+        &mut self.ptr
+    }
+}
+
+#[unsafe_destructor]
+impl<T: ToGcThing> Drop for Rooted<T> {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(r) = self.ptr.to_gc_thing() {
+                self.heap.as_mut()
+                    .expect("Rooted<T>::drop should always have a Context")
+                    .drop_root(r);
+            }
+        }
+    }
+}
 
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;
 
-/// A pointer to an `Environment` on the heap.
-pub type EnvironmentPtr = ArenaPtr<Environment>;
+impl ToGcThing for StringPtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_string_ptr(*self))
+    }
+}
 
-/// A pointer to a `Procedure` on the heap.
-pub type ProcedurePtr = ArenaPtr<Procedure>;
+/// TODO FITZGEN
+pub type RootedStringPtr = Rooted<StringPtr>;
 
 /// The scheme heap, containing all allocated cons cells and strings (including
 /// strings for symbols).
@@ -182,6 +268,7 @@ pub struct Heap {
     strings: Arena<String>,
     environments: Arena<Environment>,
     procedures: Arena<Procedure>,
+    roots: HashMap<GcThing, uint>,
 }
 
 /// The default capacity of cons cells.
@@ -196,6 +283,7 @@ pub static DEFAULT_ENVIRONMENTS_CAPACITY : uint = 1 << 12;
 /// The default capacity of environments.
 pub static DEFAULT_PROCEDURES_CAPACITY : uint = 1 << 12;
 
+/// ## `Heap` Constructors
 impl Heap {
     /// Create a new `Heap` with the default capacity.
     pub fn new() -> Heap {
@@ -216,16 +304,21 @@ impl Heap {
             strings: strings,
             environments: envs,
             procedures: procs,
+            roots: HashMap::new(),
         }
     }
+}
 
+/// ## `Heap` Allocation Methods
+impl Heap {
     /// Allocate a new cons cell and return a pointer to it.
     ///
     /// ## Panics
     ///
     /// Panics if the `Arena` for cons cells has already reached capacity.
-    pub fn allocate_cons(&mut self) -> ConsPtr {
-        self.cons_cells.allocate()
+    pub fn allocate_cons(&mut self) -> RootedConsPtr {
+        let cons = self.cons_cells.allocate();
+        Rooted::new(self, cons)
     }
 
     /// Allocate a new string and return a pointer to it.
@@ -256,25 +349,18 @@ impl Heap {
     }
 }
 
-/// # Garbage Collection
-///
-/// TODO FITZGEN talk about `trace` API protocol.
-
-pub type IterGcThing = IntoIter<GcThing>;
-
-/// TODO FITZGEN
-pub trait Trace {
-    /// TODO FITZGEN
-    fn trace(&self) -> IterGcThing;
-}
-
+/// ## Garbage Collection
 impl Heap {
     /// TODO FTIZGEN
     pub fn collect_garbage(&mut self, ctx: &Context) {
-        // Trace the heap graph and mark everything that is reachable.
+        // First, trace the heap graph and mark everything that is reachable.
 
         let mut marked = HashSet::new();
+        // TODO FITZGEN: make a method for getting roots
         let mut pending_trace: Vec<GcThing> = ctx.trace().collect();
+        for root in self.roots.keys() {
+            pending_trace.push(*root);
+        }
 
         while !pending_trace.is_empty() {
             let mut newly_pending_trace = vec!();
@@ -293,12 +379,7 @@ impl Heap {
             }
         }
 
-        println!("-----------------------------------------------------------");
-        for thing in marked.iter() {
-            println!("FITZGEN: traced {}", thing);
-        }
-
-        // Divide the marked set by arena, and sweep each arena.
+        // Second, divide the marked set by arena, and sweep each arena.
 
         let mut live_strings = HashSet::new();
         let mut live_envs = HashSet::new();
@@ -319,6 +400,33 @@ impl Heap {
         self.cons_cells.sweep(live_cons_cells);
         self.procedures.sweep(live_procs);
     }
+
+    /// TODO FITZGEN
+    pub fn add_root(&mut self, root: GcThing) {
+        let zero = 0u;
+        let current_count = *self.roots.get(&root).unwrap_or(&zero);
+        self.roots.insert(root, current_count + 1);
+    }
+
+    /// TODO FITZGEN
+    pub fn drop_root(&mut self, root: GcThing) {
+        let current_count = *self.roots.get(&root)
+            .expect("Shouldn't drop a gc thing that isn't rooted");
+        if current_count == 1 {
+            self.roots.remove(&root);
+        } else {
+            self.roots.insert(root, current_count - 1);
+        }
+    }
+}
+
+/// TODO FITZGEN
+pub type IterGcThing = IntoIter<GcThing>;
+
+/// TODO FITZGEN
+pub trait Trace {
+    /// TODO FITZGEN
+    fn trace(&self) -> IterGcThing;
 }
 
 /// TODO FITZGEN

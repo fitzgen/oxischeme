@@ -20,7 +20,8 @@
 use std::collections::{HashMap};
 use std::mem;
 
-use heap::{EnvironmentPtr, GcThing, Heap, IterGcThing, StringPtr, Trace};
+use environment::{EnvironmentPtr};
+use heap::{GcThing, Heap, IterGcThing, StringPtr, Trace};
 use value::{Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
@@ -28,7 +29,7 @@ use value::{Value};
 pub struct Context {
     heap: *mut Heap,
     symbol_table: HashMap<String, StringPtr>,
-    global_environment: EnvironmentPtr
+    global_environment: EnvironmentPtr,
 }
 
 impl<'a> Context {
@@ -49,7 +50,7 @@ impl<'a> Context {
             return Context {
                 heap: heap,
                 global_environment: env,
-                symbol_table: HashMap::new()
+                symbol_table: HashMap::new(),
             };
         }
     }
@@ -119,7 +120,9 @@ impl Trace for Context {
             .values()
             .map(|s| GcThing::from_string_ptr(*s))
             .collect();
+
         results.push(GcThing::from_environment_ptr(self.global_env()));
+
         results.into_iter()
     }
 }
