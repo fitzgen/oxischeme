@@ -21,7 +21,7 @@ use std::collections::{HashMap};
 use std::mem;
 
 use environment::{EnvironmentPtr};
-use heap::{GcThing, Heap, IterGcThing, StringPtr, Trace};
+use heap::{GcThing, Heap, IterGcThing, Rooted, StringPtr, Trace};
 use value::{Value};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
@@ -71,13 +71,14 @@ impl<'a> Context {
     /// and return it.
     pub fn get_or_create_symbol(&mut self, str: String) -> Value {
         if self.symbol_table.contains_key(&str) {
-            return Value::new_symbol(self.symbol_table[str]);
+            let sym_ptr = Rooted::new(self.heap(), self.symbol_table[str]);
+            return Value::new_symbol(sym_ptr);
         }
 
         let mut symbol = self.heap().allocate_string();
         symbol.clear();
         symbol.push_str(str.as_slice());
-        self.symbol_table.insert(str, symbol);
+        self.symbol_table.insert(str, *symbol);
         return Value::new_symbol(symbol);
     }
 }

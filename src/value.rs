@@ -17,8 +17,8 @@
 use std::default::{Default};
 
 use environment::{EnvironmentPtr};
-use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, StringPtr,
-           ToGcThing, Trace};
+use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
+           StringPtr, ToGcThing, Trace};
 use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
@@ -250,12 +250,12 @@ impl Value {
         let mut value = heap.allocate_string();
         value.clear();
         value.push_str(str.as_slice());
-        Value::String(value)
+        Value::String(*value)
     }
 
     /// Create a new symbol value with the given string.
-    pub fn new_symbol(str: StringPtr) -> Value {
-        Value::Symbol(str)
+    pub fn new_symbol(str: RootedStringPtr) -> Value {
+        Value::Symbol(*str)
     }
 }
 
@@ -343,6 +343,8 @@ impl ToGcThing for Value {
         }
     }
 }
+
+pub type RootedValue = Rooted<Value>;
 
 /// Either a Scheme `Value`, or a `String` containing an error message.
 pub type SchemeResult = Result<Value, String>;

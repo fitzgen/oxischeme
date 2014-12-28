@@ -326,8 +326,9 @@ impl Heap {
     /// ## Panics
     ///
     /// Panics if the `Arena` for strings has already reached capacity.
-    pub fn allocate_string(&mut self) -> StringPtr {
-        self.strings.allocate()
+    pub fn allocate_string(&mut self) -> RootedStringPtr {
+        let str = self.strings.allocate();
+        Rooted::new(self, str)
     }
 
     /// Allocate a new `Environment` and return a pointer to it.
