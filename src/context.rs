@@ -115,7 +115,6 @@ impl Context {
 }
 
 impl Trace for Context {
-    /// TODO FITZGEN
     fn trace(&self) -> IterGcThing {
         let mut results: Vec<GcThing> = self.symbol_table
             .values()

@@ -141,7 +141,6 @@ impl Default for Environment {
 }
 
 impl Trace for Environment {
-    /// TODO FITZGEN
     fn trace(&self) -> IterGcThing {
         let mut results = vec!();
 
@@ -168,5 +167,5 @@ impl ToGcThing for EnvironmentPtr {
     }
 }
 
-/// TODO FITZGEN
+/// A rooted pointer to an `Environment` on the heap.
 pub type RootedEnvironmentPtr = Rooted<EnvironmentPtr>;

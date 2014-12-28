@@ -64,9 +64,7 @@ impl Cons {
     }
 }
 
-/// TODO FITZGEN
 impl Trace for Cons {
-    /// TODO FITZGEN
     fn trace(&self) -> IterGcThing {
         let mut results = vec!();
 
@@ -91,7 +89,7 @@ impl ToGcThing for ConsPtr {
     }
 }
 
-/// TODO FITZGEN
+/// A rooted pointer to a cons cell on the heap.
 pub type RootedConsPtr = Rooted<ConsPtr>;
 
 /// Procedures are represented by their parameter list, body, and a pointer to
@@ -148,7 +146,6 @@ impl Default for Procedure {
 }
 
 impl Trace for Procedure {
-    /// TODO FITZGEN
     fn trace(&self) -> IterGcThing {
         let mut results = vec!();
 
@@ -173,7 +170,7 @@ impl ToGcThing for ProcedurePtr {
     }
 }
 
-/// TODO FITZGEN
+/// A rooted pointer to a `Procedure` on the heap.
 pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 
 /// `Value` represents a scheme value of any type.
@@ -334,7 +331,6 @@ impl Value {
 }
 
 impl ToGcThing for Value {
-    /// TODO FITZGEN
     fn to_gc_thing(&self) -> Option<GcThing> {
         match *self {
             Value::String(str)  => Some(GcThing::from_string_ptr(str)),

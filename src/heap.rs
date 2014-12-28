@@ -168,14 +168,12 @@ impl<T: Default> Arena<T> {
             None      => panic!("Arena::allocate: out of memory!"),
             Some(idx) => {
                 let self_ptr : *mut Arena<T> = self;
-                let res = ArenaPtr::new(self_ptr, idx);
-                println!("FITZGEN: allocated {}", &res);
-                res
+                ArenaPtr::new(self_ptr, idx)
             },
         }
     }
 
-    /// TODO FITZGEN
+    /// Sweep the arena and add any reclaimed objects back to the free list.
     pub fn sweep(&mut self, live: HashSet<uint>) {
         self.free = range(0, self.capacity())
             .filter(|n| !live.contains(n))
@@ -260,20 +258,23 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
 
 impl<T> cmp::Eq for ArenaPtr<T> { }
 
-/// TODO FITZGEN
+/// A trait for types that can be coerced to a `GcThing`.
 pub trait ToGcThing {
-    /// TODO FITZGEN
+    /// Coerce this value to a `GcThing`.
     fn to_gc_thing(&self) -> Option<GcThing>;
 }
 
-/// TODO FITZGEN
+/// A smart pointer wrapping the pointer type `T`. It keeps its referent rooted
+/// while the smart pointer is in scope to prevent dangling pointers caused by a
+/// garbage collection within the pointers lifespan. For more information see
+/// the module level documentation about rooting.
 pub struct Rooted<T> {
     heap: *mut Heap,
     ptr: T,
 }
 
 impl<T: ToGcThing> Rooted<T> {
-    /// TODO FITZGEN
+    /// Create a new `Rooted<T>`, rooting the referent.
     pub fn new(heap: &mut Heap, ptr: T) -> Rooted<T> {
         let mut r = Rooted {
             heap: heap,
@@ -283,7 +284,15 @@ impl<T: ToGcThing> Rooted<T> {
         r
     }
 
-    /// TODO FITZGEN
+    /// Unroot the current referent and replace it with the given referent,
+    /// which then gets rooted.
+    pub fn emplace(&mut self, rhs: T) {
+        self.drop_root();
+        self.ptr = rhs;
+        self.add_root();
+    }
+
+    /// Add the current referent as a GC root.
     fn add_root(&mut self) {
         if let Some(r) = self.ptr.to_gc_thing() {
             unsafe {
@@ -294,7 +303,7 @@ impl<T: ToGcThing> Rooted<T> {
         }
     }
 
-    /// TODO FITZGEN
+    /// Unroot the current referent.
     fn drop_root(&mut self) {
         if let Some(r) = self.ptr.to_gc_thing() {
             unsafe {
@@ -303,13 +312,6 @@ impl<T: ToGcThing> Rooted<T> {
                     .drop_root(r);
             }
         }
-    }
-
-    /// TODO FITZGEN
-    pub fn emplace(&mut self, rhs: T) {
-        self.drop_root();
-        self.ptr = rhs;
-        self.add_root();
     }
 }
 
@@ -341,7 +343,7 @@ impl ToGcThing for StringPtr {
     }
 }
 
-/// TODO FITZGEN
+/// A rooted pointer to a string on the heap.
 pub type RootedStringPtr = Rooted<StringPtr>;
 
 /// The scheme heap, containing all allocated cons cells and strings (including
@@ -437,16 +439,12 @@ impl Heap {
 
 /// ## Garbage Collection
 impl Heap {
-    /// TODO FTIZGEN
+    /// Perform a garbage collection on the heap.
     pub fn collect_garbage(&mut self, ctx: &Context) {
         // First, trace the heap graph and mark everything that is reachable.
 
         let mut marked = HashSet::new();
-        // TODO FITZGEN: make a method for getting roots
-        let mut pending_trace: Vec<GcThing> = ctx.trace().collect();
-        for root in self.roots.keys() {
-            pending_trace.push(*root);
-        }
+        let mut pending_trace = self.get_roots(ctx);
 
         while !pending_trace.is_empty() {
             let mut newly_pending_trace = vec!();
@@ -487,75 +485,99 @@ impl Heap {
         self.procedures.sweep(live_procs);
     }
 
-    /// TODO FITZGEN
+    /// Explicitly add the given GC thing as a root.
     pub fn add_root(&mut self, root: GcThing) {
         let zero = 0u;
         let current_count = *self.roots.get(&root).unwrap_or(&zero);
         self.roots.insert(root, current_count + 1);
     }
 
-    /// TODO FITZGEN
+    /// Unroot a GC thing that was explicitly rooted with `add_root`.
     pub fn drop_root(&mut self, root: GcThing) {
         let current_count = *self.roots.get(&root)
-            .expect("Shouldn't drop a gc thing that isn't rooted");
+            .expect("Should never drop_root a gc thing that isn't rooted");
         if current_count == 1 {
             self.roots.remove(&root);
         } else {
             self.roots.insert(root, current_count - 1);
         }
     }
+
+    /// Get a vector of all of the GC roots.
+    fn get_roots(&self, ctx: &Context) -> Vec<GcThing> {
+        let mut roots: Vec<GcThing> = ctx.trace().collect();
+        for root in self.roots.keys() {
+            roots.push(*root);
+        }
+        roots
+    }
 }
 
-/// TODO FITZGEN
+/// An iterable of `GcThing`s.
 pub type IterGcThing = IntoIter<GcThing>;
 
-/// TODO FITZGEN
+/// The `Trace` trait allows GC participants to inform the collector of their
+/// references to other GC things.
+///
+/// For example, imagine we had a `Trio` type that contained three cons cells:
+///
+///     struct Trio {
+///         first: ConsPtr,
+///         second: ConsPtr,
+///         third: ConsPtr,
+///     }
+///
+/// `Trio`'s implementation of `Trace` must yield all of its cons pointers, or
+/// else their referents could be reclaimed by the garbage collector, and the
+/// `Trio` would have dangling pointers, leading to undefined behavior and bad
+/// things when it dereferences them in the future.
+///
+///     impl Trace for Trio {
+///         fn trace(&self) -> IterGcThing {
+///             let refs = vec!(GcThing::from_cons_ptr(self.first),
+///                             GcThing::from_cons_ptr(self.second),
+///                             GcThing::from_cons_ptr(self.third));
+///             refs.into_iter()
+///         }
+///     }
 pub trait Trace {
-    /// TODO FITZGEN
+    /// Return an iterable of all of the GC things referenced by this structure.
     fn trace(&self) -> IterGcThing;
 }
 
-/// TODO FITZGEN
+/// The union of the various types that are GC things.
 #[deriving(Copy, Eq, Hash, PartialEq, Show)]
 pub enum GcThing {
-    /// TODO FITZGEN
     Cons(ConsPtr),
-
-    /// TODO FITZGEN
     String(StringPtr),
-
-    /// TODO FITZGEN
     Environment(EnvironmentPtr),
-
-    /// TODO FITZGEN
     Procedure(ProcedurePtr),
 }
 
 /// ## `GcThing` Constructors
 impl GcThing {
-    /// TODO FITZGEN
+    /// Create a `GcThing` from a `StringPtr`.
     pub fn from_string_ptr(str: StringPtr) -> GcThing {
         GcThing::String(str)
     }
 
-    /// TODO FITZGEN
+    /// Create a `GcThing` from a `ConsPtr`.
     pub fn from_cons_ptr(cons: ConsPtr) -> GcThing {
         GcThing::Cons(cons)
     }
 
-    /// TODO FITZGEN
+    /// Create a `GcThing` from a `ProcedurePtr`.
     pub fn from_procedure_ptr(procedure: ProcedurePtr) -> GcThing {
         GcThing::Procedure(procedure)
     }
 
-    /// TODO FITZGEN
+    /// Create a `GcThing` from a `EnvironmentPtr`.
     pub fn from_environment_ptr(env: EnvironmentPtr) -> GcThing {
         GcThing::Environment(env)
     }
 }
 
 impl Trace for GcThing {
-    /// TODO FITZGEN
     fn trace(&self) -> IterGcThing {
         match *self {
             GcThing::Cons(cons)       => cons.trace(),

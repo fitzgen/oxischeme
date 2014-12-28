@@ -21,7 +21,8 @@ use environment::{Environment, RootedEnvironmentPtr};
 use heap::{Rooted};
 use value::{SchemeResult, Value};
 
-/// TODO FITZGEN
+/// Return true if the value doesn't need to be evaluated because it is
+/// "autoquoting" or "self evaluating", false otherwise.
 fn is_auto_quoting(val: &Value) -> bool {
     match *val {
         Value::EmptyList    => false,
