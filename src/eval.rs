@@ -230,7 +230,9 @@ fn evaluate_list(ctx: &mut Context,
         Value::Pair(cons) => {
             let val = try!(evaluate(ctx, env, cons.car()));
             let rest = try!(evaluate_list(ctx, env, cons.cdr()));
-            Ok(Value::new_pair(ctx.heap(), val, rest))
+            let rval = Rooted::new(ctx.heap(), val);
+            let rrest = Rooted::new(ctx.heap(), rest);
+            Ok(Value::new_pair(ctx.heap(), &rval, &rrest))
         },
         _                 => Err("Improper list".to_string()),
     }

@@ -20,6 +20,7 @@ use std::io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
 use std::iter::{Peekable};
 
 use context::{Context};
+use heap::{Rooted};
 use value::{Value, list};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
@@ -328,7 +329,7 @@ impl<'a, R: Reader> Read<R> {
             _         => {
                 let car = match self.next() {
                     None    => return self.unexpected_eof(),
-                    Some(v) => v,
+                    Some(v) => Rooted::new(self.ctx().heap(), v),
                 };
 
                 self.trim();
@@ -340,7 +341,7 @@ impl<'a, R: Reader> Read<R> {
                         self.next_char();
                         let cdr = match self.next() {
                             None    => return self.unexpected_eof(),
-                            Some(v) => v,
+                            Some(v) => Rooted::new(self.ctx().heap(), v),
                         };
 
                         self.trim();
@@ -348,17 +349,21 @@ impl<'a, R: Reader> Read<R> {
                             return None;
                         }
 
-                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
+                        return Some(Value::new_pair(self.ctx().heap(),
+                                                    &car,
+                                                    &cdr));
                     },
 
                     // Proper list.
                     _         => {
                         let cdr = match self.read_pair() {
                             None    => return self.unexpected_eof(),
-                            Some(v) => v,
+                            Some(v) => Rooted::new(self.ctx().heap(), v),
                         };
 
-                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
+                        return Some(Value::new_pair(self.ctx().heap(),
+                                                    &car,
+                                                    &cdr));
                     },
                 };
             },

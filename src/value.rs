@@ -226,10 +226,12 @@ impl Value {
     }
 
     /// Create a new cons pair value with the given car and cdr.
-    pub fn new_pair(heap: &mut Heap, car: Value, cdr: Value) -> Value {
+    pub fn new_pair(heap: &mut Heap,
+                    car: &RootedValue,
+                    cdr: &RootedValue) -> Value {
         let mut cons = heap.allocate_cons();
-        cons.set_car(car);
-        cons.set_cdr(cdr);
+        cons.set_car(**car);
+        cons.set_cdr(**cdr);
         Value::Pair(*cons)
     }
 
@@ -358,9 +360,11 @@ fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context,
                                            values: &mut T) -> Value {
     match values.next() {
         None      => Value::EmptyList,
-        Some(car) => {
-            let cdr = list_helper(ctx, values);
-            Value::new_pair(ctx.heap(), *car, cdr)
+        Some(c) => {
+            let rest = list_helper(ctx, values);
+            let car = Rooted::new(ctx.heap(), *c);
+            let cdr = Rooted::new(ctx.heap(), rest);
+            Value::new_pair(ctx.heap(), &car, &cdr)
         },
     }
 }
