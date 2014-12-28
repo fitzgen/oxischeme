@@ -242,7 +242,7 @@ impl Value {
         procedure.set_params(params);
         procedure.set_body(body);
         procedure.set_env(**env);
-        Value::Procedure(procedure)
+        Value::Procedure(*procedure)
     }
 
     /// Create a new string value with the given string.

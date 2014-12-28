@@ -68,7 +68,8 @@ use std::vec::{IntoIter};
 
 use context::{Context};
 use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
-use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr};
+use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
+            RootedProcedurePtr};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
@@ -368,8 +369,9 @@ impl Heap {
     /// ## Panics
     ///
     /// Panics if the `Arena` for environments has already reached capacity.
-    pub fn allocate_procedure(&mut self) -> ProcedurePtr {
-        self.procedures.allocate()
+    pub fn allocate_procedure(&mut self) -> RootedProcedurePtr {
+        let p = self.procedures.allocate();
+        Rooted::new(self, p)
     }
 }
 
