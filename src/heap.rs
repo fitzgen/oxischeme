@@ -58,6 +58,66 @@
 //! unreachable objects are the set of GC things that are not in the marked
 //! set. We find these unreachable objects and return them to their respective
 //! arena's free list in the sweep phase.
+//!
+//! ### Rooting
+//!
+//! Sometimes it is necessary to temporarily root GC things referenced by
+//! pointers on the stack. Garbage collection can be triggered by allocating any
+//! GC thing, and it isn't always clear which rust functions (or other functions
+//! called by those functions, or even other functions called by those functions
+//! called from the first function, and so on) might allocate a GC thing and
+//! trigger collection. The situation we want to avoid is a rust function using a
+//! temporary variable that references a GC thing, then calling another function
+//! which triggers a collection and collects the GC thing that was referred to by
+//! the temporary variable, and the temporary variable is now a dangling
+//! pointer. If the rust function accesses it again, that is undefined behavior:
+//! it might still get the value it was pointing at, or it might be a segfault,
+//! or it might be a freshly allocated value used by something else! Not good!
+//!
+//! Here is what this scenario looks like in psuedo code:
+//!
+//!     let a = pointer_to_some_gc_thing;
+//!     function_which_can_trigger_gc();
+//!     // Oops! A collection was triggered and dereferencing this pointer leads
+//!     // to undefined behavior!
+//!     *a;
+//!
+//! There are two possible solutions to this problem. The first is *conservative*
+//! garbage collection, where we walk the stack and if anything on the stack
+//! looks like it might be a pointer and if coerced to a pointer happens to point
+//! to a GC thing in the heap, we assume that it *is* a pointer and we consider
+//! the GC thing that may or may not actually be pointed to by a variable on the
+//! stack a GC root. The second is *precise rooting*. With precise rooting, it is
+//! the responsibility of the rust function's author to explicitly root and
+//! unroot pointers to GC things used in variables on the stack.
+//!
+//! Oxischeme uses precise rooting. Precise rooting is implemented with the
+//! `Rooted<GcThingPtr>` smart pointer type, which roots its referent upon
+//! construction and unroots it when the smart pointer goes out of scope and is
+//! dropped.
+//!
+//! Using precise rooting and `Rooted`, we can solve the dangling pointer
+//! problem like this:
+//!
+//!     {
+//!         // The pointed to GC thing gets rooted when wrapped with `Rooted`.
+//!         let a = Rooted::new(heap, pointer_to_some_gc_thing);
+//!         function_which_can_trigger_gc();
+//!         // Dereferencing `a` is now safe, because the referent is a GC root!
+//!         *a;
+//!     }
+//!     // `a` goes out of scope, and its referent is unrooted.
+//!
+//! Tips for working with precise rooting if your function allocates GC things,
+//! or calls other functions which allocate GC things:
+//!
+//! * Accept GC thing parameters as `&Rooted<T>` or `&mut Rooted<T>` to ensure
+//!   that callers properly root them.
+//!
+//! * Always root GC things whose lifetime spans a call which could trigger a
+//!   collection!
+//!
+//! * When in doubt, Just Root It!
 
 use std::cmp;
 use std::collections::{HashMap, HashSet};
