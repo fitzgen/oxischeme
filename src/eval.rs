@@ -17,7 +17,8 @@
 use std::fmt::{format};
 
 use context::{Context};
-use environment::{Environment, EnvironmentPtr};
+use environment::{Environment, RootedEnvironmentPtr};
+use heap::{Rooted};
 use value::{SchemeResult, Value};
 
 /// TODO FITZGEN
@@ -32,13 +33,13 @@ fn is_auto_quoting(val: &Value) -> bool {
 
 /// Evaluate the given form in the global environment.
 pub fn evaluate_in_global_env(ctx: &mut Context, form: Value) -> SchemeResult {
-    let env = ctx.global_env();
-    evaluate(ctx, env, form)
+    let mut env = ctx.global_env();
+    evaluate(ctx, &mut env, form)
 }
 
 /// Evaluate the given form in the given environment.
 pub fn evaluate(ctx: &mut Context,
-                env: EnvironmentPtr,
+                env: &mut RootedEnvironmentPtr,
                 form: Value) -> SchemeResult {
     // NB: We use a loop to trampoline tail calls to `evaluate` to ensure that tail
     // calls don't take up more stack space. Instead of doing
@@ -47,10 +48,10 @@ pub fn evaluate(ctx: &mut Context,
     //
     // we just do
     //
-    //   env_ = new_env;
+    //   env_.emplace(new_env);
     //   form_ = new_form;
     //   continue;
-    let mut env_ = env;
+    let mut env_ = &mut Rooted::new(ctx.heap(), **env);
     let mut form_ = form;
     loop {
         if form_.is_atom() {
@@ -121,10 +122,11 @@ pub fn evaluate(ctx: &mut Context,
                                  proc_val)));
                 let args = try!(evaluate_list(ctx, env_, pair.cdr()));
 
-                env_ = try!(Environment::extend(ctx.heap(),
-                                                proc_ptr.get_env(),
-                                                proc_ptr.get_params(),
-                                                args));
+                let proc_env = try!(Environment::extend(ctx.heap(),
+                                                        proc_ptr.get_env(),
+                                                        proc_ptr.get_params(),
+                                                        args));
+                env_.emplace(*proc_env);
                 form_ = try!(evaluate_sequence(ctx,
                                                env_,
                                                proc_ptr.get_body()));
@@ -136,7 +138,7 @@ pub fn evaluate(ctx: &mut Context,
 
 /// Evaluate a `lambda` form.
 fn evaluate_lambda(ctx: &mut Context,
-                   env: EnvironmentPtr,
+                   env: &RootedEnvironmentPtr,
                    form: Value) -> SchemeResult {
     let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
     if length < 3 {
@@ -151,7 +153,7 @@ fn evaluate_lambda(ctx: &mut Context,
 
 /// Evaluate a `set!` form.
 fn evaluate_set(ctx: &mut Context,
-                env: EnvironmentPtr,
+                env: &mut RootedEnvironmentPtr,
                 form: Value) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
@@ -160,7 +162,7 @@ fn evaluate_set(ctx: &mut Context,
 
         if let Some(str) = sym.to_symbol() {
             let new_value_form = try!(pair.caddr());
-            let new_value = try!(evaluate(ctx, env, new_value_form));
+            let new_value = try!(evaluate(ctx, env_, new_value_form));
             try!(env_.update(str.deref().clone(), new_value));
             return Ok(ctx.unspecified_symbol());
         }
@@ -173,7 +175,7 @@ fn evaluate_set(ctx: &mut Context,
 
 /// Evaluate a `define` form.
 fn evaluate_definition(ctx: &mut Context,
-                       env: EnvironmentPtr,
+                       env: &mut RootedEnvironmentPtr,
                        form: Value) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
@@ -182,7 +184,7 @@ fn evaluate_definition(ctx: &mut Context,
 
         if let Some(str) = sym.to_symbol() {
             let def_value_form = try!(pair.caddr());
-            let def_value = try!(evaluate(ctx, env, def_value_form));
+            let def_value = try!(evaluate(ctx, env_, def_value_form));
             env_.define(str.deref().clone(), def_value);
             return Ok(ctx.unspecified_symbol());
         }
@@ -203,7 +205,7 @@ fn evaluate_quoted(form: Value) -> SchemeResult {
 }
 
 /// Evaluate an atom (ie anything that is not a list).
-fn evaluate_atom(env: EnvironmentPtr, form: Value) -> SchemeResult {
+fn evaluate_atom(env: &mut RootedEnvironmentPtr, form: Value) -> SchemeResult {
     if is_auto_quoting(&form) {
         return Ok(form);
     }
@@ -217,7 +219,7 @@ fn evaluate_atom(env: EnvironmentPtr, form: Value) -> SchemeResult {
 
 /// Evaluate each given form, returning the resulting list of values.
 fn evaluate_list(ctx: &mut Context,
-                 env: EnvironmentPtr,
+                 env: &mut RootedEnvironmentPtr,
                  forms: Value) -> SchemeResult {
     match forms {
         Value::EmptyList  => Ok(Value::EmptyList),
@@ -234,7 +236,7 @@ fn evaluate_list(ctx: &mut Context,
 /// expression, whose form is returned (so it can be trampolined to maintain
 /// TCO).
 fn evaluate_sequence(ctx: &mut Context,
-                     env: EnvironmentPtr,
+                     env: &mut RootedEnvironmentPtr,
                      exprs: Value) -> SchemeResult {
     let mut e = exprs;
     loop {

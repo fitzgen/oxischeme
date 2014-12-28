@@ -20,7 +20,7 @@
 use std::collections::{HashMap};
 use std::mem;
 
-use environment::{EnvironmentPtr};
+use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{GcThing, Heap, IterGcThing, Rooted, StringPtr, Trace};
 use value::{Value};
 
@@ -49,7 +49,7 @@ impl<'a> Context {
 
             return Context {
                 heap: heap,
-                global_environment: env,
+                global_environment: *env,
                 symbol_table: HashMap::new(),
             };
         }
@@ -63,8 +63,8 @@ impl<'a> Context {
     }
 
     /// Get the global environment.
-    pub fn global_env(&self) -> EnvironmentPtr {
-        self.global_environment
+    pub fn global_env(&self) -> RootedEnvironmentPtr {
+        Rooted::new(self.heap(), self.global_environment)
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`
@@ -122,7 +122,7 @@ impl Trace for Context {
             .map(|s| GcThing::from_string_ptr(*s))
             .collect();
 
-        results.push(GcThing::from_environment_ptr(self.global_env()));
+        results.push(GcThing::from_environment_ptr(self.global_environment));
 
         results.into_iter()
     }

@@ -16,7 +16,7 @@
 
 use std::default::{Default};
 
-use environment::{EnvironmentPtr};
+use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
 use context::{Context};
@@ -237,11 +237,11 @@ impl Value {
     pub fn new_procedure(heap: &mut Heap,
                          params: Value,
                          body: Value,
-                         env: EnvironmentPtr) -> Value {
+                         env: &RootedEnvironmentPtr) -> Value {
         let mut procedure = heap.allocate_procedure();
         procedure.set_params(params);
         procedure.set_body(body);
-        procedure.set_env(env);
+        procedure.set_env(**env);
         Value::Procedure(procedure)
     }
 

@@ -42,7 +42,7 @@ impl Environment {
     pub fn extend(heap: &mut Heap,
                   parent: EnvironmentPtr,
                   names: Value,
-                  values: Value) -> Result<EnvironmentPtr, String> {
+                  values: Value) -> Result<RootedEnvironmentPtr, String> {
         let mut env = heap.allocate_environment();
         env.set_parent(parent);
 

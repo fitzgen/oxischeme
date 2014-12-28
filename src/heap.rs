@@ -67,7 +67,7 @@ use std::ptr;
 use std::vec::{IntoIter};
 
 use context::{Context};
-use environment::{Environment, EnvironmentPtr};
+use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
@@ -214,13 +214,41 @@ pub struct Rooted<T> {
 impl<T: ToGcThing> Rooted<T> {
     /// TODO FITZGEN
     pub fn new(heap: &mut Heap, ptr: T) -> Rooted<T> {
-        if let Some(r) = ptr.to_gc_thing() {
-            heap.add_root(r);
-        }
-        Rooted {
+        let mut r = Rooted {
             heap: heap,
             ptr: ptr,
+        };
+        r.add_root();
+        r
+    }
+
+    /// TODO FITZGEN
+    fn add_root(&mut self) {
+        if let Some(r) = self.ptr.to_gc_thing() {
+            unsafe {
+                self.heap.as_mut()
+                    .expect("Rooted<T>::drop should always have a Context")
+                    .add_root(r);
+            }
         }
+    }
+
+    /// TODO FITZGEN
+    fn drop_root(&mut self) {
+        if let Some(r) = self.ptr.to_gc_thing() {
+            unsafe {
+                self.heap.as_mut()
+                    .expect("Rooted<T>::drop should always have a Context")
+                    .drop_root(r);
+            }
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn emplace(&mut self, rhs: T) {
+        self.drop_root();
+        self.ptr = rhs;
+        self.add_root();
     }
 }
 
@@ -239,13 +267,7 @@ impl<T> DerefMut<T> for Rooted<T> {
 #[unsafe_destructor]
 impl<T: ToGcThing> Drop for Rooted<T> {
     fn drop(&mut self) {
-        unsafe {
-            if let Some(r) = self.ptr.to_gc_thing() {
-                self.heap.as_mut()
-                    .expect("Rooted<T>::drop should always have a Context")
-                    .drop_root(r);
-            }
-        }
+        self.drop_root();
     }
 }
 
@@ -336,8 +358,9 @@ impl Heap {
     /// ## Panics
     ///
     /// Panics if the `Arena` for environments has already reached capacity.
-    pub fn allocate_environment(&mut self) -> EnvironmentPtr {
-        self.environments.allocate()
+    pub fn allocate_environment(&mut self) -> RootedEnvironmentPtr {
+        let env = self.environments.allocate();
+        Rooted::new(self, env)
     }
 
     /// Allocate a new `Procedure` and return a pointer to it.
