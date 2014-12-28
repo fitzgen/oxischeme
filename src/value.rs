@@ -235,12 +235,12 @@ impl Value {
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
-                         params: Value,
-                         body: Value,
+                         params: &RootedValue,
+                         body: &RootedValue,
                          env: &RootedEnvironmentPtr) -> Value {
         let mut procedure = heap.allocate_procedure();
-        procedure.set_params(params);
-        procedure.set_body(body);
+        procedure.set_params(**params);
+        procedure.set_body(**body);
         procedure.set_env(**env);
         Value::Procedure(*procedure)
     }

@@ -146,9 +146,13 @@ fn evaluate_lambda(ctx: &mut Context,
     }
 
     let pair = form.to_pair().unwrap();
-    let params = pair.cadr().ok().expect("Must be here since length >= 3");
-    let body = pair.cddr().ok().expect("Must be here since length >= 3");
-    return Ok(Value::new_procedure(ctx.heap(), params, body, env));
+    let params = Rooted::new(
+        ctx.heap(),
+        pair.cadr().ok().expect("Must be here since length >= 3"));
+    let body = Rooted::new(
+        ctx.heap(),
+        pair.cddr().ok().expect("Must be here since length >= 3"));
+    return Ok(Value::new_procedure(ctx.heap(), &params, &body, env));
 }
 
 /// Evaluate a `set!` form.
