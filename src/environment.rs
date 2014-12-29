@@ -29,14 +29,6 @@ pub struct Environment {
 }
 
 impl Environment {
-    /// Create a new `Environment`.
-    pub fn new() -> Environment {
-        Environment {
-            parent: None,
-            bindings: HashMap::new()
-        }
-    }
-
     /// Extend the given environment with the names and associated values
     /// supplied, resulting in a new environment.
     pub fn extend(heap: &mut Heap,
@@ -139,7 +131,10 @@ impl<S: hash::Writer> hash::Hash<S> for Environment {
 
 impl Default for Environment {
     fn default() -> Environment {
-        Environment::new()
+        Environment {
+            parent: None,
+            bindings: HashMap::new()
+        }
     }
 }
 
