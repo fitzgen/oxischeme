@@ -60,10 +60,8 @@ pub fn evaluate(ctx: &mut Context,
             return evaluate_atom(ctx, env_, form_);
         }
 
-        let pair = Rooted::new(
-            ctx.heap(),
-            form_.to_pair().expect(
-                "If a value is not an atom, then it must be a pair."));
+        let pair = form_.to_pair(ctx.heap()).expect(
+            "If a value is not an atom, then it must be a pair.");
 
         let quote = ctx.quote_symbol();
         let if_symbol = ctx.if_symbol();
@@ -72,7 +70,7 @@ pub fn evaluate(ctx: &mut Context,
         let set_bang = ctx.set_bang_symbol();
         let lambda = ctx.lambda_symbol();
 
-        match pair.car() {
+        match *pair.car(ctx.heap()) {
             // Quoted forms.
             v if v == *quote => return evaluate_quoted(ctx, form_),
 
@@ -110,7 +108,7 @@ pub fn evaluate(ctx: &mut Context,
 
             // `(begin ...)` sequences.
             v if v == *begin => {
-                let forms = Rooted::new(ctx.heap(), pair.cdr());
+                let forms = pair.cdr(ctx.heap());
                 form_.emplace(*try!(evaluate_sequence(ctx, env_, &forms)));
                 continue;
             },
@@ -122,21 +120,21 @@ pub fn evaluate(ctx: &mut Context,
 
                 let proc_form = Rooted::new(ctx.heap(), procedure);
                 let proc_val = try!(evaluate(ctx, env_, &proc_form));
-                let proc_ptr = try!(proc_val.to_procedure().ok_or(
+                let proc_ptr = try!(proc_val.to_procedure(ctx.heap()).ok_or(
                     format_args!(format,
                                  "Expected a procedure, found {}",
                                  *proc_val)));
 
-                let args_form = Rooted::new(ctx.heap(), pair.cdr());
+                let args_form = pair.cdr(ctx.heap());
                 let args_val = try!(evaluate_list(ctx, env_, &args_form));
 
                 let proc_env = try!(Environment::extend(
                     ctx.heap(),
-                    &Rooted::new(ctx.heap(), proc_ptr.get_env()),
-                    &Rooted::new(ctx.heap(), proc_ptr.get_params()),
+                    &proc_ptr.get_env(ctx.heap()),
+                    &proc_ptr.get_params(ctx.heap()),
                     &args_val));
 
-                let body = Rooted::new(ctx.heap(), proc_ptr.get_body());
+                let body = proc_ptr.get_body(ctx.heap());
 
                 env_.emplace(*proc_env);
                 form_.emplace(*try!(evaluate_sequence(ctx, env_, &body)));
@@ -155,7 +153,7 @@ fn evaluate_lambda(ctx: &mut Context,
         return Err("Lambda is missing body".to_string());
     }
 
-    let pair = form.to_pair().unwrap();
+    let pair = form.to_pair(ctx.heap()).unwrap();
     let params = pair.cadr(ctx).ok().expect("Must be here since length >= 3");
     let body = pair.cddr(ctx).ok().expect("Must be here since length >= 3");
     return Ok(Value::new_procedure(ctx.heap(), &params, &body, env));
@@ -167,13 +165,13 @@ fn evaluate_set(ctx: &mut Context,
                 form: &RootedValue) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
-        let pair = form.to_pair().unwrap();
+        let pair = form.to_pair(ctx.heap()).unwrap();
         let sym = try!(pair.cadr(ctx));
 
-        if let Some(str) = sym.to_symbol() {
+        if let Some(str) = sym.to_symbol(ctx.heap()) {
             let new_value_form = try!(pair.caddr(ctx));
             let new_value = try!(evaluate(ctx, env_, &new_value_form));
-            try!(env_.update(str.deref().clone(), &new_value));
+            try!(env_.update((**str).clone(), &new_value));
             return Ok(ctx.unspecified_symbol());
         }
 
@@ -189,13 +187,13 @@ fn evaluate_definition(ctx: &mut Context,
                        form: &RootedValue) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
-        let pair = form.to_pair().unwrap();
+        let pair = form.to_pair(ctx.heap()).unwrap();
         let sym = try!(pair.cadr(ctx));
 
-        if let Some(str) = sym.to_symbol() {
+        if let Some(str) = sym.to_symbol(ctx.heap()) {
             let def_value_form = try!(pair.caddr(ctx));
             let def_value = try!(evaluate(ctx, env_, &def_value_form));
-            env_.define(str.deref().clone(), &def_value);
+            env_.define((**str).clone(), &def_value);
             return Ok(ctx.unspecified_symbol());
         }
 
@@ -207,9 +205,10 @@ fn evaluate_definition(ctx: &mut Context,
 
 /// Evaluate a quoted form.
 fn evaluate_quoted(ctx: &mut Context, form: &RootedValue) -> SchemeResult {
-    if let Some(Value::EmptyList) = form.cdr().unwrap().cdr() {
-        return Ok(Rooted::new(ctx.heap(),
-                              form.cdr().unwrap().car().unwrap()));
+    if let Ok(2) = form.len() {
+        let heap = ctx.heap();
+        return Ok(form.cdr(heap).unwrap()
+                      .car(heap).unwrap());
     }
 
     return Err("Wrong number of parts in quoted form".to_string());
@@ -237,10 +236,10 @@ fn evaluate_list(ctx: &mut Context,
     match **forms {
         Value::EmptyList      => Ok(Rooted::new(ctx.heap(), Value::EmptyList)),
         Value::Pair(ref cons) => {
-            let car = Rooted::new(ctx.heap(), cons.car());
+            let car = cons.car(ctx.heap());
             let val = try!(evaluate(ctx, env, &car));
 
-            let cdr = Rooted::new(ctx.heap(), cons.cdr());
+            let cdr = cons.cdr(ctx.heap());
             let rest = try!(evaluate_list(ctx, env, &cdr));
 
             Ok(Value::new_pair(ctx.heap(), &val, &rest))
@@ -260,12 +259,12 @@ fn evaluate_sequence(ctx: &mut Context,
         let ee = *e;
         match ee {
             Value::Pair(ref pair) => {
-                if pair.cdr() == Value::EmptyList {
-                    return Ok(Rooted::new(ctx.heap(), pair.car()));
+                if *pair.cdr(ctx.heap()) == Value::EmptyList {
+                    return Ok(pair.car(ctx.heap()));
                 } else {
-                    let car = Rooted::new(ctx.heap(), pair.car());
+                    let car = pair.car(ctx.heap());
                     try!(evaluate(ctx, env, &car));
-                    e.emplace(pair.cdr());
+                    e.emplace(*pair.cdr(ctx.heap()));
                 }
             },
             _                 => {

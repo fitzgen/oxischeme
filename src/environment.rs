@@ -66,18 +66,17 @@ impl Environment {
                     return Ok(env);
                 },
                 Value::Pair(ref cons) => {
-                    let sym = try!(cons.car().to_symbol().ok_or(
+                    let sym = try!(cons.car(heap).to_symbol(heap).ok_or(
                         "Can't extend environment with non-symbol".to_string()));
-                    let val = Rooted::new(
-                        heap,
-                        values_.car().expect(
-                            "Already verified that names.len() == values.len()"));
-                    env.define(sym.deref().clone(), &val);
-
-                    names_.emplace(cons.cdr());
-                    let next_val = values_.cdr().expect(
+                    let val = values_.car(heap).expect(
                         "Already verified that names.len() == values.len()");
-                    values_.emplace(next_val);
+                    env.define((**sym).clone(), &val);
+
+                    names_.emplace(*cons.cdr(heap));
+
+                    let next_val = values_.cdr(heap).expect(
+                        "Already verified that names.len() == values.len()");
+                    values_.emplace(*next_val);
                 },
                 _                 => {
                     return Err(
@@ -129,8 +128,8 @@ impl Environment {
     }
 }
 
-impl hash::Hash for Environment {
-    fn hash(&self, state: &mut hash::sip::SipState) {
+impl<S: hash::Writer> hash::Hash<S> for Environment {
+    fn hash(&self, state: &mut S) {
         self.parent.hash(state);
         for item in self.bindings.iter() {
             item.hash(state);

@@ -44,13 +44,13 @@ impl Default for Cons {
 
 impl Cons {
     /// Get the car of this cons cell.
-    pub fn car(&self) -> Value {
-        self.car
+    pub fn car(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.car)
     }
 
     /// Get the cdr of this cons cell.
-    pub fn cdr(&self) -> Value {
-        self.cdr
+    pub fn cdr(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.cdr)
     }
 
     /// Set the car of this cons cell.
@@ -103,18 +103,18 @@ pub struct Procedure {
 
 impl Procedure {
     /// Get this procedure's parameters.
-    pub fn get_params(&self) -> Value {
-        self.params
+    pub fn get_params(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.params)
     }
 
     /// Get this procedure's body.
-    pub fn get_body(&self) -> Value {
-        self.body
+    pub fn get_body(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.body)
     }
 
     /// Get this procedure's environment.
-    pub fn get_env(&self) -> EnvironmentPtr {
-        self.env
+    pub fn get_env(&self, heap: &mut Heap) -> RootedEnvironmentPtr {
+        Rooted::new(heap, self.env)
     }
 
     /// Set this procedure's parameters.
@@ -253,8 +253,8 @@ impl Value {
     }
 
     /// Create a new symbol value with the given string.
-    pub fn new_symbol(str: RootedStringPtr) -> Value {
-        Value::Symbol(*str)
+    pub fn new_symbol(ctx: &Context, str: RootedStringPtr) -> RootedValue {
+        Rooted::new(ctx.heap(), Value::Symbol(*str))
     }
 }
 
@@ -262,18 +262,18 @@ impl Value {
 impl Value {
     /// Assuming this value is a cons pair, get its car value. Otherwise, return
     /// `None`.
-    pub fn car(&self) -> Option<Value> {
+    pub fn car(&self, heap: &mut Heap) -> Option<RootedValue> {
         match *self {
-            Value::Pair(ref cons) => Some(cons.car()),
+            Value::Pair(ref cons) => Some(cons.car(heap)),
             _                     => None,
         }
     }
 
     /// Assuming this value is a cons pair, get its cdr value. Otherwise, return
     /// `None`.
-    pub fn cdr(&self) -> Option<Value> {
+    pub fn cdr(&self, heap: &mut Heap) -> Option<RootedValue> {
         match *self {
-            Value::Pair(ref cons) => Some(cons.cdr()),
+            Value::Pair(ref cons) => Some(cons.cdr(heap)),
             _                     => None,
         }
     }
@@ -292,27 +292,27 @@ impl Value {
     }
 
     /// Coerce this symbol value to a `StringPtr` to the symbol's string name.
-    pub fn to_symbol(&self) -> Option<StringPtr> {
+    pub fn to_symbol(&self, heap: &mut Heap) -> Option<RootedStringPtr> {
         match *self {
-            Value::Symbol(sym) => Some(sym),
+            Value::Symbol(sym) => Some(Rooted::new(heap, sym)),
             _                  => None,
         }
     }
 
     /// Coerce this pair value to a `ConsPtr` to the cons cell this pair is
     /// referring to.
-    pub fn to_pair(&self) -> Option<ConsPtr> {
+    pub fn to_pair(&self, heap: &mut Heap) -> Option<RootedConsPtr> {
         match *self {
-            Value::Pair(cons) => Some(cons),
+            Value::Pair(cons) => Some(Rooted::new(heap, cons)),
             _                 => None,
         }
     }
 
     /// Coerce this procedure value to a `ProcedurePtr` to the `Procedure` this
     /// value is referring to.
-    pub fn to_procedure(&self) -> Option<ProcedurePtr> {
+    pub fn to_procedure(&self, heap: &mut Heap) -> Option<RootedProcedurePtr> {
         match *self {
-            Value::Procedure(p) => Some(p),
+            Value::Procedure(p) => Some(Rooted::new(heap, p)),
             _                   => None,
         }
     }
@@ -322,7 +322,7 @@ impl Value {
         match *self {
             Value::EmptyList => Ok(0),
             Value::Pair(p)   => {
-                let cdr_len = try!(p.cdr().len());
+                let cdr_len = try!(p.cdr.len());
                 Ok(cdr_len + 1)
             },
             _                => Err(()),
@@ -366,33 +366,28 @@ fn list_helper<'a, T: Iterator<&'a RootedValue>>(ctx: &mut Context,
 /// ## The 28 car/cdr compositions.
 impl Cons {
     pub fn cddr(&self, ctx: &Context) -> SchemeResult {
-        let cddr = try!(self.cdr.cdr().ok_or("bad cddr".to_string()));
-        Ok(Rooted::new(ctx.heap(), cddr))
+        self.cdr.cdr(ctx.heap()).ok_or("bad cddr".to_string())
     }
 
     pub fn cdddr(&self, ctx: &Context) -> SchemeResult {
         let cddr = try!(self.cddr(ctx));
-        let cdddr = try!(cddr.cdr().ok_or("bad cdddr".to_string()));
-        Ok(Rooted::new(ctx.heap(), cdddr))
+        cddr.cdr(ctx.heap()).ok_or("bad cdddr".to_string())
     }
 
     // TODO FITZGEN: cddddr
 
     pub fn cadr(&self, ctx: &Context) -> SchemeResult {
-        let cadr = try!(self.cdr.car().ok_or("bad cadr".to_string()));
-        Ok(Rooted::new(ctx.heap(), cadr))
+        self.cdr.car(ctx.heap()).ok_or("bad cadr".to_string())
     }
 
     pub fn caddr(&self, ctx: &Context) -> SchemeResult {
         let cddr = try!(self.cddr(ctx));
-        let caddr = try!(cddr.car().ok_or("bad caddr".to_string()));
-        Ok(Rooted::new(ctx.heap(), caddr))
+        cddr.car(ctx.heap()).ok_or("bad caddr".to_string())
     }
 
     pub fn cadddr(&self, ctx: &Context) -> SchemeResult {
         let cdddr = try!(self.cdddr(ctx));
-        let cadddr = try!(cdddr.car().ok_or("bad caddr".to_string()));
-        Ok(Rooted::new(ctx.heap(), cadddr))
+        cdddr.car(ctx.heap()).ok_or("bad caddr".to_string())
     }
 
     // TODO FITZGEN ...

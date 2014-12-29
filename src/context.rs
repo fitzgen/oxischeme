@@ -72,14 +72,14 @@ impl<'a> Context {
     pub fn get_or_create_symbol(&mut self, str: String) -> RootedValue {
         if self.symbol_table.contains_key(&str) {
             let sym_ptr = Rooted::new(self.heap(), self.symbol_table[str]);
-            return Rooted::new(self.heap(), Value::new_symbol(sym_ptr));
+            return Value::new_symbol(self, sym_ptr);
         }
 
         let mut symbol = self.heap().allocate_string();
         symbol.clear();
         symbol.push_str(str.as_slice());
         self.symbol_table.insert(str, *symbol);
-        return Rooted::new(self.heap(), Value::new_symbol(symbol));
+        return Value::new_symbol(self, symbol);
     }
 }
 

@@ -344,13 +344,27 @@ impl<T: Copy + ToGcThing> Clone for Rooted<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for Rooted<T> {
+impl<T: PartialEq> PartialEq<Self> for Rooted<T> {
     fn eq(&self, rhs: &Self) -> bool {
-        *self == *rhs
+        **self == **rhs
     }
 }
 
-impl<T: PartialEq + Eq> Eq for Rooted<T> { }
+impl<T: PartialEq + Eq> Eq<Self> for Rooted<T> { }
+
+impl<T: PartialEq> PartialEq<T> for Rooted<T> {
+    fn eq(&self, rhs: &T) -> bool {
+        **self == *rhs
+    }
+}
+
+impl<T: PartialEq + Eq> Eq<T> for Rooted<T> { }
+
+impl<T: fmt::Show> fmt::Show for Rooted<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Rooted({})", self.ptr)
+    }
+}
 
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;

@@ -14,7 +14,7 @@
 
 //! A Scheme implementation, in Rust.
 
-#![feature(unsafe_destructor)]
+#![feature(default_type_params, unsafe_destructor)]
 
 use std::io;
 

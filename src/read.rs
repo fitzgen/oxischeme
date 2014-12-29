@@ -578,52 +578,52 @@ fn test_read_pairs() {
     assert_eq!(results[0], Value::EmptyList);
 
     let v1 = &results[1];
-    assert_eq!(v1.car(),
-               Some(Value::new_integer(1)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .car(),
-               Some(Value::new_integer(2)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .cdr().expect("v1.cdr.cdr")
-                 .car(),
-               Some(Value::new_integer(3)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .cdr().expect("v1.cdr.cdr")
-                 .cdr(),
-               Some(Value::EmptyList));
+    assert_eq!(v1.car(ctx.heap()).expect("v1.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(1)));
+    assert_eq!(v1.cdr(ctx.heap()).expect("v1.cdr")
+                 .car(ctx.heap()).expect("v1.cdr.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(2)));
+    assert_eq!(v1.cdr(ctx.heap()).expect("v1.cdr")
+                 .cdr(ctx.heap()).expect("v1.cdr.cdr")
+                 .car(ctx.heap()).expect("v1.cdr.cdr.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(3)));
+    assert_eq!(v1.cdr(ctx.heap()).expect("v1.cdr")
+                 .cdr(ctx.heap()).expect("v1.cdr.cdr")
+                 .cdr(ctx.heap()).expect("v1.cdr.cdr.cdr"),
+               Rooted::new(ctx.heap(), Value::EmptyList));
 
     let v2 = &results[2];
-    assert_eq!(v2.car(),
-               Some(Value::new_integer(1)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car().expect("v2.cdr.car")
-                 .car(),
-               Some(Value::new_integer(2)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car().expect("v2.cdr.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .car().expect("v2.cdr.cdr.car.car")
-                 .car(),
-               Some(Value::new_integer(3)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .car().expect("v2.cdr.cdr.car.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .cdr(),
-               Some(Value::EmptyList));
+    assert_eq!(v2.car(ctx.heap()).expect("v2.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(1)));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .car(ctx.heap()).expect("v2.cdr.car")
+                 .car(ctx.heap()).expect("v2.cdr.car.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(2)));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .car(ctx.heap()).expect("v2.cdr.car")
+                 .cdr(ctx.heap()).expect("v2.cdr.car.cdr"),
+               Rooted::new(ctx.heap(), Value::EmptyList));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car.car")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car.car.car"),
+               Rooted::new(ctx.heap(), Value::new_integer(3)));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car.car")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr.car.car.cdr"),
+               Rooted::new(ctx.heap(), Value::EmptyList));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr")
+                 .car(ctx.heap()).expect("v2.cdr.cdr.car")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr.car.cdr"),
+               Rooted::new(ctx.heap(), Value::EmptyList));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr")
+                 .cdr(ctx.heap()).expect("v2.cdr.cdr.cdr"),
+               Rooted::new(ctx.heap(), Value::EmptyList));
 }
 
 #[test]
@@ -636,30 +636,36 @@ fn test_read_improper_lists() {
     assert_eq!(results.len(), 4);
 
     let v0 = &results[0];
-    assert_eq!(v0.car(), Some(Value::new_integer(1)));
-    assert_eq!(v0.cdr(), Some(Value::new_integer(2)));
+    assert_eq!(v0.car(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(1))));
+    assert_eq!(v0.cdr(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(2))));
 
     let v1 = &results[1];
-    assert_eq!(v1.car(), Some(Value::new_integer(3)));
-    assert_eq!(v1.cdr(), Some(Value::EmptyList));
+    assert_eq!(v1.car(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(3))));
+    assert_eq!(v1.cdr(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::EmptyList)));
 
     let v2 = &results[2];
-    assert_eq!(v2.car(), Some(Value::new_integer(4)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car(),
-               Some(Value::new_integer(5)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr(),
-               Some(Value::new_integer(6)));
+    assert_eq!(v2.car(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(4))));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .car(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(5))));
+    assert_eq!(v2.cdr(ctx.heap()).expect("v2.cdr")
+                 .cdr(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(6))));
 
     let v3 = &results[3];
-    assert_eq!(v3.car(), Some(Value::new_integer(1)));
-    assert_eq!(v3.cdr().expect("v3.cdr")
-                 .car(),
-              Some(Value::new_integer(2)));
-    assert_eq!(v3.cdr().expect("v3.cdr")
-                 .cdr(),
-              Some(Value::new_integer(3)));
+    assert_eq!(v3.car(ctx.heap()),
+               Some(Rooted::new(ctx.heap(), Value::new_integer(1))));
+    assert_eq!(v3.cdr(ctx.heap()).expect("v3.cdr")
+                 .car(ctx.heap()),
+              Some(Rooted::new(ctx.heap(), Value::new_integer(2))));
+    assert_eq!(v3.cdr(ctx.heap()).expect("v3.cdr")
+                 .cdr(ctx.heap()),
+              Some(Rooted::new(ctx.heap(), Value::new_integer(3))));
 }
 
 #[test]
@@ -750,12 +756,17 @@ fn test_read_quoted() {
         .collect();
     assert_eq!(results.len(), 1);
 
-    match results[0].car() {
+    let car = results[0].car(ctx.heap()).map(|s| *s);
+    match car {
         Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
                                                "quote".to_string()),
         _                        => assert!(false),
     }
-    match results[0].cdr().expect("results[0].cdr").car() {
+
+    let cdar = results[0]
+        .cdr(ctx.heap()).expect("results[0].cdr")
+        .car(ctx.heap()).map(|s| *s);
+    match cdar {
         Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
                                                "foo".to_string()),
         _                        => assert!(false),
@@ -772,7 +783,8 @@ fn test_read_from_file() {
         .map(|v| *v)
         .collect();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].to_symbol().expect("Should be a symbol")
+    assert_eq!(results[0].to_symbol(ctx.heap()).expect("Should be a symbol")
+                         .deref()
                          .deref()
                          .deref(),
                "hello".to_string());

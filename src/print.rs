@@ -60,9 +60,9 @@ pub fn print<W: Writer>(ctx: &Context,
 fn print_pair<W: Writer>(ctx: &Context,
                          writer: &mut W,
                          cons: &RootedConsPtr) -> IoResult<()> {
-    let car = Rooted::new(ctx.heap(), cons.car());
+    let car = cons.car(ctx.heap());
     try!(print(ctx, writer, &car));
-    match cons.cdr() {
+    match *cons.cdr(ctx.heap()) {
         Value::EmptyList => Ok(()),
         Value::Pair(cdr) => {
             try!(write!(writer, " "));
