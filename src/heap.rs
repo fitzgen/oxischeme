@@ -114,6 +114,12 @@
 //! * Accept GC thing parameters as `&Rooted<T>` or `&mut Rooted<T>` to ensure
 //!   that callers properly root them.
 //!
+//! * Accept a `&mut Heap` parameter and return `Rooted<T>` for getters and
+//!   methods that return GC things. This greatly alleviates potential
+//!   foot-guns, as a caller would have to explicitly unwrap the smart pointer
+//!   and store that in a new variable to cause a dangling pointer. It also
+//!   cuts down on `Rooted<T>` construction boiler plate.
+//!
 //! * Always root GC things whose lifetime spans a call which could trigger a
 //!   collection!
 //!
