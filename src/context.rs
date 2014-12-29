@@ -83,6 +83,16 @@ impl<'a> Context {
     }
 }
 
+impl Drop for Context {
+    fn drop(&mut self) {
+        // Transmute the heap back to its Box form so that it gets collected at
+        // the end of the method.
+        unsafe {
+            let _ : Box<Heap> = mem::transmute(self.heap);
+        }
+    }
+}
+
 /// ## Getters for well known symbols.
 impl Context {
     pub fn quote_symbol(&mut self) -> RootedValue {
