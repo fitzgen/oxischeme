@@ -225,31 +225,31 @@ impl Value {
     /// Create a new cons pair value with the given car and cdr.
     pub fn new_pair(heap: &mut Heap,
                     car: &RootedValue,
-                    cdr: &RootedValue) -> Value {
+                    cdr: &RootedValue) -> RootedValue {
         let mut cons = heap.allocate_cons();
         cons.set_car(**car);
         cons.set_cdr(**cdr);
-        Value::Pair(*cons)
+        Rooted::new(heap, Value::Pair(*cons))
     }
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
                          params: &RootedValue,
                          body: &RootedValue,
-                         env: &RootedEnvironmentPtr) -> Value {
+                         env: &RootedEnvironmentPtr) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
         procedure.set_params(**params);
         procedure.set_body(**body);
         procedure.set_env(**env);
-        Value::Procedure(*procedure)
+        Rooted::new(heap, Value::Procedure(*procedure))
     }
 
     /// Create a new string value with the given string.
-    pub fn new_string(heap: &mut Heap, str: String) -> Value {
+    pub fn new_string(heap: &mut Heap, str: String) -> RootedValue {
         let mut value = heap.allocate_string();
         value.clear();
         value.push_str(str.as_slice());
-        Value::String(*value)
+        Rooted::new(heap, Value::String(*value))
     }
 
     /// Create a new symbol value with the given string.
@@ -344,8 +344,8 @@ impl ToGcThing for Value {
 
 pub type RootedValue = Rooted<Value>;
 
-/// Either a Scheme `Value`, or a `String` containing an error message.
-pub type SchemeResult = Result<Value, String>;
+/// Either a Scheme `RootedValue`, or a `String` containing an error message.
+pub type SchemeResult = Result<RootedValue, String>;
 
 /// A helper utility to create a cons list from the given values.
 pub fn list(ctx: &mut Context, values: &[Value]) -> Value {

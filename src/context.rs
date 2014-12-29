@@ -22,7 +22,7 @@ use std::mem;
 
 use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{GcThing, Heap, IterGcThing, Rooted, StringPtr, Trace};
-use value::{Value};
+use value::{Value, RootedValue};
 
 /// A collection of state required to run Scheme programs, such as the `Heap`
 /// and the symbol table.
@@ -69,47 +69,47 @@ impl<'a> Context {
 
     /// Ensure that there is an interned symbol extant for the given `String`
     /// and return it.
-    pub fn get_or_create_symbol(&mut self, str: String) -> Value {
+    pub fn get_or_create_symbol(&mut self, str: String) -> RootedValue {
         if self.symbol_table.contains_key(&str) {
             let sym_ptr = Rooted::new(self.heap(), self.symbol_table[str]);
-            return Value::new_symbol(sym_ptr);
+            return Rooted::new(self.heap(), Value::new_symbol(sym_ptr));
         }
 
         let mut symbol = self.heap().allocate_string();
         symbol.clear();
         symbol.push_str(str.as_slice());
         self.symbol_table.insert(str, *symbol);
-        return Value::new_symbol(symbol);
+        return Rooted::new(self.heap(), Value::new_symbol(symbol));
     }
 }
 
 /// ## Getters for well known symbols.
 impl Context {
-    pub fn quote_symbol(&mut self) -> Value {
+    pub fn quote_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("quote".to_string())
     }
 
-    pub fn if_symbol(&mut self) -> Value {
+    pub fn if_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("if".to_string())
     }
 
-    pub fn begin_symbol(&mut self) -> Value {
+    pub fn begin_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("begin".to_string())
     }
 
-    pub fn define_symbol(&mut self) -> Value {
+    pub fn define_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("define".to_string())
     }
 
-    pub fn set_bang_symbol(&mut self) -> Value {
+    pub fn set_bang_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("set!".to_string())
     }
 
-    pub fn unspecified_symbol(&mut self) -> Value {
+    pub fn unspecified_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("unspecified".to_string())
     }
 
-    pub fn lambda_symbol(&mut self) -> Value {
+    pub fn lambda_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("lambda".to_string())
     }
 }

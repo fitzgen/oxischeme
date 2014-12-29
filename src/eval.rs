@@ -19,12 +19,12 @@ use std::fmt::{format};
 use context::{Context};
 use environment::{Environment, RootedEnvironmentPtr};
 use heap::{Rooted};
-use value::{SchemeResult, Value};
+use value::{SchemeResult, RootedValue, Value};
 
 /// Return true if the value doesn't need to be evaluated because it is
 /// "autoquoting" or "self evaluating", false otherwise.
-fn is_auto_quoting(val: &Value) -> bool {
-    match *val {
+fn is_auto_quoting(val: &RootedValue) -> bool {
+    match **val {
         Value::EmptyList    => false,
         Value::Pair(_)      => false,
         Value::Symbol(_)    => false,
@@ -33,7 +33,8 @@ fn is_auto_quoting(val: &Value) -> bool {
 }
 
 /// Evaluate the given form in the global environment.
-pub fn evaluate_in_global_env(ctx: &mut Context, form: Value) -> SchemeResult {
+pub fn evaluate_in_global_env(ctx: &mut Context,
+                              form: &RootedValue) -> SchemeResult {
     let mut env = ctx.global_env();
     evaluate(ctx, &mut env, form)
 }
@@ -41,26 +42,28 @@ pub fn evaluate_in_global_env(ctx: &mut Context, form: Value) -> SchemeResult {
 /// Evaluate the given form in the given environment.
 pub fn evaluate(ctx: &mut Context,
                 env: &mut RootedEnvironmentPtr,
-                form: Value) -> SchemeResult {
+                form: &RootedValue) -> SchemeResult {
     // NB: We use a loop to trampoline tail calls to `evaluate` to ensure that tail
     // calls don't take up more stack space. Instead of doing
     //
-    //   return evaluate(ctx, new_env, new_form);
+    //     return evaluate(ctx, new_env, new_form);
     //
-    // we just do
+    // we do
     //
-    //   env_.emplace(new_env);
-    //   form_ = new_form;
-    //   continue;
+    //     env_.emplace(new_env);
+    //     form_.emplace(new_form);
+    //     continue;
     let mut env_ = &mut Rooted::new(ctx.heap(), **env);
-    let mut form_ = form;
+    let mut form_ = &Rooted::new(ctx.heap(), **form);
     loop {
         if form_.is_atom() {
-            return evaluate_atom(env_, form_);
+            return evaluate_atom(ctx, env_, form_);
         }
 
-        let pair = form_.to_pair()
-            .expect("If a value is not an atom, then it must be a pair.");
+        let pair = Rooted::new(
+            ctx.heap(),
+            form_.to_pair().expect(
+                "If a value is not an atom, then it must be a pair."));
 
         let quote = ctx.quote_symbol();
         let if_symbol = ctx.if_symbol();
@@ -71,21 +74,21 @@ pub fn evaluate(ctx: &mut Context,
 
         match pair.car() {
             // Quoted forms.
-            v if v == quote => return evaluate_quoted(form_),
+            v if v == *quote => return evaluate_quoted(ctx, form_),
 
             // Definitions. These are only supposed to be allowed at the top level
             // and at the beginning of a body, but we are punting on that
             // restriction for now.
-            v if v == define => return evaluate_definition(ctx, env_, form_),
+            v if v == *define => return evaluate_definition(ctx, env_, form_),
 
             // `set!` assignment.
-            v if v == set_bang => return evaluate_set(ctx, env_, form_),
+            v if v == *set_bang => return evaluate_set(ctx, env_, form_),
 
             // Lambda forms.
-            v if v == lambda => return evaluate_lambda(ctx, env_, form_),
+            v if v == *lambda => return evaluate_lambda(ctx, env_, form_),
 
             // If expressions.
-            v if v == if_symbol => {
+            v if v == *if_symbol => {
                 let length = try!(form_.len().ok().ok_or(
                     "Improperly formed if expression".to_string()));
                 if length != 4 {
@@ -93,21 +96,25 @@ pub fn evaluate(ctx: &mut Context,
                 }
 
                 let condition_form = try!(pair.cadr());
-                let condition_val = try!(evaluate(ctx, env_, condition_form));
+                let condition_val = try!(evaluate(ctx, env_, &condition_form));
 
-                form_ = try!(if condition_val == Value::new_boolean(false) {
+                form_.emplace(*try!(if *condition_val == Value::new_boolean(false) {
                     // Alternative.
                     pair.cadddr()
                 } else {
                     // Consequent.
                     pair.caddr()
-                });
+                }));
                 continue;
             },
 
             // `(begin ...)` sequences.
-            v if v == begin => {
-                form_ = try!(evaluate_sequence(ctx, env_, pair.cdr()));
+            v if v == *begin => {
+                form_.emplace(
+                    *try!(evaluate_sequence(ctx,
+                                            env_,
+                                            &Rooted::new(ctx.heap(),
+                                                         pair.cdr()))));
                 continue;
             },
 
@@ -116,21 +123,31 @@ pub fn evaluate(ctx: &mut Context,
                 // Ensure that the form is a proper list.
                 try!(form_.len().ok().ok_or("Bad invocation form".to_string()));
 
-                let proc_val = try!(evaluate(ctx, env_, procedure));
+                let proc_val = try!(evaluate(ctx,
+                                             env_,
+                                             &Rooted::new(ctx.heap(),
+                                                          procedure)));
                 let proc_ptr = try!(proc_val.to_procedure().ok_or(
                     format_args!(format,
                                  "Expected a procedure, found {}",
-                                 proc_val)));
-                let args = try!(evaluate_list(ctx, env_, pair.cdr()));
+                                 *proc_val)));
+                let args = try!(evaluate_list(ctx,
+                                              env_,
+                                              &Rooted::new(ctx.heap(),
+                                                           pair.cdr())));
 
-                let proc_env = try!(Environment::extend(ctx.heap(),
-                                                        proc_ptr.get_env(),
-                                                        proc_ptr.get_params(),
-                                                        args));
+                let proc_env = try!(Environment::extend(
+                    ctx.heap(),
+                    &Rooted::new(ctx.heap(), proc_ptr.get_env()),
+                    &Rooted::new(ctx.heap(), proc_ptr.get_params()),
+                    &args));
                 env_.emplace(*proc_env);
-                form_ = try!(evaluate_sequence(ctx,
-                                               env_,
-                                               proc_ptr.get_body()));
+                form_.emplace(
+                    *try!(evaluate_sequence(
+                        ctx,
+                        env_,
+                        &Rooted::new(ctx.heap(),
+                                     proc_ptr.get_body()))));
                 continue;
             },
         };
@@ -140,26 +157,22 @@ pub fn evaluate(ctx: &mut Context,
 /// Evaluate a `lambda` form.
 fn evaluate_lambda(ctx: &mut Context,
                    env: &RootedEnvironmentPtr,
-                   form: Value) -> SchemeResult {
+                   form: &RootedValue) -> SchemeResult {
     let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
     if length < 3 {
         return Err("Lambda is missing body".to_string());
     }
 
     let pair = form.to_pair().unwrap();
-    let params = Rooted::new(
-        ctx.heap(),
-        pair.cadr().ok().expect("Must be here since length >= 3"));
-    let body = Rooted::new(
-        ctx.heap(),
-        pair.cddr().ok().expect("Must be here since length >= 3"));
+    let params = pair.cadr().ok().expect("Must be here since length >= 3");
+    let body = pair.cddr().ok().expect("Must be here since length >= 3");
     return Ok(Value::new_procedure(ctx.heap(), &params, &body, env));
 }
 
 /// Evaluate a `set!` form.
 fn evaluate_set(ctx: &mut Context,
                 env: &mut RootedEnvironmentPtr,
-                form: Value) -> SchemeResult {
+                form: &RootedValue) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
         let pair = form.to_pair().unwrap();
@@ -167,8 +180,8 @@ fn evaluate_set(ctx: &mut Context,
 
         if let Some(str) = sym.to_symbol() {
             let new_value_form = try!(pair.caddr());
-            let new_value = try!(evaluate(ctx, env_, new_value_form));
-            try!(env_.update(str.deref().clone(), new_value));
+            let new_value = try!(evaluate(ctx, env_, &new_value_form));
+            try!(env_.update(str.deref().clone(), &new_value));
             return Ok(ctx.unspecified_symbol());
         }
 
@@ -181,7 +194,7 @@ fn evaluate_set(ctx: &mut Context,
 /// Evaluate a `define` form.
 fn evaluate_definition(ctx: &mut Context,
                        env: &mut RootedEnvironmentPtr,
-                       form: Value) -> SchemeResult {
+                       form: &RootedValue) -> SchemeResult {
     let mut env_ = env;
     if let Ok(3) = form.len() {
         let pair = form.to_pair().unwrap();
@@ -189,8 +202,8 @@ fn evaluate_definition(ctx: &mut Context,
 
         if let Some(str) = sym.to_symbol() {
             let def_value_form = try!(pair.caddr());
-            let def_value = try!(evaluate(ctx, env_, def_value_form));
-            env_.define(str.deref().clone(), def_value);
+            let def_value = try!(evaluate(ctx, env_, &def_value_form));
+            env_.define(str.deref().clone(), &def_value);
             return Ok(ctx.unspecified_symbol());
         }
 
@@ -201,39 +214,44 @@ fn evaluate_definition(ctx: &mut Context,
 }
 
 /// Evaluate a quoted form.
-fn evaluate_quoted(form: Value) -> SchemeResult {
+fn evaluate_quoted(ctx: &mut Context, form: &RootedValue) -> SchemeResult {
     if let Some(Value::EmptyList) = form.cdr().unwrap().cdr() {
-        return Ok(form.cdr().unwrap().car().unwrap());
+        return Ok(Rooted::new(ctx.heap(),
+                              form.cdr().unwrap().car().unwrap()));
     }
 
     return Err("Wrong number of parts in quoted form".to_string());
 }
 
 /// Evaluate an atom (ie anything that is not a list).
-fn evaluate_atom(env: &mut RootedEnvironmentPtr, form: Value) -> SchemeResult {
-    if is_auto_quoting(&form) {
-        return Ok(form);
+fn evaluate_atom(ctx: &Context,
+                 env: &mut RootedEnvironmentPtr,
+                 form: &RootedValue) -> SchemeResult {
+    if is_auto_quoting(form) {
+        return Ok(Rooted::new(ctx.heap(), **form));
     }
 
-    if let Value::Symbol(sym) = form {
-        return env.lookup(sym.deref());
+    if let Value::Symbol(sym) = **form {
+        return env.lookup(ctx.heap(), sym.deref());
     }
 
-    return Err(format_args!(format, "Cannot evaluate: {}", form));
+    return Err(format_args!(format, "Cannot evaluate: {}", **form));
 }
 
 /// Evaluate each given form, returning the resulting list of values.
 fn evaluate_list(ctx: &mut Context,
                  env: &mut RootedEnvironmentPtr,
-                 forms: Value) -> SchemeResult {
-    match forms {
-        Value::EmptyList  => Ok(Value::EmptyList),
-        Value::Pair(cons) => {
-            let val = try!(evaluate(ctx, env, cons.car()));
-            let rest = try!(evaluate_list(ctx, env, cons.cdr()));
-            let rval = Rooted::new(ctx.heap(), val);
-            let rrest = Rooted::new(ctx.heap(), rest);
-            Ok(Value::new_pair(ctx.heap(), &rval, &rrest))
+                 forms: &RootedValue) -> SchemeResult {
+    match **forms {
+        Value::EmptyList      => Ok(Rooted::new(ctx.heap(), Value::EmptyList)),
+        Value::Pair(ref cons) => {
+            let car = Rooted::new(ctx.heap(), cons.car());
+            let val = try!(evaluate(ctx, env, &car));
+
+            let cdr = Rooted::new(ctx.heap(), cons.cdr());
+            let rest = try!(evaluate_list(ctx, env, &cdr));
+
+            Ok(Value::new_pair(ctx.heap(), &val, &rest))
         },
         _                 => Err("Improper list".to_string()),
     }
@@ -244,16 +262,17 @@ fn evaluate_list(ctx: &mut Context,
 /// TCO).
 fn evaluate_sequence(ctx: &mut Context,
                      env: &mut RootedEnvironmentPtr,
-                     exprs: Value) -> SchemeResult {
-    let mut e = exprs;
+                     exprs: &RootedValue) -> SchemeResult {
+    let mut e = Rooted::new(ctx.heap(), **exprs);
     loop {
-        match e {
-            Value::Pair(pair) => {
+        match *e {
+            Value::Pair(ref pair) => {
                 if pair.cdr() == Value::EmptyList {
-                    return Ok(pair.car());
+                    return Ok(Rooted::new(ctx.heap(), pair.car()));
                 } else {
-                    try!(evaluate(ctx, env, pair.car()));
-                    e = pair.cdr();
+                    let car = Rooted::new(ctx.heap(), pair.car());
+                    try!(evaluate(ctx, env, &car));
+                    e.emplace(pair.cdr());
                 }
             },
             _                 => {
