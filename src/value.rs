@@ -348,48 +348,51 @@ pub type RootedValue = Rooted<Value>;
 pub type SchemeResult = Result<RootedValue, String>;
 
 /// A helper utility to create a cons list from the given values.
-pub fn list(ctx: &mut Context, values: &[Value]) -> Value {
+pub fn list(ctx: &mut Context, values: &[RootedValue]) -> RootedValue {
     list_helper(ctx, &mut values.iter())
 }
 
-fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context,
-                                           values: &mut T) -> Value {
+fn list_helper<'a, T: Iterator<&'a RootedValue>>(ctx: &mut Context,
+                                                 values: &mut T) -> RootedValue {
     match values.next() {
-        None      => Value::EmptyList,
-        Some(c) => {
+        None      => Rooted::new(ctx.heap(), Value::EmptyList),
+        Some(car) => {
             let rest = list_helper(ctx, values);
-            let car = Rooted::new(ctx.heap(), *c);
-            let cdr = Rooted::new(ctx.heap(), rest);
-            Value::new_pair(ctx.heap(), &car, &cdr)
+            Value::new_pair(ctx.heap(), car, &rest)
         },
     }
 }
 
 /// ## The 28 car/cdr compositions.
 impl Cons {
-    pub fn cddr(&self) -> SchemeResult {
-        self.cdr.cdr().ok_or("bad cddr".to_string())
+    pub fn cddr(&self, ctx: &Context) -> SchemeResult {
+        let cddr = try!(self.cdr.cdr().ok_or("bad cddr".to_string()));
+        Ok(Rooted::new(ctx.heap(), cddr))
     }
 
-    pub fn cdddr(&self) -> SchemeResult {
-        let cddr = try!(self.cddr());
-        cddr.cdr().ok_or("bad cdddr".to_string())
+    pub fn cdddr(&self, ctx: &Context) -> SchemeResult {
+        let cddr = try!(self.cddr(ctx));
+        let cdddr = try!(cddr.cdr().ok_or("bad cdddr".to_string()));
+        Ok(Rooted::new(ctx.heap(), cdddr))
     }
 
     // TODO FITZGEN: cddddr
 
-    pub fn cadr(&self) -> SchemeResult {
-        self.cdr.car().ok_or("bad cadr".to_string())
+    pub fn cadr(&self, ctx: &Context) -> SchemeResult {
+        let cadr = try!(self.cdr.car().ok_or("bad cadr".to_string()));
+        Ok(Rooted::new(ctx.heap(), cadr))
     }
 
-    pub fn caddr(&self) -> SchemeResult {
-        let cddr = try!(self.cddr());
-        cddr.car().ok_or("bad caddr".to_string())
+    pub fn caddr(&self, ctx: &Context) -> SchemeResult {
+        let cddr = try!(self.cddr(ctx));
+        let caddr = try!(cddr.car().ok_or("bad caddr".to_string()));
+        Ok(Rooted::new(ctx.heap(), caddr))
     }
 
-    pub fn cadddr(&self) -> SchemeResult {
-        let cdddr = try!(self.cdddr());
-        cdddr.car().ok_or("bad caddr".to_string())
+    pub fn cadddr(&self, ctx: &Context) -> SchemeResult {
+        let cdddr = try!(self.cdddr(ctx));
+        let cadddr = try!(cdddr.car().ok_or("bad caddr".to_string()));
+        Ok(Rooted::new(ctx.heap(), cadddr))
     }
 
     // TODO FITZGEN ...

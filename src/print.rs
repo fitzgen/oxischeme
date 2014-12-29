@@ -15,47 +15,64 @@
 //! Printing values' text representations.
 
 use std::io::{IoResult};
-use value::{ConsPtr, Value};
+
+use context::{Context};
+use heap::{Rooted};
+use value::{RootedConsPtr, RootedValue, Value};
 
 /// Print the given value's text representation to the given writer.
-pub fn print<W: Writer>(val: Value, writer: &mut W) -> IoResult<()> {
-    match val {
-        Value::EmptyList    => write!(writer, "()"),
-        Value::Pair(cons)   => {
+pub fn print<W: Writer>(ctx: &Context,
+                        writer: &mut W,
+                        val: &RootedValue) -> IoResult<()> {
+    match **val {
+        Value::EmptyList        => write!(writer, "()"),
+        Value::Pair(ref cons)   => {
             try!(write!(writer, "("));
-            try!(print_pair(cons, writer));
+            let rcons = Rooted::new(ctx.heap(), *cons);
+            try!(print_pair(ctx, writer, &rcons));
             write!(writer, ")")
         },
-        Value::String(str)  => {
+        Value::String(ref str)  => {
             try!(write!(writer, "\""));
             try!(write!(writer, "{}", str.deref()));
             write!(writer, "\"")
         },
-        Value::Symbol(s)    => write!(writer, "{}", s.deref()),
-        Value::Integer(i)   => write!(writer, "{}", i),
-        Value::Boolean(b)   => write!(writer, "{}", if b { "#t" } else { "#f" }),
-        Value::Character(c) => match c {
+        Value::Symbol(ref s)    => write!(writer, "{}", s.deref()),
+        Value::Integer(ref i)   => write!(writer, "{}", i),
+        Value::Boolean(ref b)   => {
+            write!(writer, "{}", if *b {
+                "#t"
+            } else {
+                "#f"
+            })
+        },
+        Value::Character(ref c) => match *c {
             '\n' => write!(writer, "#\\newline"),
             '\t' => write!(writer, "#\\tab"),
             ' '  => write!(writer, "#\\space"),
             _    => write!(writer, "#\\{}", c),
         },
-        Value::Procedure(p) => write!(writer, "Procedure({})", p),
+        Value::Procedure(ref p) => write!(writer, "Procedure({})", p),
     }
 }
 
 /// Print the given cons pair, without the containing "(" and ")".
-fn print_pair<W: Writer>(cons: ConsPtr, writer: &mut W) -> IoResult<()> {
-    try!(print(cons.car(), writer));
+fn print_pair<W: Writer>(ctx: &Context,
+                         writer: &mut W,
+                         cons: &RootedConsPtr) -> IoResult<()> {
+    let car = Rooted::new(ctx.heap(), cons.car());
+    try!(print(ctx, writer, &car));
     match cons.cdr() {
         Value::EmptyList => Ok(()),
         Value::Pair(cdr) => {
             try!(write!(writer, " "));
-            print_pair(cdr, writer)
+            let rcdr = Rooted::new(ctx.heap(), cdr);
+            print_pair(ctx, writer, &rcdr)
         },
         val              => {
             try!(write!(writer, " . "));
-            print(val, writer)
+            let rval = Rooted::new(ctx.heap(), val);
+            print(ctx, writer, &rval)
         },
     }
 }

@@ -57,10 +57,11 @@ impl Environment {
             return Err("Too many values".to_string());
         }
 
-        let mut names_ = Rooted::new(heap, **names);
-        let mut values_ = Rooted::new(heap, **values);
+        let mut names_ = names.clone();
+        let mut values_ = values.clone();
         loop {
-            match *names_ {
+            let n = *names_;
+            match n {
                 Value::EmptyList  => {
                     return Ok(env);
                 },
@@ -74,8 +75,9 @@ impl Environment {
                     env.define(sym.deref().clone(), &val);
 
                     names_.emplace(cons.cdr());
-                    values_.emplace(values_.cdr().expect(
-                        "Already verified that names.len() == values.len()"));
+                    let next_val = values_.cdr().expect(
+                        "Already verified that names.len() == values.len()");
+                    values_.emplace(next_val);
                 },
                 _                 => {
                     return Err(

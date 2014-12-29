@@ -297,7 +297,7 @@ impl<T: ToGcThing> Rooted<T> {
         if let Some(r) = self.ptr.to_gc_thing() {
             unsafe {
                 self.heap.as_mut()
-                    .expect("Rooted<T>::drop should always have a Context")
+                    .expect("Rooted<T>::drop should always have a Heap")
                     .add_root(r);
             }
         }
@@ -308,7 +308,7 @@ impl<T: ToGcThing> Rooted<T> {
         if let Some(r) = self.ptr.to_gc_thing() {
             unsafe {
                 self.heap.as_mut()
-                    .expect("Rooted<T>::drop should always have a Context")
+                    .expect("Rooted<T>::drop should always have a Heap")
                     .drop_root(r);
             }
         }
@@ -333,6 +333,24 @@ impl<T: ToGcThing> Drop for Rooted<T> {
         self.drop_root();
     }
 }
+
+impl<T: Copy + ToGcThing> Clone for Rooted<T> {
+    fn clone(&self) -> Self {
+        unsafe {
+            let heap = self.heap.as_mut()
+                .expect("Rooted<T>::clone should always have a Heap");
+            Rooted::new(heap, self.ptr)
+        }
+    }
+}
+
+impl<T: PartialEq> PartialEq for Rooted<T> {
+    fn eq(&self, rhs: &Self) -> bool {
+        *self == *rhs
+    }
+}
+
+impl<T: PartialEq + Eq> Eq for Rooted<T> { }
 
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;

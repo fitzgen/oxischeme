@@ -53,8 +53,8 @@ pub fn evaluate(ctx: &mut Context,
     //     env_.emplace(new_env);
     //     form_.emplace(new_form);
     //     continue;
-    let mut env_ = &mut Rooted::new(ctx.heap(), **env);
-    let mut form_ = &Rooted::new(ctx.heap(), **form);
+    let mut env_ = &mut env.clone();
+    let mut form_ = &mut form.clone();
     loop {
         if form_.is_atom() {
             return evaluate_atom(ctx, env_, form_);
@@ -95,26 +95,23 @@ pub fn evaluate(ctx: &mut Context,
                     return Err("Improperly formed if expression".to_string());
                 }
 
-                let condition_form = try!(pair.cadr());
+                let condition_form = try!(pair.cadr(ctx));
                 let condition_val = try!(evaluate(ctx, env_, &condition_form));
 
                 form_.emplace(*try!(if *condition_val == Value::new_boolean(false) {
                     // Alternative.
-                    pair.cadddr()
+                    pair.cadddr(ctx)
                 } else {
                     // Consequent.
-                    pair.caddr()
+                    pair.caddr(ctx)
                 }));
                 continue;
             },
 
             // `(begin ...)` sequences.
             v if v == *begin => {
-                form_.emplace(
-                    *try!(evaluate_sequence(ctx,
-                                            env_,
-                                            &Rooted::new(ctx.heap(),
-                                                         pair.cdr()))));
+                let forms = Rooted::new(ctx.heap(), pair.cdr());
+                form_.emplace(*try!(evaluate_sequence(ctx, env_, &forms)));
                 continue;
             },
 
@@ -123,31 +120,26 @@ pub fn evaluate(ctx: &mut Context,
                 // Ensure that the form is a proper list.
                 try!(form_.len().ok().ok_or("Bad invocation form".to_string()));
 
-                let proc_val = try!(evaluate(ctx,
-                                             env_,
-                                             &Rooted::new(ctx.heap(),
-                                                          procedure)));
+                let proc_form = Rooted::new(ctx.heap(), procedure);
+                let proc_val = try!(evaluate(ctx, env_, &proc_form));
                 let proc_ptr = try!(proc_val.to_procedure().ok_or(
                     format_args!(format,
                                  "Expected a procedure, found {}",
                                  *proc_val)));
-                let args = try!(evaluate_list(ctx,
-                                              env_,
-                                              &Rooted::new(ctx.heap(),
-                                                           pair.cdr())));
+
+                let args_form = Rooted::new(ctx.heap(), pair.cdr());
+                let args_val = try!(evaluate_list(ctx, env_, &args_form));
 
                 let proc_env = try!(Environment::extend(
                     ctx.heap(),
                     &Rooted::new(ctx.heap(), proc_ptr.get_env()),
                     &Rooted::new(ctx.heap(), proc_ptr.get_params()),
-                    &args));
+                    &args_val));
+
+                let body = Rooted::new(ctx.heap(), proc_ptr.get_body());
+
                 env_.emplace(*proc_env);
-                form_.emplace(
-                    *try!(evaluate_sequence(
-                        ctx,
-                        env_,
-                        &Rooted::new(ctx.heap(),
-                                     proc_ptr.get_body()))));
+                form_.emplace(*try!(evaluate_sequence(ctx, env_, &body)));
                 continue;
             },
         };
@@ -164,8 +156,8 @@ fn evaluate_lambda(ctx: &mut Context,
     }
 
     let pair = form.to_pair().unwrap();
-    let params = pair.cadr().ok().expect("Must be here since length >= 3");
-    let body = pair.cddr().ok().expect("Must be here since length >= 3");
+    let params = pair.cadr(ctx).ok().expect("Must be here since length >= 3");
+    let body = pair.cddr(ctx).ok().expect("Must be here since length >= 3");
     return Ok(Value::new_procedure(ctx.heap(), &params, &body, env));
 }
 
@@ -176,10 +168,10 @@ fn evaluate_set(ctx: &mut Context,
     let mut env_ = env;
     if let Ok(3) = form.len() {
         let pair = form.to_pair().unwrap();
-        let sym = try!(pair.cadr());
+        let sym = try!(pair.cadr(ctx));
 
         if let Some(str) = sym.to_symbol() {
-            let new_value_form = try!(pair.caddr());
+            let new_value_form = try!(pair.caddr(ctx));
             let new_value = try!(evaluate(ctx, env_, &new_value_form));
             try!(env_.update(str.deref().clone(), &new_value));
             return Ok(ctx.unspecified_symbol());
@@ -198,10 +190,10 @@ fn evaluate_definition(ctx: &mut Context,
     let mut env_ = env;
     if let Ok(3) = form.len() {
         let pair = form.to_pair().unwrap();
-        let sym = try!(pair.cadr());
+        let sym = try!(pair.cadr(ctx));
 
         if let Some(str) = sym.to_symbol() {
-            let def_value_form = try!(pair.caddr());
+            let def_value_form = try!(pair.caddr(ctx));
             let def_value = try!(evaluate(ctx, env_, &def_value_form));
             env_.define(str.deref().clone(), &def_value);
             return Ok(ctx.unspecified_symbol());
@@ -228,7 +220,7 @@ fn evaluate_atom(ctx: &Context,
                  env: &mut RootedEnvironmentPtr,
                  form: &RootedValue) -> SchemeResult {
     if is_auto_quoting(form) {
-        return Ok(Rooted::new(ctx.heap(), **form));
+        return Ok(form.clone());
     }
 
     if let Value::Symbol(sym) = **form {
@@ -263,9 +255,10 @@ fn evaluate_list(ctx: &mut Context,
 fn evaluate_sequence(ctx: &mut Context,
                      env: &mut RootedEnvironmentPtr,
                      exprs: &RootedValue) -> SchemeResult {
-    let mut e = Rooted::new(ctx.heap(), **exprs);
+    let mut e = exprs.clone();
     loop {
-        match *e {
+        let ee = *e;
+        match ee {
             Value::Pair(ref pair) => {
                 if pair.cdr() == Value::EmptyList {
                     return Ok(Rooted::new(ctx.heap(), pair.car()));
@@ -282,80 +275,79 @@ fn evaluate_sequence(ctx: &mut Context,
     }
 }
 
+/// TODO FITZGEN
+pub fn evaluate_file(ctx: &mut Context, file_path: &str) -> SchemeResult {
+    use read::read_from_file;
+
+    let mut reader = try!(read_from_file(file_path, ctx)
+                              .ok()
+                              .ok_or("Failed to read from file".to_string()));
+
+    let mut result = Rooted::new(ctx.heap(), Value::EmptyList);
+
+    for form in reader {
+        result.emplace(*try!(evaluate_in_global_env(ctx, &form)));
+    }
+
+    if let Err(ref msg) = *reader.get_result() {
+        return Err(msg.clone());
+    }
+
+    return Ok(result);
+}
+
 #[test]
 fn test_eval_integer() {
     let mut ctx = Context::new();
-    assert_eq!(evaluate_in_global_env(&mut ctx, Value::new_integer(42)),
-               Ok(Value::new_integer(42)));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_integer.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(42));
 }
 
 #[test]
 fn test_eval_boolean() {
     let mut ctx = Context::new();
-    assert_eq!(evaluate_in_global_env(&mut ctx, Value::new_boolean(true)),
-               Ok(Value::new_boolean(true)));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_boolean.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_boolean(true));
 }
 
 #[test]
 fn test_eval_quoted() {
-    use value::list;
-
     let mut ctx = Context::new();
-    let val = Value::new_integer(5);
-    let mut items = [
-        ctx.quote_symbol(),
-        val
-    ];
-    let quoted = list(&mut ctx, &mut items);
-    assert_eq!(evaluate_in_global_env(&mut ctx, quoted),
-               Ok(val));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_quoted.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::EmptyList);
 }
 
 #[test]
 fn test_eval_if_consequent() {
-    use value::list;
-
     let mut ctx = Context::new();
-    let mut items = [
-        ctx.if_symbol(),
-        Value::new_boolean(true),
-        Value::new_integer(1),
-        Value::new_integer(2)
-    ];
-    let if_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate_in_global_env(&mut ctx, if_form),
-               Ok(Value::new_integer(1)));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_if_consequent.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
 }
 
 #[test]
 fn test_eval_if_alternative() {
-    use value::list;
-
     let mut ctx = Context::new();
-    let mut items = [
-        ctx.if_symbol(),
-        Value::new_boolean(false),
-        Value::new_integer(1),
-        Value::new_integer(2)
-    ];
-    let if_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate_in_global_env(&mut ctx, if_form),
-               Ok(Value::new_integer(2)));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_if_alternative.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
 }
 
 #[test]
 fn test_eval_begin() {
-    use value::list;
-
     let mut ctx = Context::new();
-    let mut items = [
-        ctx.begin_symbol(),
-        Value::new_integer(1),
-        Value::new_integer(2)
-    ];
-    let begin_form = list(&mut ctx, &mut items);
-    assert_eq!(evaluate_in_global_env(&mut ctx, begin_form),
-               Ok(Value::new_integer(2)));
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_begin.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
 }
 
 #[test]
@@ -371,58 +363,48 @@ fn test_eval_variables() {
     let mut def_items = [
         define_symbol,
         foo_symbol,
-        Value::new_integer(2)
+        Rooted::new(ctx.heap(), Value::new_integer(2))
     ];
     let def_form = list(&mut ctx, &mut def_items);
-    evaluate_in_global_env(&mut ctx, def_form).ok()
+    evaluate_in_global_env(&mut ctx, &def_form).ok()
         .expect("Should be able to define");
 
-    let def_val = evaluate_in_global_env(&mut ctx, foo_symbol).ok()
+    let foo_symbol_ = ctx.get_or_create_symbol("foo".to_string());
+
+    let def_val = evaluate_in_global_env(&mut ctx, &foo_symbol_).ok()
         .expect("Should be able to get a defined symbol's value");
-    assert_eq!(def_val, Value::new_integer(2));
+    assert_eq!(*def_val, Value::new_integer(2));
 
     let mut set_items = [
         set_bang_symbol,
-        foo_symbol,
-        Value::new_integer(1)
+        foo_symbol_,
+        Rooted::new(ctx.heap(), Value::new_integer(1))
     ];
     let set_form = list(&mut ctx, &mut set_items);
-    evaluate_in_global_env(&mut ctx, set_form).ok()
+    evaluate_in_global_env(&mut ctx, &set_form).ok()
         .expect("Should be able to define");
 
-    let set_val = evaluate_in_global_env(&mut ctx, foo_symbol).ok()
+    let foo_symbol__ = ctx.get_or_create_symbol("foo".to_string());
+
+    let set_val = evaluate_in_global_env(&mut ctx, &foo_symbol__).ok()
         .expect("Should be able to get a defined symbol's value");
-    assert_eq!(set_val, Value::new_integer(1));
+    assert_eq!(*set_val, Value::new_integer(1));
 }
 
 #[test]
 fn test_eval_and_call_lambda() {
-    use read::read_from_file;
-
     let mut ctx = Context::new();
-    let mut reader = read_from_file("./tests/test_eval_and_call_lambda.scm",
-                                    &mut ctx)
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_and_call_lambda.scm")
         .ok()
-        .expect("Should be able to read from a file");
-    let form = reader.next().expect("Should have a lambda form");
-    let result = evaluate_in_global_env(&mut ctx, form)
-        .ok()
-        .expect("Should be able to evaluate a lambda.");
-    assert_eq!(result, Value::new_integer(5));
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(5));
 }
 
 #[test]
 fn test_eval_closures() {
-    use read::read_from_file;
-
     let mut ctx = Context::new();
-    let mut reader = read_from_file("./tests/test_eval_closures.scm",
-                                    &mut ctx)
+    let result = evaluate_file(&mut ctx, "./tests/test_eval_closures.scm")
         .ok()
-        .expect("Should be able to read from a file");
-    let form = reader.next().expect("Should have a lambda form");
-    let result = evaluate_in_global_env(&mut ctx, form)
-        .ok()
-        .expect("Should be able to evaluate closures");
-    assert_eq!(result, Value::new_integer(1));
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
 }

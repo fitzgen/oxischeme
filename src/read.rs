@@ -21,7 +21,7 @@ use std::iter::{Peekable};
 
 use context::{Context};
 use heap::{Rooted};
-use value::{Value, list};
+use value::{list, RootedValue, Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -166,7 +166,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report a failure reading values.
-    fn report_failure(&mut self, msg: String) -> Option<Value> {
+    fn report_failure(&mut self, msg: String) -> Option<RootedValue> {
         // Don't overwrite existing failures.
         match self.result {
             Ok(_) => self.result = Err(msg),
@@ -177,7 +177,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report an unexpected character.
-    fn unexpected_character(&mut self, c: &char) -> Option<Value> {
+    fn unexpected_character(&mut self, c: &char) -> Option<RootedValue> {
         self.report_failure(format_args!(format, "Unexpected character: {}", c))
     }
 
@@ -199,26 +199,33 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report an unexpected EOF.
-    fn unexpected_eof(&mut self) -> Option<Value> {
+    fn unexpected_eof(&mut self) -> Option<RootedValue> {
         self.report_failure("Unexpected EOF".to_string())
     }
 
     /// Report a bad character literal, e.g. `#\bad`.
-    fn bad_character_literal(&mut self) -> Option<Value> {
+    fn bad_character_literal(&mut self) -> Option<RootedValue> {
         self.report_failure("Bad character value".to_string())
     }
 
     /// Report an unterminated string literal.
-    fn unterminated_string(&mut self) -> Option<Value> {
+    fn unterminated_string(&mut self) -> Option<RootedValue> {
         self.report_failure("Unterminated string literal".to_string())
+    }
+
+    /// TODO FITZGEN
+    fn some_rooted(&self, val: Value) -> Option<RootedValue> {
+        Some(Rooted::new(self.ctx().heap(), val))
     }
 
     /// Read a character value, after the starting '#' and '\' characters have
     /// already been eaten.
-    fn read_character(&mut self) -> Option<Value> {
+    fn read_character(&mut self) -> Option<RootedValue> {
         match [self.next_char(), self.peek_char()] {
             // Normal character, e.g. `#\f`.
-            [Some(c), d] if is_eof_or_delimiter(&d) => Some(Value::new_character(c)),
+            [Some(c), d] if is_eof_or_delimiter(&d) => {
+                self.some_rooted(Value::new_character(c))
+            },
 
             // Newline character: `#\newline`.
             [Some('n'), Some('e')] => match [self.next_char(),
@@ -234,7 +241,9 @@ impl<'a, R: Reader> Read<R> {
                  Some('i'),
                  Some('n'),
                  Some('e'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\n')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character('\n'))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -248,7 +257,9 @@ impl<'a, R: Reader> Read<R> {
                  Some('a'),
                  Some('c'),
                  Some('e'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character(' ')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character(' '))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -258,7 +269,9 @@ impl<'a, R: Reader> Read<R> {
                                              self.peek_char()] {
                 [Some('a'),
                  Some('b'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\t')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character('\t'))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -268,15 +281,15 @@ impl<'a, R: Reader> Read<R> {
 
     /// Given that we have already read a '#' character, read in either a
     /// boolean or a character.
-    fn read_bool_or_char(&mut self) -> Option<Value> {
+    fn read_bool_or_char(&mut self) -> Option<RootedValue> {
         self.next_char();
         // Deterimine if this is a boolean or a character.
         match [self.next_char(), self.peek_char()] {
             [Some('t'), d] if is_eof_or_delimiter(&d)  => {
-                Some(Value::new_boolean(true))
+                self.some_rooted(Value::new_boolean(true))
             },
             [Some('f'), d] if is_eof_or_delimiter(&d)  => {
-                Some(Value::new_boolean(false))
+                self.some_rooted(Value::new_boolean(false))
             },
             [Some('\\'), _]                            => {
                 self.read_character()
@@ -289,7 +302,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read an integer.
-    fn read_integer(&mut self, is_negative: bool) -> Option<Value> {
+    fn read_integer(&mut self, is_negative: bool) -> Option<RootedValue> {
         let sign : i64 = if is_negative { -1 } else { 1 };
 
         let mut abs_value : i64 = match self.next_char() {
@@ -312,24 +325,24 @@ impl<'a, R: Reader> Read<R> {
             self.next_char();
         }
 
-        Some(Value::new_integer(abs_value * sign))
+        self.some_rooted(Value::new_integer(abs_value * sign))
     }
 
     /// Read a pair, with the leading '(' already taken from the input.
-    fn read_pair(&mut self) -> Option<Value> {
+    fn read_pair(&mut self) -> Option<RootedValue> {
         self.trim();
         match self.peek_char() {
             None      => return self.unexpected_eof(),
 
             Some(')') => {
                 self.next_char();
-                return Some(Value::EmptyList);
+                return self.some_rooted(Value::EmptyList);
             },
 
             _         => {
                 let car = match self.next() {
                     None    => return self.unexpected_eof(),
-                    Some(v) => Rooted::new(self.ctx().heap(), v),
+                    Some(v) => v,
                 };
 
                 self.trim();
@@ -341,7 +354,7 @@ impl<'a, R: Reader> Read<R> {
                         self.next_char();
                         let cdr = match self.next() {
                             None    => return self.unexpected_eof(),
-                            Some(v) => Rooted::new(self.ctx().heap(), v),
+                            Some(v) => v,
                         };
 
                         self.trim();
@@ -358,7 +371,7 @@ impl<'a, R: Reader> Read<R> {
                     _         => {
                         let cdr = match self.read_pair() {
                             None    => return self.unexpected_eof(),
-                            Some(v) => Rooted::new(self.ctx().heap(), v),
+                            Some(v) => v,
                         };
 
                         return Some(Value::new_pair(self.ctx().heap(),
@@ -371,7 +384,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read a string in from the input.
-    fn read_string(&mut self) -> Option<Value> {
+    fn read_string(&mut self) -> Option<RootedValue> {
         if self.expect_character('"').is_err() {
             return None;
         }
@@ -399,7 +412,7 @@ impl<'a, R: Reader> Read<R> {
 
     /// Read a symbol in from the input. Optionally supply a prefix character
     /// that was already read from the symbol.
-    fn read_symbol(&mut self, prefix: Option<char>) -> Option<Value> {
+    fn read_symbol(&mut self, prefix: Option<char>) -> Option<RootedValue> {
         let mut str = String::new();
 
         if prefix.is_some() {
@@ -430,7 +443,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read a quoted form from input, e.g. `'(1 2 3)`.
-    fn read_quoted(&mut self) -> Option<Value> {
+    fn read_quoted(&mut self) -> Option<RootedValue> {
         if self.expect_character('\'').is_err() {
             return None;
         }
@@ -445,8 +458,8 @@ impl<'a, R: Reader> Read<R> {
     }
 }
 
-impl<R: Reader> Iterator<Value> for Read<R> {
-    fn next(&mut self) -> Option<Value> {
+impl<R: Reader> Iterator<RootedValue> for Read<R> {
+    fn next(&mut self) -> Option<RootedValue> {
         if self.result.is_err() {
             return None;
         }
@@ -504,7 +517,9 @@ pub fn read_from_file(path_name: &str, ctx: *mut Context) -> IoResult<Read<File>
 fn test_read_integers() {
     let input = "5 -5 789 -987";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_integer(5),
                              Value::new_integer(-5),
                              Value::new_integer(789),
@@ -515,7 +530,9 @@ fn test_read_integers() {
 fn test_read_booleans() {
     let input = "#t #f";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_boolean(true),
                              Value::new_boolean(false)))
 }
@@ -524,7 +541,9 @@ fn test_read_booleans() {
 fn test_read_characters() {
     let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_character('a'),
                              Value::new_character('0'),
                              Value::new_character('-'),
@@ -538,7 +557,9 @@ fn test_read_characters() {
 fn test_read_comments() {
     let input = "1 ;; this is a comment\n2";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
 
     assert_eq!(results.len(), 2);
     assert_eq!(results, vec!(Value::new_integer(1),
@@ -549,7 +570,9 @@ fn test_read_comments() {
 fn test_read_pairs() {
     let input = "() (1 2 3) (1 (2) ((3)))";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 3);
 
     assert_eq!(results[0], Value::EmptyList);
@@ -607,7 +630,9 @@ fn test_read_pairs() {
 fn test_read_improper_lists() {
     let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 4);
 
     let v0 = &results[0];
@@ -641,7 +666,9 @@ fn test_read_improper_lists() {
 fn test_read_string() {
     let input = "\"\" \"hello\" \"\\\"\"";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 3);
 
     match results[0] {
@@ -664,7 +691,9 @@ fn test_read_string() {
 fn test_read_symbols() {
     let input = "foo + - * ? !";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 6);
 
     match results[0] {
@@ -702,7 +731,9 @@ fn test_read_symbols() {
 fn test_read_same_symbol() {
     let input = "foo foo";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 2);
 
     // We should only allocate one StringPtr and share it between both parses of
@@ -714,7 +745,9 @@ fn test_read_same_symbol() {
 fn test_read_quoted() {
     let input = "'foo";
     let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let results : Vec<Value> = read_from_str(input, &mut ctx)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 1);
 
     match results[0].car() {
@@ -735,7 +768,9 @@ fn test_read_from_file() {
     let reader = read_from_file("./tests/test_read_from_file.scm", &mut ctx)
         .ok()
         .expect("Should be able to read from a file");
-    let results : Vec<Value> = reader.collect();
+    let results : Vec<Value> = reader
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].to_symbol().expect("Should be a symbol")
                          .deref()

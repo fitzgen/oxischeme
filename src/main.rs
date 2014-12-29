@@ -41,9 +41,9 @@ pub fn main() {
 
         print!("oxischeme> ");
         for form in reader {
-            match eval::evaluate_in_global_env(&mut ctx, form) {
+            match eval::evaluate_in_global_env(&mut ctx, &form) {
                 Ok(val) => {
-                    print::print(val, &mut stdout).ok().expect("IO ERROR!");
+                    print::print(&ctx, &mut stdout, &val).ok().expect("IO ERROR!");
                 },
                 Err(e) => {
                     (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
