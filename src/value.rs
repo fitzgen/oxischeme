@@ -54,13 +54,13 @@ impl Cons {
     }
 
     /// Set the car of this cons cell.
-    pub fn set_car(&mut self, car: Value) {
-        self.car = car;
+    pub fn set_car(&mut self, car: &RootedValue) {
+        self.car = **car;
     }
 
     /// Set the cdr of this cons cell.
-    pub fn set_cdr(&mut self, cdr: Value) {
-        self.cdr = cdr;
+    pub fn set_cdr(&mut self, cdr: &RootedValue) {
+        self.cdr = **cdr;
     }
 }
 
@@ -118,18 +118,18 @@ impl Procedure {
     }
 
     /// Set this procedure's parameters.
-    pub fn set_params(&mut self, params: Value) {
-        self.params = params;
+    pub fn set_params(&mut self, params: &RootedValue) {
+        self.params = **params;
     }
 
     /// Set this procedure's body.
-    pub fn set_body(&mut self, body: Value) {
-        self.body = body;
+    pub fn set_body(&mut self, body: &RootedValue) {
+        self.body = **body;
     }
 
     /// Set this procedure's environment.
-    pub fn set_env(&mut self, env: EnvironmentPtr) {
-        self.env = env;
+    pub fn set_env(&mut self, env: &RootedEnvironmentPtr) {
+        self.env = **env;
     }
 }
 
@@ -227,8 +227,8 @@ impl Value {
                     car: &RootedValue,
                     cdr: &RootedValue) -> RootedValue {
         let mut cons = heap.allocate_cons();
-        cons.set_car(**car);
-        cons.set_cdr(**cdr);
+        cons.set_car(car);
+        cons.set_cdr(cdr);
         Rooted::new(heap, Value::Pair(*cons))
     }
 
@@ -238,9 +238,9 @@ impl Value {
                          body: &RootedValue,
                          env: &RootedEnvironmentPtr) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
-        procedure.set_params(**params);
-        procedure.set_body(**body);
-        procedure.set_env(**env);
+        procedure.set_params(params);
+        procedure.set_body(body);
+        procedure.set_env(env);
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
