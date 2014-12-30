@@ -16,20 +16,19 @@
 
 use std::io::{IoResult};
 
-use context::{Context};
-use heap::{Rooted};
+use heap::{Heap, Rooted};
 use value::{RootedConsPtr, RootedValue, Value};
 
 /// Print the given value's text representation to the given writer.
-pub fn print<W: Writer>(ctx: &Context,
+pub fn print<W: Writer>(heap: &mut Heap,
                         writer: &mut W,
                         val: &RootedValue) -> IoResult<()> {
     match **val {
         Value::EmptyList        => write!(writer, "()"),
         Value::Pair(ref cons)   => {
             try!(write!(writer, "("));
-            let rcons = Rooted::new(ctx.heap(), *cons);
-            try!(print_pair(ctx, writer, &rcons));
+            let rcons = Rooted::new(heap, *cons);
+            try!(print_pair(heap, writer, &rcons));
             write!(writer, ")")
         },
         Value::String(ref str)  => {
@@ -57,22 +56,22 @@ pub fn print<W: Writer>(ctx: &Context,
 }
 
 /// Print the given cons pair, without the containing "(" and ")".
-fn print_pair<W: Writer>(ctx: &Context,
+fn print_pair<W: Writer>(heap: &mut Heap,
                          writer: &mut W,
                          cons: &RootedConsPtr) -> IoResult<()> {
-    let car = cons.car(ctx.heap());
-    try!(print(ctx, writer, &car));
-    match *cons.cdr(ctx.heap()) {
+    let car = cons.car(heap);
+    try!(print(heap, writer, &car));
+    match *cons.cdr(heap) {
         Value::EmptyList => Ok(()),
         Value::Pair(cdr) => {
             try!(write!(writer, " "));
-            let rcdr = Rooted::new(ctx.heap(), cdr);
-            print_pair(ctx, writer, &rcdr)
+            let rcdr = Rooted::new(heap, cdr);
+            print_pair(heap, writer, &rcdr)
         },
         val              => {
             try!(write!(writer, " . "));
-            let rval = Rooted::new(ctx.heap(), val);
-            print(ctx, writer, &rval)
+            let rval = Rooted::new(heap, val);
+            print(heap, writer, &rval)
         },
     }
 }

@@ -132,10 +132,9 @@ use std::fmt;
 use std::ptr;
 use std::vec::{IntoIter};
 
-use context::{Context};
 use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
-            RootedProcedurePtr};
+            RootedProcedurePtr, RootedValue, Value};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
@@ -355,7 +354,6 @@ impl<T: PartialEq> PartialEq<Self> for Rooted<T> {
         **self == **rhs
     }
 }
-
 impl<T: PartialEq + Eq> Eq<Self> for Rooted<T> { }
 
 impl<T: PartialEq> PartialEq<T> for Rooted<T> {
@@ -363,7 +361,6 @@ impl<T: PartialEq> PartialEq<T> for Rooted<T> {
         **self == *rhs
     }
 }
-
 impl<T: PartialEq + Eq> Eq<T> for Rooted<T> { }
 
 impl<T: fmt::Show> fmt::Show for Rooted<T> {
@@ -384,14 +381,16 @@ impl ToGcThing for StringPtr {
 /// A rooted pointer to a string on the heap.
 pub type RootedStringPtr = Rooted<StringPtr>;
 
-/// The scheme heap, containing all allocated cons cells and strings (including
-/// strings for symbols).
+/// The scheme heap and GC runtime, containing all allocated cons cells,
+/// environments, procedures, and strings (including strings for symbols).
 pub struct Heap {
     cons_cells: Arena<Cons>,
     strings: Arena<String>,
     environments: Arena<Environment>,
     procedures: Arena<Procedure>,
     roots: HashMap<GcThing, uint>,
+    symbol_table: HashMap<String, StringPtr>,
+    global_environment: EnvironmentPtr,
 }
 
 /// The default capacity of cons cells.
@@ -422,12 +421,16 @@ impl Heap {
                        strings: Arena<String>,
                        envs: Arena<Environment>,
                        procs: Arena<Procedure>) -> Heap {
+        let mut e = envs;
+        let global_env = e.allocate();
         Heap {
             cons_cells: cons_cells,
             strings: strings,
-            environments: envs,
+            environments: e,
             procedures: procs,
             roots: HashMap::new(),
+            symbol_table: HashMap::new(),
+            global_environment: global_env,
         }
     }
 }
@@ -475,14 +478,14 @@ impl Heap {
     }
 }
 
-/// ## Garbage Collection
+/// ## `Heap` Methods for Garbage Collection
 impl Heap {
     /// Perform a garbage collection on the heap.
-    pub fn collect_garbage(&mut self, ctx: &Context) {
+    pub fn collect_garbage(&mut self) {
         // First, trace the heap graph and mark everything that is reachable.
 
         let mut marked = HashSet::new();
-        let mut pending_trace = self.get_roots(ctx);
+        let mut pending_trace = self.get_roots();
 
         while !pending_trace.is_empty() {
             let mut newly_pending_trace = vec!();
@@ -532,7 +535,7 @@ impl Heap {
 
     /// Unroot a GC thing that was explicitly rooted with `add_root`.
     pub fn drop_root(&mut self, root: GcThing) {
-        let current_count = *self.roots.get(&root)
+        let current_count = *(self.roots.get(&root))
             .expect("Should never drop_root a gc thing that isn't rooted");
         if current_count == 1 {
             self.roots.remove(&root);
@@ -542,12 +545,75 @@ impl Heap {
     }
 
     /// Get a vector of all of the GC roots.
-    fn get_roots(&self, ctx: &Context) -> Vec<GcThing> {
-        let mut roots: Vec<GcThing> = ctx.trace().collect();
+    fn get_roots(&self) -> Vec<GcThing> {
+        let mut roots: Vec<GcThing> = self.symbol_table
+            .values()
+            .map(|s| GcThing::from_string_ptr(*s))
+            .collect();
+
+        roots.push(GcThing::from_environment_ptr(self.global_environment));
+
         for root in self.roots.keys() {
             roots.push(*root);
         }
+
         roots
+    }
+}
+
+/// ## `Heap` Methods and Accessors.
+impl Heap {
+    /// Get the global environment.
+    pub fn global_env(&mut self) -> RootedEnvironmentPtr {
+        let env = self.global_environment;
+        Rooted::new(self, env)
+    }
+
+    /// Ensure that there is an interned symbol extant for the given `String`
+    /// and return it.
+    pub fn get_or_create_symbol(&mut self, str: String) -> RootedValue {
+        if self.symbol_table.contains_key(&str) {
+            let sym_ptr = self.symbol_table[str];
+            let rooted_sym_ptr = Rooted::new(self, sym_ptr);
+            return Value::new_symbol(self, rooted_sym_ptr);
+        }
+
+        let mut symbol = self.allocate_string();
+        symbol.clear();
+        symbol.push_str(str.as_slice());
+        self.symbol_table.insert(str, *symbol);
+        return Value::new_symbol(self, symbol);
+    }
+}
+
+/// ## Getters for well known symbols.
+impl Heap {
+    pub fn quote_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("quote".to_string())
+    }
+
+    pub fn if_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("if".to_string())
+    }
+
+    pub fn begin_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("begin".to_string())
+    }
+
+    pub fn define_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("define".to_string())
+    }
+
+    pub fn set_bang_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("set!".to_string())
+    }
+
+    pub fn unspecified_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("unspecified".to_string())
+    }
+
+    pub fn lambda_symbol(&mut self) -> RootedValue {
+        self.get_or_create_symbol("lambda".to_string())
     }
 }
 

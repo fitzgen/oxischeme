@@ -123,8 +123,9 @@ impl Environment {
 impl<S: hash::Writer> hash::Hash<S> for Environment {
     fn hash(&self, state: &mut S) {
         self.parent.hash(state);
-        for item in self.bindings.iter() {
-            item.hash(state);
+        for (k, v) in self.bindings.iter() {
+            k.hash(state);
+            v.hash(state);
         }
     }
 }

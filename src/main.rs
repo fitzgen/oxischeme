@@ -18,7 +18,6 @@
 
 use std::io;
 
-pub mod context;
 pub mod environment;
 pub mod eval;
 pub mod heap;
@@ -32,18 +31,18 @@ pub fn main() {
     println!("C-c to exit.");
     println!("");
 
-    let mut ctx = context::Context::new();
+    let heap = &mut heap::Heap::new();
 
     loop {
         let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
-        let mut reader = read::Read::new(stdin, &mut ctx);
+        let mut reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
         for form in reader {
-            match eval::evaluate_in_global_env(&mut ctx, &form) {
+            match eval::evaluate_in_global_env(heap, &form) {
                 Ok(val) => {
-                    print::print(&ctx, &mut stdout, &val).ok().expect("IO ERROR!");
+                    print::print(heap, &mut stdout, &val).ok().expect("IO ERROR!");
                 },
                 Err(e) => {
                     (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
@@ -51,8 +50,7 @@ pub fn main() {
             };
             (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
 
-            let heap = ctx.heap();
-            heap.collect_garbage(&ctx);
+            heap.collect_garbage();
 
             (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
             stdout.flush().ok().expect("IO ERROR!");
