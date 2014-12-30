@@ -19,7 +19,6 @@ use std::default::{Default};
 use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
-use context::{Context};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
@@ -253,8 +252,8 @@ impl Value {
     }
 
     /// Create a new symbol value with the given string.
-    pub fn new_symbol(ctx: &Context, str: RootedStringPtr) -> RootedValue {
-        Rooted::new(ctx.heap(), Value::Symbol(*str))
+    pub fn new_symbol(heap: &mut Heap, str: RootedStringPtr) -> RootedValue {
+        Rooted::new(heap, Value::Symbol(*str))
     }
 }
 
@@ -348,46 +347,46 @@ pub type RootedValue = Rooted<Value>;
 pub type SchemeResult = Result<RootedValue, String>;
 
 /// A helper utility to create a cons list from the given values.
-pub fn list(ctx: &mut Context, values: &[RootedValue]) -> RootedValue {
-    list_helper(ctx, &mut values.iter())
+pub fn list(heap: &mut Heap, values: &[RootedValue]) -> RootedValue {
+    list_helper(heap, &mut values.iter())
 }
 
-fn list_helper<'a, T: Iterator<&'a RootedValue>>(ctx: &mut Context,
+fn list_helper<'a, T: Iterator<&'a RootedValue>>(heap: &mut Heap,
                                                  values: &mut T) -> RootedValue {
     match values.next() {
-        None      => Rooted::new(ctx.heap(), Value::EmptyList),
+        None      => Rooted::new(heap, Value::EmptyList),
         Some(car) => {
-            let rest = list_helper(ctx, values);
-            Value::new_pair(ctx.heap(), car, &rest)
+            let rest = list_helper(heap, values);
+            Value::new_pair(heap, car, &rest)
         },
     }
 }
 
 /// ## The 28 car/cdr compositions.
 impl Cons {
-    pub fn cddr(&self, ctx: &Context) -> SchemeResult {
-        self.cdr.cdr(ctx.heap()).ok_or("bad cddr".to_string())
+    pub fn cddr(&self, heap: &mut Heap) -> SchemeResult {
+        self.cdr.cdr(heap).ok_or("bad cddr".to_string())
     }
 
-    pub fn cdddr(&self, ctx: &Context) -> SchemeResult {
-        let cddr = try!(self.cddr(ctx));
-        cddr.cdr(ctx.heap()).ok_or("bad cdddr".to_string())
+    pub fn cdddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cddr = try!(self.cddr(heap));
+        cddr.cdr(heap).ok_or("bad cdddr".to_string())
     }
 
     // TODO FITZGEN: cddddr
 
-    pub fn cadr(&self, ctx: &Context) -> SchemeResult {
-        self.cdr.car(ctx.heap()).ok_or("bad cadr".to_string())
+    pub fn cadr(&self, heap: &mut Heap) -> SchemeResult {
+        self.cdr.car(heap).ok_or("bad cadr".to_string())
     }
 
-    pub fn caddr(&self, ctx: &Context) -> SchemeResult {
-        let cddr = try!(self.cddr(ctx));
-        cddr.car(ctx.heap()).ok_or("bad caddr".to_string())
+    pub fn caddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cddr = try!(self.cddr(heap));
+        cddr.car(heap).ok_or("bad caddr".to_string())
     }
 
-    pub fn cadddr(&self, ctx: &Context) -> SchemeResult {
-        let cdddr = try!(self.cdddr(ctx));
-        cdddr.car(ctx.heap()).ok_or("bad caddr".to_string())
+    pub fn cadddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cdddr = try!(self.cdddr(heap));
+        cdddr.car(heap).ok_or("bad caddr".to_string())
     }
 
     // TODO FITZGEN ...

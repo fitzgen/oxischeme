@@ -16,7 +16,6 @@
 
 use std::collections::{HashMap};
 use std::default::{Default};
-use std::fmt::{format};
 use std::hash;
 
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, ToGcThing, Trace};
@@ -109,8 +108,8 @@ impl Environment {
         if !self.bindings.contains_key(sym) {
             match self.parent {
                 Some(env) => return env.lookup(heap, sym),
-                _         => return Err(format_args!(
-                    format, "Reference to undefined identifier: {}", sym)),
+                _         => return Err(format!(
+                    "Reference to undefined identifier: {}", sym)),
             };
         }
 
@@ -123,8 +122,9 @@ impl Environment {
 impl<S: hash::Writer> hash::Hash<S> for Environment {
     fn hash(&self, state: &mut S) {
         self.parent.hash(state);
-        for item in self.bindings.iter() {
-            item.hash(state);
+        for (k, v) in self.bindings.iter() {
+            k.hash(state);
+            v.hash(state);
         }
     }
 }
