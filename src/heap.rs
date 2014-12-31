@@ -156,10 +156,17 @@ impl<T: Default> Arena<T> {
             free: range(0, capacity).collect(),
         }
     }
+}
 
+impl<T> Arena<T> {
     /// Get this heap's capacity for simultaneously allocated cons cells.
     pub fn capacity(&self) -> uint {
         self.pool.len()
+    }
+
+    /// TODO FITZGEN
+    pub fn is_full(&self) -> bool {
+        self.free.is_empty()
     }
 
     /// Allocate a new `T` instance and return a pointer to it.
@@ -200,7 +207,7 @@ pub struct ArenaPtr<T> {
 // itself.
 impl<T> ::std::kinds::Copy for ArenaPtr<T> { }
 
-impl<T: Default> ArenaPtr<T> {
+impl<T> ArenaPtr<T> {
     /// Create a new `ArenaPtr` to the `T` instance at the given index in the
     /// provided arena. **Not** publicly exposed, and should only be called by
     /// `Arena::allocate`.
@@ -391,6 +398,7 @@ pub struct Heap {
     roots: HashMap<GcThing, uint>,
     symbol_table: HashMap<String, StringPtr>,
     global_environment: EnvironmentPtr,
+    allocations: uint,
 }
 
 /// The default capacity of cons cells.
@@ -431,6 +439,7 @@ impl Heap {
             roots: HashMap::new(),
             symbol_table: HashMap::new(),
             global_environment: global_env,
+            allocations: 0,
         }
     }
 }
@@ -443,8 +452,9 @@ impl Heap {
     ///
     /// Panics if the `Arena` for cons cells has already reached capacity.
     pub fn allocate_cons(&mut self) -> RootedConsPtr {
-        let cons = self.cons_cells.allocate();
-        Rooted::new(self, cons)
+        self.on_allocation();
+        let c = self.cons_cells.allocate();
+        Rooted::new(self, c)
     }
 
     /// Allocate a new string and return a pointer to it.
@@ -453,8 +463,9 @@ impl Heap {
     ///
     /// Panics if the `Arena` for strings has already reached capacity.
     pub fn allocate_string(&mut self) -> RootedStringPtr {
-        let str = self.strings.allocate();
-        Rooted::new(self, str)
+        self.on_allocation();
+        let s = self.strings.allocate();
+        Rooted::new(self, s)
     }
 
     /// Allocate a new `Environment` and return a pointer to it.
@@ -463,8 +474,9 @@ impl Heap {
     ///
     /// Panics if the `Arena` for environments has already reached capacity.
     pub fn allocate_environment(&mut self) -> RootedEnvironmentPtr {
-        let env = self.environments.allocate();
-        Rooted::new(self, env)
+        self.on_allocation();
+        let e = self.environments.allocate();
+        Rooted::new(self, e)
     }
 
     /// Allocate a new `Procedure` and return a pointer to it.
@@ -473,15 +485,21 @@ impl Heap {
     ///
     /// Panics if the `Arena` for environments has already reached capacity.
     pub fn allocate_procedure(&mut self) -> RootedProcedurePtr {
+        self.on_allocation();
         let p = self.procedures.allocate();
         Rooted::new(self, p)
     }
 }
 
+/// TODO FITZGEN
+const MAX_GC_PRESSURE : uint = 1 << 8;
+
 /// ## `Heap` Methods for Garbage Collection
 impl Heap {
     /// Perform a garbage collection on the heap.
     pub fn collect_garbage(&mut self) {
+        self.reset_gc_pressure();
+
         // First, trace the heap graph and mark everything that is reachable.
 
         let mut marked = HashSet::new();
@@ -544,6 +562,14 @@ impl Heap {
         }
     }
 
+    /// TODO FITZGEN
+    pub fn increase_gc_pressure(&mut self) {
+        self.allocations += 1;
+        if self.is_too_much_pressure() {
+            self.collect_garbage();
+        }
+    }
+
     /// Get a vector of all of the GC roots.
     fn get_roots(&self) -> Vec<GcThing> {
         let mut roots: Vec<GcThing> = self.symbol_table
@@ -558,6 +584,32 @@ impl Heap {
         }
 
         roots
+    }
+
+    fn any_arena_is_full(&self) -> bool {
+        self.cons_cells.is_full()
+            || self.strings.is_full()
+            || self.procedures.is_full()
+            || self.environments.is_full()
+    }
+
+    /// TODO FITZGEN
+    fn on_allocation(&mut self)  {
+        if self.any_arena_is_full() {
+            self.collect_garbage();
+        } else {
+            self.increase_gc_pressure();
+        }
+    }
+
+    /// TODO FITZGEN
+    fn is_too_much_pressure(&mut self) -> bool {
+        self.allocations > MAX_GC_PRESSURE
+    }
+
+    /// TODO FITZGEN
+    fn reset_gc_pressure(&mut self) {
+        self.allocations = 0;
     }
 }
 
