@@ -52,6 +52,7 @@ pub fn print<W: Writer>(heap: &mut Heap,
             _    => write!(writer, "#\\{}", c),
         },
         Value::Procedure(ref p) => write!(writer, "Procedure({})", p),
+        Value::Primitive(ref p) => write!(writer, "{}", p),
     }
 }
 

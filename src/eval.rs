@@ -16,7 +16,7 @@
 
 use environment::{Environment, RootedEnvironmentPtr};
 use heap::{Heap, Rooted};
-use value::{SchemeResult, RootedValue, Value};
+use value::{RootedValue, SchemeResult, Value};
 
 /// Return true if the value doesn't need to be evaluated because it is
 /// "autoquoting" or "self evaluating", false otherwise.
@@ -117,23 +117,36 @@ pub fn evaluate(heap: &mut Heap,
 
                 let proc_form = Rooted::new(heap, procedure);
                 let proc_val = try!(evaluate(heap, env_, &proc_form));
-                let proc_ptr = try!(proc_val.to_procedure(heap).ok_or(
-                    format!("Expected a procedure, found {}", *proc_val)));
 
                 let args_form = pair.cdr(heap);
                 let args_val = try!(evaluate_list(heap, env_, &args_form));
 
-                let proc_env = proc_ptr.get_env(heap);
-                let proc_params = proc_ptr.get_params(heap);
-                env_.emplace(*try!(Environment::extend(
-                    heap,
-                    &proc_env,
-                    &proc_params,
-                    &args_val)));
+                match *proc_val {
+                    Value::Primitive(primitive) => {
+                        return primitive.call(heap, &args_val);
+                    },
 
-                let proc_body = proc_ptr.get_body(heap);
-                form_.emplace(*try!(evaluate_sequence(heap, env_, &proc_body)));
-                continue;
+                    Value::Procedure(proc_ptr) => {
+                        let proc_env = proc_ptr.get_env(heap);
+                        let proc_params = proc_ptr.get_params(heap);
+                        env_.emplace(*try!(Environment::extend(
+                            heap,
+                            &proc_env,
+                            &proc_params,
+                            &args_val)));
+
+                        let proc_body = proc_ptr.get_body(heap);
+                        form_.emplace(*try!(evaluate_sequence(heap,
+                                                              env_,
+                                                              &proc_body)));
+                        continue;
+                    },
+
+                    _                           => {
+                        return Err(format!("Expected a procedure, found {}",
+                                           *proc_val));
+                    }
+                }
             },
         };
     }

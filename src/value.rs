@@ -15,6 +15,8 @@
 //! Scheme value implementation.
 
 use std::default::{Default};
+use std::fmt;
+use std::hash;
 
 use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
@@ -172,6 +174,44 @@ impl ToGcThing for ProcedurePtr {
 /// A rooted pointer to a `Procedure` on the heap.
 pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 
+/// A primitive procedure, such as Scheme's `+` or `cons`.
+#[deriving(Copy)]
+pub struct Primitive {
+    /// The function implementing the primitive.
+    function: fn(&mut Heap, &RootedValue) -> SchemeResult,
+    /// The name of the primitive.
+    name: &'static str,
+}
+
+impl PartialEq for Primitive {
+    fn eq(&self, rhs: &Self) -> bool {
+        self.function as uint == rhs.function as uint
+    }
+}
+
+impl Eq for Primitive { }
+
+impl<S: hash::Writer> hash::Hash<S> for Primitive {
+    fn hash(&self, state: &mut S) {
+        let u = self.function as uint;
+        u.hash(state);
+    }
+}
+
+impl Primitive {
+    #[inline]
+    pub fn call(&self, heap: &mut Heap, args: &RootedValue) -> SchemeResult {
+        let f = self.function;
+        f(heap, args)
+    }
+}
+
+impl fmt::Show for Primitive {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Primitive({})", self.name)
+    }
+}
+
 /// `Value` represents a scheme value of any type.
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
@@ -200,8 +240,13 @@ pub enum Value {
     /// Scheme characters are `char`s.
     Character(char),
 
-    /// A Scheme procedure is a pointer to a GC-managed `Procedure`.
+    /// A user-defined Scheme procedure is a pointer to a GC-managed
+    /// `Procedure`.
     Procedure(ProcedurePtr),
+
+    /// A primitive Scheme procedure is just a pointer to a `Primitive` type
+    /// function pointer.
+    Primitive(Primitive),
 }
 
 /// # `Value` Constructors
