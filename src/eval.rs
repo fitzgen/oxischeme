@@ -268,7 +268,7 @@ fn evaluate_sequence(heap: &mut Heap,
     }
 }
 
-/// TODO FITZGEN
+/// Evaluate the file at the given path and return the value of the last form.
 pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
     use read::read_from_file;
 

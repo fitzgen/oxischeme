@@ -164,7 +164,7 @@ impl<T> Arena<T> {
         self.pool.len()
     }
 
-    /// TODO FITZGEN
+    /// Return true if this arena is at full capacity, and false otherwise.
     pub fn is_full(&self) -> bool {
         self.free.is_empty()
     }
@@ -491,7 +491,8 @@ impl Heap {
     }
 }
 
-/// TODO FITZGEN
+/// The maximum number of things to allocate before triggering a garbage
+/// collection.
 const MAX_GC_PRESSURE : uint = 1 << 8;
 
 /// ## `Heap` Methods for Garbage Collection
@@ -562,7 +563,8 @@ impl Heap {
         }
     }
 
-    /// TODO FITZGEN
+    /// Apply pressure to the GC, and if enough pressure has built up, then
+    /// perform a garbage collection.
     pub fn increase_gc_pressure(&mut self) {
         self.allocations += 1;
         if self.is_too_much_pressure() {
@@ -586,6 +588,7 @@ impl Heap {
         roots
     }
 
+    /// Returns true if any of the heap's arenas are full, and false otherwise.
     fn any_arena_is_full(&self) -> bool {
         self.cons_cells.is_full()
             || self.strings.is_full()
@@ -593,7 +596,9 @@ impl Heap {
             || self.environments.is_full()
     }
 
-    /// TODO FITZGEN
+    /// A method that should be called on every allocation. If any arenas are
+    /// already full, it triggers a GC immediately, otherwise it builds GC
+    /// pressure.
     fn on_allocation(&mut self)  {
         if self.any_arena_is_full() {
             self.collect_garbage();
@@ -602,12 +607,14 @@ impl Heap {
         }
     }
 
-    /// TODO FITZGEN
+    /// Returns true when we have built up too much GC pressure, and it is time
+    /// to collect garbage. False otherwise.
     fn is_too_much_pressure(&mut self) -> bool {
         self.allocations > MAX_GC_PRESSURE
     }
 
-    /// TODO FITZGEN
+    /// Resets the GC pressure, so that it must build all the way back up to the
+    /// max again before a GC is triggered.
     fn reset_gc_pressure(&mut self) {
         self.allocations = 0;
     }

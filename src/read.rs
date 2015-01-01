@@ -209,7 +209,7 @@ impl<'a, R: Reader> Read<R> {
         self.report_failure("Unterminated string literal".to_string())
     }
 
-    /// TODO FITZGEN
+    /// Given a value, root the value and wrap it in `Option::Some`.
     fn some_rooted(&self, val: Value) -> Option<RootedValue> {
         Some(Rooted::new(self.heap(), val))
     }
