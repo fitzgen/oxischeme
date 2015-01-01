@@ -16,14 +16,15 @@
 
 use std::default::{Default};
 
-use heap::{ArenaPtr, ConsPtr, EnvironmentPtr, Heap, ProcedurePtr, StringPtr};
-use context::{Context};
+use environment::{EnvironmentPtr, RootedEnvironmentPtr};
+use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
+           StringPtr, ToGcThing, Trace};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[deriving(Copy, PartialEq)]
+#[deriving(Copy, Eq, Hash, PartialEq)]
 pub struct Cons {
     car: Value,
     cdr: Value,
@@ -42,29 +43,57 @@ impl Default for Cons {
 
 impl Cons {
     /// Get the car of this cons cell.
-    pub fn car(&self) -> Value {
-        self.car
+    pub fn car(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.car)
     }
 
     /// Get the cdr of this cons cell.
-    pub fn cdr(&self) -> Value {
-        self.cdr
+    pub fn cdr(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.cdr)
     }
 
     /// Set the car of this cons cell.
-    pub fn set_car(&mut self, car: Value) {
-        self.car = car;
+    pub fn set_car(&mut self, car: &RootedValue) {
+        self.car = **car;
     }
 
     /// Set the cdr of this cons cell.
-    pub fn set_cdr(&mut self, cdr: Value) {
-        self.cdr = cdr;
+    pub fn set_cdr(&mut self, cdr: &RootedValue) {
+        self.cdr = **cdr;
     }
 }
 
+impl Trace for Cons {
+    fn trace(&self) -> IterGcThing {
+        let mut results = vec!();
+
+        if let Some(car) = self.car.to_gc_thing() {
+            results.push(car);
+        }
+
+        if let Some(cdr) = self.cdr.to_gc_thing() {
+            results.push(cdr);
+        }
+
+        results.into_iter()
+    }
+}
+
+/// A pointer to a cons cell on the heap.
+pub type ConsPtr = ArenaPtr<Cons>;
+
+impl ToGcThing for ConsPtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_cons_ptr(*self))
+    }
+}
+
+/// A rooted pointer to a cons cell on the heap.
+pub type RootedConsPtr = Rooted<ConsPtr>;
+
 /// Procedures are represented by their parameter list, body, and a pointer to
 /// their definition environment.
-#[deriving(Copy)]
+#[deriving(Copy, Hash)]
 pub struct Procedure {
     params: Value,
     body: Value,
@@ -73,33 +102,33 @@ pub struct Procedure {
 
 impl Procedure {
     /// Get this procedure's parameters.
-    pub fn get_params(&self) -> Value {
-        self.params
+    pub fn get_params(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.params)
     }
 
     /// Get this procedure's body.
-    pub fn get_body(&self) -> Value {
-        self.body
+    pub fn get_body(&self, heap: &mut Heap) -> RootedValue {
+        Rooted::new(heap, self.body)
     }
 
     /// Get this procedure's environment.
-    pub fn get_env(&self) -> EnvironmentPtr {
-        self.env
+    pub fn get_env(&self, heap: &mut Heap) -> RootedEnvironmentPtr {
+        Rooted::new(heap, self.env)
     }
 
     /// Set this procedure's parameters.
-    pub fn set_params(&mut self, params: Value) {
-        self.params = params;
+    pub fn set_params(&mut self, params: &RootedValue) {
+        self.params = **params;
     }
 
     /// Set this procedure's body.
-    pub fn set_body(&mut self, body: Value) {
-        self.body = body;
+    pub fn set_body(&mut self, body: &RootedValue) {
+        self.body = **body;
     }
 
     /// Set this procedure's environment.
-    pub fn set_env(&mut self, env: EnvironmentPtr) {
-        self.env = env;
+    pub fn set_env(&mut self, env: &RootedEnvironmentPtr) {
+        self.env = **env;
     }
 }
 
@@ -115,11 +144,39 @@ impl Default for Procedure {
     }
 }
 
+impl Trace for Procedure {
+    fn trace(&self) -> IterGcThing {
+        let mut results = vec!();
+
+        if let Some(params) = self.params.to_gc_thing() {
+            results.push(params);
+        }
+
+        if let Some(body) = self.body.to_gc_thing() {
+            results.push(body);
+        }
+
+        results.push(GcThing::from_environment_ptr(self.env));
+        results.into_iter()
+    }
+}
+
+/// A pointer to a `Procedure` on the heap.
+pub type ProcedurePtr = ArenaPtr<Procedure>;
+impl ToGcThing for ProcedurePtr {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        Some(GcThing::from_procedure_ptr(*self))
+    }
+}
+
+/// A rooted pointer to a `Procedure` on the heap.
+pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
+
 /// `Value` represents a scheme value of any type.
 ///
-/// Note that `PartialEq` is object identity, not structural comparison, same as
-/// with [`ArenaPtr`](struct.ArenaPtr.html).
-#[deriving(Copy, PartialEq, Show)]
+/// Note that `Eq` and `PartialEq` are object identity, not structural
+/// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
+#[deriving(Copy, Eq, Hash, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
@@ -165,36 +222,38 @@ impl Value {
     }
 
     /// Create a new cons pair value with the given car and cdr.
-    pub fn new_pair(heap: &mut Heap, car: Value, cdr: Value) -> Value {
+    pub fn new_pair(heap: &mut Heap,
+                    car: &RootedValue,
+                    cdr: &RootedValue) -> RootedValue {
         let mut cons = heap.allocate_cons();
         cons.set_car(car);
         cons.set_cdr(cdr);
-        Value::Pair(cons)
+        Rooted::new(heap, Value::Pair(*cons))
     }
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
-                         params: Value,
-                         body: Value,
-                         env: EnvironmentPtr) -> Value {
+                         params: &RootedValue,
+                         body: &RootedValue,
+                         env: &RootedEnvironmentPtr) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
         procedure.set_params(params);
         procedure.set_body(body);
         procedure.set_env(env);
-        Value::Procedure(procedure)
+        Rooted::new(heap, Value::Procedure(*procedure))
     }
 
     /// Create a new string value with the given string.
-    pub fn new_string(heap: &mut Heap, str: String) -> Value {
+    pub fn new_string(heap: &mut Heap, str: String) -> RootedValue {
         let mut value = heap.allocate_string();
         value.clear();
         value.push_str(str.as_slice());
-        Value::String(value)
+        Rooted::new(heap, Value::String(*value))
     }
 
     /// Create a new symbol value with the given string.
-    pub fn new_symbol(str: StringPtr) -> Value {
-        Value::Symbol(str)
+    pub fn new_symbol(heap: &mut Heap, str: RootedStringPtr) -> RootedValue {
+        Rooted::new(heap, Value::Symbol(*str))
     }
 }
 
@@ -202,18 +261,18 @@ impl Value {
 impl Value {
     /// Assuming this value is a cons pair, get its car value. Otherwise, return
     /// `None`.
-    pub fn car(&self) -> Option<Value> {
+    pub fn car(&self, heap: &mut Heap) -> Option<RootedValue> {
         match *self {
-            Value::Pair(ref cons) => Some(cons.car()),
+            Value::Pair(ref cons) => Some(cons.car(heap)),
             _                     => None,
         }
     }
 
     /// Assuming this value is a cons pair, get its cdr value. Otherwise, return
     /// `None`.
-    pub fn cdr(&self) -> Option<Value> {
+    pub fn cdr(&self, heap: &mut Heap) -> Option<RootedValue> {
         match *self {
-            Value::Pair(ref cons) => Some(cons.cdr()),
+            Value::Pair(ref cons) => Some(cons.cdr(heap)),
             _                     => None,
         }
     }
@@ -232,27 +291,27 @@ impl Value {
     }
 
     /// Coerce this symbol value to a `StringPtr` to the symbol's string name.
-    pub fn to_symbol(&self) -> Option<StringPtr> {
+    pub fn to_symbol(&self, heap: &mut Heap) -> Option<RootedStringPtr> {
         match *self {
-            Value::Symbol(sym) => Some(sym),
+            Value::Symbol(sym) => Some(Rooted::new(heap, sym)),
             _                  => None,
         }
     }
 
     /// Coerce this pair value to a `ConsPtr` to the cons cell this pair is
     /// referring to.
-    pub fn to_pair(&self) -> Option<ConsPtr> {
+    pub fn to_pair(&self, heap: &mut Heap) -> Option<RootedConsPtr> {
         match *self {
-            Value::Pair(cons) => Some(cons),
+            Value::Pair(cons) => Some(Rooted::new(heap, cons)),
             _                 => None,
         }
     }
 
     /// Coerce this procedure value to a `ProcedurePtr` to the `Procedure` this
     /// value is referring to.
-    pub fn to_procedure(&self) -> Option<ProcedurePtr> {
+    pub fn to_procedure(&self, heap: &mut Heap) -> Option<RootedProcedurePtr> {
         match *self {
-            Value::Procedure(p) => Some(p),
+            Value::Procedure(p) => Some(Rooted::new(heap, p)),
             _                   => None,
         }
     }
@@ -262,7 +321,7 @@ impl Value {
         match *self {
             Value::EmptyList => Ok(0),
             Value::Pair(p)   => {
-                let cdr_len = try!(p.cdr().len());
+                let cdr_len = try!(p.cdr.len());
                 Ok(cdr_len + 1)
             },
             _                => Err(()),
@@ -270,50 +329,64 @@ impl Value {
     }
 }
 
-/// Either a Scheme `Value`, or a `String` containing an error message.
-pub type SchemeResult = Result<Value, String>;
-
-/// A helper utility to create a cons list from the given values.
-pub fn list(ctx: &mut Context, values: &[Value]) -> Value {
-    list_helper(ctx, &mut values.iter())
+impl ToGcThing for Value {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        match *self {
+            Value::String(str)  => Some(GcThing::from_string_ptr(str)),
+            Value::Symbol(sym)  => Some(GcThing::from_string_ptr(sym)),
+            Value::Pair(cons)   => Some(GcThing::from_cons_ptr(cons)),
+            Value::Procedure(p) => Some(GcThing::from_procedure_ptr(p)),
+            _                   => None,
+        }
+    }
 }
 
-fn list_helper<'a, T: Iterator<&'a Value>>(ctx: &mut Context,
-                                           values: &mut T) -> Value {
+pub type RootedValue = Rooted<Value>;
+
+/// Either a Scheme `RootedValue`, or a `String` containing an error message.
+pub type SchemeResult = Result<RootedValue, String>;
+
+/// A helper utility to create a cons list from the given values.
+pub fn list(heap: &mut Heap, values: &[RootedValue]) -> RootedValue {
+    list_helper(heap, &mut values.iter())
+}
+
+fn list_helper<'a, T: Iterator<&'a RootedValue>>(heap: &mut Heap,
+                                                 values: &mut T) -> RootedValue {
     match values.next() {
-        None      => Value::EmptyList,
+        None      => Rooted::new(heap, Value::EmptyList),
         Some(car) => {
-            let cdr = list_helper(ctx, values);
-            Value::new_pair(ctx.heap(), *car, cdr)
+            let rest = list_helper(heap, values);
+            Value::new_pair(heap, car, &rest)
         },
     }
 }
 
 /// ## The 28 car/cdr compositions.
 impl Cons {
-    pub fn cddr(&self) -> SchemeResult {
-        self.cdr.cdr().ok_or("bad cddr".to_string())
+    pub fn cddr(&self, heap: &mut Heap) -> SchemeResult {
+        self.cdr.cdr(heap).ok_or("bad cddr".to_string())
     }
 
-    pub fn cdddr(&self) -> SchemeResult {
-        let cddr = try!(self.cddr());
-        cddr.cdr().ok_or("bad cdddr".to_string())
+    pub fn cdddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cddr = try!(self.cddr(heap));
+        cddr.cdr(heap).ok_or("bad cdddr".to_string())
     }
 
     // TODO FITZGEN: cddddr
 
-    pub fn cadr(&self) -> SchemeResult {
-        self.cdr.car().ok_or("bad cadr".to_string())
+    pub fn cadr(&self, heap: &mut Heap) -> SchemeResult {
+        self.cdr.car(heap).ok_or("bad cadr".to_string())
     }
 
-    pub fn caddr(&self) -> SchemeResult {
-        let cddr = try!(self.cddr());
-        cddr.car().ok_or("bad caddr".to_string())
+    pub fn caddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cddr = try!(self.cddr(heap));
+        cddr.car(heap).ok_or("bad caddr".to_string())
     }
 
-    pub fn cadddr(&self) -> SchemeResult {
-        let cdddr = try!(self.cdddr());
-        cdddr.car().ok_or("bad caddr".to_string())
+    pub fn cadddr(&self, heap: &mut Heap) -> SchemeResult {
+        let cdddr = try!(self.cdddr(heap));
+        cdddr.car(heap).ok_or("bad caddr".to_string())
     }
 
     // TODO FITZGEN ...

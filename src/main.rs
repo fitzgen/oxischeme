@@ -14,9 +14,10 @@
 
 //! A Scheme implementation, in Rust.
 
+#![feature(default_type_params, unsafe_destructor)]
+
 use std::io;
 
-pub mod context;
 pub mod environment;
 pub mod eval;
 pub mod heap;
@@ -30,24 +31,27 @@ pub fn main() {
     println!("C-c to exit.");
     println!("");
 
-    let mut ctx = context::Context::new();
+    let heap = &mut heap::Heap::new();
 
     loop {
         let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
-        let mut reader = read::Read::new(stdin, &mut ctx);
+        let mut reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
-        for val in reader {
-            match eval::evaluate_in_global_env(&mut ctx, val) {
-                Ok(evaluated) => {
-                    print::print(evaluated, &mut stdout).ok().expect("IO ERROR!");
+        for form in reader {
+            match eval::evaluate_in_global_env(heap, &form) {
+                Ok(val) => {
+                    print::print(heap, &mut stdout, &val).ok().expect("IO ERROR!");
                 },
                 Err(e) => {
                     (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
                 },
             };
             (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+
+            heap.collect_garbage();
+
             (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
             stdout.flush().ok().expect("IO ERROR!");
         }

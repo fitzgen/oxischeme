@@ -15,12 +15,11 @@
 //! Parsing values.
 
 use std::cell::{RefCell};
-use std::fmt::{format};
 use std::io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
 use std::iter::{Peekable};
 
-use context::{Context};
-use value::{Value, list};
+use heap::{Heap, Rooted};
+use value::{list, RootedValue, Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -95,24 +94,24 @@ fn is_symbol_subsequent(c: &char) -> bool {
 pub struct Read<R> {
     chars: RefCell<Peekable<char, CharReader<R>>>,
     result: Result<(), String>,
-    context: *mut Context,
+    heap_ptr: *mut Heap,
 }
 
 impl<'a, R: Reader> Read<R> {
     /// Create a new `Read` instance from the given `Reader` input source.
-    pub fn new(reader: R, ctx: *mut Context) -> Read<R> {
+    pub fn new(reader: R, heap: *mut Heap) -> Read<R> {
         Read {
             chars: RefCell::new(CharReader::new(reader).peekable()),
             result: Ok(()),
-            context: ctx
+            heap_ptr: heap
         }
     }
 
     /// Get the current context.
-    fn ctx(&'a self) -> &'a mut Context {
+    fn heap(&'a self) -> &'a mut Heap {
         unsafe {
-            self.context.as_mut()
-                .expect("Read<R> should always have a valid Context")
+            self.heap_ptr.as_mut()
+                .expect("Read<R> should always have a valid Heap")
         }
     }
 
@@ -165,7 +164,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report a failure reading values.
-    fn report_failure(&mut self, msg: String) -> Option<Value> {
+    fn report_failure(&mut self, msg: String) -> Option<RootedValue> {
         // Don't overwrite existing failures.
         match self.result {
             Ok(_) => self.result = Err(msg),
@@ -176,21 +175,19 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report an unexpected character.
-    fn unexpected_character(&mut self, c: &char) -> Option<Value> {
-        self.report_failure(format_args!(format, "Unexpected character: {}", c))
+    fn unexpected_character(&mut self, c: &char) -> Option<RootedValue> {
+        self.report_failure(format!("Unexpected character: {}", c))
     }
 
     /// Expect that the next character is `c` and report a failure if it is not.
     fn expect_character(&mut self, c: char) -> Result<(), ()>{
         match self.next_char() {
             None                => {
-                self.report_failure(
-                    format_args!(format, "Expected '{}', but found EOF.", c));
+                self.report_failure(format!("Expected '{}', but found EOF.", c));
                 Err(())
             },
             Some(d) if d != c => {
-                self.report_failure(
-                    format_args!(format, "Expected '{}', found: '{}'", c, d));
+                self.report_failure(format!("Expected '{}', found: '{}'", c, d));
                 Err(())
             },
             _                   => Ok(()),
@@ -198,26 +195,33 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report an unexpected EOF.
-    fn unexpected_eof(&mut self) -> Option<Value> {
+    fn unexpected_eof(&mut self) -> Option<RootedValue> {
         self.report_failure("Unexpected EOF".to_string())
     }
 
     /// Report a bad character literal, e.g. `#\bad`.
-    fn bad_character_literal(&mut self) -> Option<Value> {
+    fn bad_character_literal(&mut self) -> Option<RootedValue> {
         self.report_failure("Bad character value".to_string())
     }
 
     /// Report an unterminated string literal.
-    fn unterminated_string(&mut self) -> Option<Value> {
+    fn unterminated_string(&mut self) -> Option<RootedValue> {
         self.report_failure("Unterminated string literal".to_string())
+    }
+
+    /// Given a value, root the value and wrap it in `Option::Some`.
+    fn some_rooted(&self, val: Value) -> Option<RootedValue> {
+        Some(Rooted::new(self.heap(), val))
     }
 
     /// Read a character value, after the starting '#' and '\' characters have
     /// already been eaten.
-    fn read_character(&mut self) -> Option<Value> {
+    fn read_character(&mut self) -> Option<RootedValue> {
         match [self.next_char(), self.peek_char()] {
             // Normal character, e.g. `#\f`.
-            [Some(c), d] if is_eof_or_delimiter(&d) => Some(Value::new_character(c)),
+            [Some(c), d] if is_eof_or_delimiter(&d) => {
+                self.some_rooted(Value::new_character(c))
+            },
 
             // Newline character: `#\newline`.
             [Some('n'), Some('e')] => match [self.next_char(),
@@ -233,7 +237,9 @@ impl<'a, R: Reader> Read<R> {
                  Some('i'),
                  Some('n'),
                  Some('e'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\n')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character('\n'))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -247,7 +253,9 @@ impl<'a, R: Reader> Read<R> {
                  Some('a'),
                  Some('c'),
                  Some('e'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character(' ')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character(' '))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -257,7 +265,9 @@ impl<'a, R: Reader> Read<R> {
                                              self.peek_char()] {
                 [Some('a'),
                  Some('b'),
-                 d] if is_eof_or_delimiter(&d) => Some(Value::new_character('\t')),
+                 d] if is_eof_or_delimiter(&d) => {
+                    self.some_rooted(Value::new_character('\t'))
+                },
                 _                              => self.bad_character_literal(),
             },
 
@@ -267,15 +277,15 @@ impl<'a, R: Reader> Read<R> {
 
     /// Given that we have already read a '#' character, read in either a
     /// boolean or a character.
-    fn read_bool_or_char(&mut self) -> Option<Value> {
+    fn read_bool_or_char(&mut self) -> Option<RootedValue> {
         self.next_char();
         // Deterimine if this is a boolean or a character.
         match [self.next_char(), self.peek_char()] {
             [Some('t'), d] if is_eof_or_delimiter(&d)  => {
-                Some(Value::new_boolean(true))
+                self.some_rooted(Value::new_boolean(true))
             },
             [Some('f'), d] if is_eof_or_delimiter(&d)  => {
-                Some(Value::new_boolean(false))
+                self.some_rooted(Value::new_boolean(false))
             },
             [Some('\\'), _]                            => {
                 self.read_character()
@@ -288,7 +298,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read an integer.
-    fn read_integer(&mut self, is_negative: bool) -> Option<Value> {
+    fn read_integer(&mut self, is_negative: bool) -> Option<RootedValue> {
         let sign : i64 = if is_negative { -1 } else { 1 };
 
         let mut abs_value : i64 = match self.next_char() {
@@ -311,18 +321,18 @@ impl<'a, R: Reader> Read<R> {
             self.next_char();
         }
 
-        Some(Value::new_integer(abs_value * sign))
+        self.some_rooted(Value::new_integer(abs_value * sign))
     }
 
     /// Read a pair, with the leading '(' already taken from the input.
-    fn read_pair(&mut self) -> Option<Value> {
+    fn read_pair(&mut self) -> Option<RootedValue> {
         self.trim();
         match self.peek_char() {
             None      => return self.unexpected_eof(),
 
             Some(')') => {
                 self.next_char();
-                return Some(Value::EmptyList);
+                return self.some_rooted(Value::EmptyList);
             },
 
             _         => {
@@ -348,7 +358,7 @@ impl<'a, R: Reader> Read<R> {
                             return None;
                         }
 
-                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
+                        return Some(Value::new_pair(self.heap(), &car, &cdr));
                     },
 
                     // Proper list.
@@ -358,7 +368,7 @@ impl<'a, R: Reader> Read<R> {
                             Some(v) => v,
                         };
 
-                        return Some(Value::new_pair(self.ctx().heap(), car, cdr));
+                        return Some(Value::new_pair(self.heap(), &car, &cdr));
                     },
                 };
             },
@@ -366,7 +376,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read a string in from the input.
-    fn read_string(&mut self) -> Option<Value> {
+    fn read_string(&mut self) -> Option<RootedValue> {
         if self.expect_character('"').is_err() {
             return None;
         }
@@ -376,7 +386,7 @@ impl<'a, R: Reader> Read<R> {
         loop {
             match self.next_char() {
                 None       => return self.unterminated_string(),
-                Some('"')  => return Some(Value::new_string(self.ctx().heap(), str)),
+                Some('"')  => return Some(Value::new_string(self.heap(), str)),
                 Some('\\') => {
                     match self.next_char() {
                         Some('n')  => str.push('\n'),
@@ -394,7 +404,7 @@ impl<'a, R: Reader> Read<R> {
 
     /// Read a symbol in from the input. Optionally supply a prefix character
     /// that was already read from the symbol.
-    fn read_symbol(&mut self, prefix: Option<char>) -> Option<Value> {
+    fn read_symbol(&mut self, prefix: Option<char>) -> Option<RootedValue> {
         let mut str = String::new();
 
         if prefix.is_some() {
@@ -421,27 +431,27 @@ impl<'a, R: Reader> Read<R> {
             };
         }
 
-        return Some(self.ctx().get_or_create_symbol(str));
+        return Some(self.heap().get_or_create_symbol(str));
     }
 
     /// Read a quoted form from input, e.g. `'(1 2 3)`.
-    fn read_quoted(&mut self) -> Option<Value> {
+    fn read_quoted(&mut self) -> Option<RootedValue> {
         if self.expect_character('\'').is_err() {
             return None;
         }
 
         return match self.next() {
             None      => self.unexpected_eof(),
-            Some(val) => Some(list(self.ctx(), &mut [
-                self.ctx().get_or_create_symbol("quote".to_string()),
+            Some(val) => Some(list(self.heap(), &mut [
+                self.heap().get_or_create_symbol("quote".to_string()),
                 val
             ])),
         };
     }
 }
 
-impl<R: Reader> Iterator<Value> for Read<R> {
-    fn next(&mut self) -> Option<Value> {
+impl<R: Reader> Iterator<RootedValue> for Read<R> {
+    fn next(&mut self) -> Option<RootedValue> {
         if self.result.is_err() {
             return None;
         }
@@ -474,32 +484,34 @@ impl<R: Reader> Iterator<Value> for Read<R> {
 }
 
 /// Create a `Read` instance from a byte vector.
-pub fn read_from_bytes(bytes: Vec<u8>, ctx: *mut Context) -> Read<MemReader> {
-    Read::new(MemReader::new(bytes), ctx)
+pub fn read_from_bytes(bytes: Vec<u8>, heap: *mut Heap) -> Read<MemReader> {
+    Read::new(MemReader::new(bytes), heap)
 }
 
 /// Create a `Read` instance from a `String`.
-pub fn read_from_string(string: String, ctx: *mut Context) -> Read<MemReader> {
-    read_from_bytes(string.into_bytes(), ctx)
+pub fn read_from_string(string: String, heap: *mut Heap) -> Read<MemReader> {
+    read_from_bytes(string.into_bytes(), heap)
 }
 
 /// Create a `Read` instance from a `&str`.
-pub fn read_from_str(str: &str, ctx: *mut Context) -> Read<MemReader> {
-    read_from_string(str.to_string(), ctx)
+pub fn read_from_str(str: &str, heap: *mut Heap) -> Read<MemReader> {
+    read_from_string(str.to_string(), heap)
 }
 
 /// Create a `Read` instance from the file at `path_name`.
-pub fn read_from_file(path_name: &str, ctx: *mut Context) -> IoResult<Read<File>> {
+pub fn read_from_file(path_name: &str, heap: *mut Heap) -> IoResult<Read<File>> {
     let path = Path::new(path_name);
     let file = try!(File::open(&path));
-    Ok(Read::new(file, ctx))
+    Ok(Read::new(file, heap))
 }
 
 #[test]
 fn test_read_integers() {
     let input = "5 -5 789 -987";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_integer(5),
                              Value::new_integer(-5),
                              Value::new_integer(789),
@@ -509,8 +521,10 @@ fn test_read_integers() {
 #[test]
 fn test_read_booleans() {
     let input = "#t #f";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_boolean(true),
                              Value::new_boolean(false)))
 }
@@ -518,8 +532,10 @@ fn test_read_booleans() {
 #[test]
 fn test_read_characters() {
     let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results, vec!(Value::new_character('a'),
                              Value::new_character('0'),
                              Value::new_character('-'),
@@ -532,8 +548,10 @@ fn test_read_characters() {
 #[test]
 fn test_read_comments() {
     let input = "1 ;; this is a comment\n2";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let mut heap = Heap::new();
+    let results : Vec<Value> = read_from_str(input, &mut heap)
+        .map(|v| *v)
+        .collect();
 
     assert_eq!(results.len(), 2);
     assert_eq!(results, vec!(Value::new_integer(1),
@@ -543,100 +561,112 @@ fn test_read_comments() {
 #[test]
 fn test_read_pairs() {
     let input = "() (1 2 3) (1 (2) ((3)))";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 3);
 
     assert_eq!(results[0], Value::EmptyList);
 
     let v1 = &results[1];
-    assert_eq!(v1.car(),
-               Some(Value::new_integer(1)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .car(),
-               Some(Value::new_integer(2)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .cdr().expect("v1.cdr.cdr")
-                 .car(),
-               Some(Value::new_integer(3)));
-    assert_eq!(v1.cdr().expect("v1.cdr")
-                 .cdr().expect("v1.cdr.cdr")
-                 .cdr(),
-               Some(Value::EmptyList));
+    assert_eq!(v1.car(heap).expect("v1.car"),
+               Rooted::new(heap, Value::new_integer(1)));
+    assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                 .car(heap).expect("v1.cdr.car"),
+               Rooted::new(heap, Value::new_integer(2)));
+    assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                 .cdr(heap).expect("v1.cdr.cdr")
+                 .car(heap).expect("v1.cdr.cdr.car"),
+               Rooted::new(heap, Value::new_integer(3)));
+    assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                 .cdr(heap).expect("v1.cdr.cdr")
+                 .cdr(heap).expect("v1.cdr.cdr.cdr"),
+               Rooted::new(heap, Value::EmptyList));
 
     let v2 = &results[2];
-    assert_eq!(v2.car(),
-               Some(Value::new_integer(1)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car().expect("v2.cdr.car")
-                 .car(),
-               Some(Value::new_integer(2)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car().expect("v2.cdr.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .car().expect("v2.cdr.cdr.car.car")
-                 .car(),
-               Some(Value::new_integer(3)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .car().expect("v2.cdr.cdr.car.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .car().expect("v2.cdr.cdr.car")
-                 .cdr(),
-               Some(Value::EmptyList));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr().expect("v2.cdr.cdr")
-                 .cdr(),
-               Some(Value::EmptyList));
+    assert_eq!(v2.car(heap).expect("v2.car"),
+               Rooted::new(heap, Value::new_integer(1)));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .car(heap).expect("v2.cdr.car")
+                 .car(heap).expect("v2.cdr.car.car"),
+               Rooted::new(heap, Value::new_integer(2)));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .car(heap).expect("v2.cdr.car")
+                 .cdr(heap).expect("v2.cdr.car.cdr"),
+               Rooted::new(heap, Value::EmptyList));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .cdr(heap).expect("v2.cdr.cdr")
+                 .car(heap).expect("v2.cdr.cdr.car")
+                 .car(heap).expect("v2.cdr.cdr.car.car")
+                 .car(heap).expect("v2.cdr.cdr.car.car.car"),
+               Rooted::new(heap, Value::new_integer(3)));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .cdr(heap).expect("v2.cdr.cdr")
+                 .car(heap).expect("v2.cdr.cdr.car")
+                 .car(heap).expect("v2.cdr.cdr.car.car")
+                 .cdr(heap).expect("v2.cdr.cdr.car.car.cdr"),
+               Rooted::new(heap, Value::EmptyList));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .cdr(heap).expect("v2.cdr.cdr")
+                 .car(heap).expect("v2.cdr.cdr.car")
+                 .cdr(heap).expect("v2.cdr.cdr.car.cdr"),
+               Rooted::new(heap, Value::EmptyList));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .cdr(heap).expect("v2.cdr.cdr")
+                 .cdr(heap).expect("v2.cdr.cdr.cdr"),
+               Rooted::new(heap, Value::EmptyList));
 }
 
 #[test]
 fn test_read_improper_lists() {
     let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 4);
 
     let v0 = &results[0];
-    assert_eq!(v0.car(), Some(Value::new_integer(1)));
-    assert_eq!(v0.cdr(), Some(Value::new_integer(2)));
+    assert_eq!(v0.car(heap),
+               Some(Rooted::new(heap, Value::new_integer(1))));
+    assert_eq!(v0.cdr(heap),
+               Some(Rooted::new(heap, Value::new_integer(2))));
 
     let v1 = &results[1];
-    assert_eq!(v1.car(), Some(Value::new_integer(3)));
-    assert_eq!(v1.cdr(), Some(Value::EmptyList));
+    assert_eq!(v1.car(heap),
+               Some(Rooted::new(heap, Value::new_integer(3))));
+    assert_eq!(v1.cdr(heap),
+               Some(Rooted::new(heap, Value::EmptyList)));
 
     let v2 = &results[2];
-    assert_eq!(v2.car(), Some(Value::new_integer(4)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .car(),
-               Some(Value::new_integer(5)));
-    assert_eq!(v2.cdr().expect("v2.cdr")
-                 .cdr(),
-               Some(Value::new_integer(6)));
+    assert_eq!(v2.car(heap),
+               Some(Rooted::new(heap, Value::new_integer(4))));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .car(heap),
+               Some(Rooted::new(heap, Value::new_integer(5))));
+    assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                 .cdr(heap),
+               Some(Rooted::new(heap, Value::new_integer(6))));
 
     let v3 = &results[3];
-    assert_eq!(v3.car(), Some(Value::new_integer(1)));
-    assert_eq!(v3.cdr().expect("v3.cdr")
-                 .car(),
-              Some(Value::new_integer(2)));
-    assert_eq!(v3.cdr().expect("v3.cdr")
-                 .cdr(),
-              Some(Value::new_integer(3)));
+    assert_eq!(v3.car(heap),
+               Some(Rooted::new(heap, Value::new_integer(1))));
+    assert_eq!(v3.cdr(heap).expect("v3.cdr")
+                 .car(heap),
+              Some(Rooted::new(heap, Value::new_integer(2))));
+    assert_eq!(v3.cdr(heap).expect("v3.cdr")
+                 .cdr(heap),
+              Some(Rooted::new(heap, Value::new_integer(3))));
 }
 
 #[test]
 fn test_read_string() {
     let input = "\"\" \"hello\" \"\\\"\"";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 3);
 
     match results[0] {
@@ -658,8 +688,10 @@ fn test_read_string() {
 #[test]
 fn test_read_symbols() {
     let input = "foo + - * ? !";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 6);
 
     match results[0] {
@@ -696,8 +728,10 @@ fn test_read_symbols() {
 #[test]
 fn test_read_same_symbol() {
     let input = "foo foo";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 2);
 
     // We should only allocate one StringPtr and share it between both parses of
@@ -708,16 +742,23 @@ fn test_read_same_symbol() {
 #[test]
 fn test_read_quoted() {
     let input = "'foo";
-    let mut ctx = Context::new();
-    let results : Vec<Value> = read_from_str(input, &mut ctx).collect();
+    let heap = &mut Heap::new();
+    let results : Vec<Value> = read_from_str(input, heap)
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 1);
 
-    match results[0].car() {
+    let car = results[0].car(heap).map(|s| *s);
+    match car {
         Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
                                                "quote".to_string()),
         _                        => assert!(false),
     }
-    match results[0].cdr().expect("results[0].cdr").car() {
+
+    let cdar = results[0]
+        .cdr(heap).expect("results[0].cdr")
+        .car(heap).map(|s| *s);
+    match cdar {
         Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
                                                "foo".to_string()),
         _                        => assert!(false),
@@ -726,13 +767,16 @@ fn test_read_quoted() {
 
 #[test]
 fn test_read_from_file() {
-    let mut ctx = Context::new();
-    let reader = read_from_file("./tests/test_read_from_file.scm", &mut ctx)
+    let heap = &mut Heap::new();
+    let reader = read_from_file("./tests/test_read_from_file.scm", heap)
         .ok()
         .expect("Should be able to read from a file");
-    let results : Vec<Value> = reader.collect();
+    let results : Vec<Value> = reader
+        .map(|v| *v)
+        .collect();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].to_symbol().expect("Should be a symbol")
+    assert_eq!(results[0].to_symbol(heap).expect("Should be a symbol")
+                         .deref()
                          .deref()
                          .deref(),
                "hello".to_string());
