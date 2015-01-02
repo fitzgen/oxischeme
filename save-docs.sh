@@ -19,6 +19,7 @@ git st | grep "working directory clean" || {
 cargo doc
 
 TEMP_LOCATION="/tmp/oxischeme-docs"
+TEMP_INDEX_LOCATION="/tmp/oxischeme-index.html"
 
 rm -rf $TEMP_LOCATION
 mv target/doc $TEMP_LOCATION
@@ -29,11 +30,11 @@ git checkout gh-pages
 
 # Delete all the files, except index.html. They will be replaced by the new
 # versions.
+cp index.html $TEMP_INDEX_LOCATION
 git rm -rf .
-git reset HEAD index.html
-git checkout -- index.html
-
 mv $TEMP_LOCATION/* .
+mv $TEMP_INDEX_LOCATION index.html
+
 git add .
 git commit -m "Update docs to: ${message}"
 git push
