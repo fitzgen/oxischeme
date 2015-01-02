@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Trace` trait in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Trace">
+
+    <title>oxischeme::heap::Trace - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Arena.html'>Arena</a><a class='struct ' href='struct.ArenaPtr.html'>ArenaPtr</a><a class='struct ' href='struct.Heap.html'>Heap</a><a class='struct ' href='struct.Rooted.html'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html'>ToGcThing</a><a class='trait current' href='trait.Trace.html'>Trace</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content trait">
+<h1 class='fqn'><span class='in-band'>Trait <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='trait' href=''>Trace</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-3887' href='../../src/oxischeme/heap.rs.html#708-711'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait Trace {
+    fn <a href='#tymethod.trace' class='fnname'>trace</a>(&amp;self) -&gt; <a class='type' href='../../oxischeme/heap/type.IterGcThing.html' title='oxischeme::heap::IterGcThing'>IterGcThing</a>;
+}</pre><div class='docblock'><p>The <code>Trace</code> trait allows GC participants to inform the collector of their
+references to other GC things.</p>
+
+<p>For example, imagine we had a <code>Trio</code> type that contained three cons cells:</p>
+<pre class='rust '>
+<span class='kw'>struct</span> <span class='ident'>Trio</span> {
+    <span class='ident'>first</span>: <span class='ident'>ConsPtr</span>,
+    <span class='ident'>second</span>: <span class='ident'>ConsPtr</span>,
+    <span class='ident'>third</span>: <span class='ident'>ConsPtr</span>,
+}
+</pre>
+
+<p><code>Trio</code>&#39;s implementation of <code>Trace</code> must yield all of its cons pointers, or
+else their referents could be reclaimed by the garbage collector, and the
+<code>Trio</code> would have dangling pointers, leading to undefined behavior and bad
+things when it dereferences them in the future.</p>
+<pre class='rust '>
+<span class='kw'>impl</span> <span class='ident'>Trace</span> <span class='kw'>for</span> <span class='ident'>Trio</span> {
+    <span class='kw'>fn</span> <span class='ident'>trace</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>IterGcThing</span> {
+        <span class='kw'>let</span> <span class='ident'>refs</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>(<span class='ident'>GcThing</span>::<span class='ident'>from_cons_ptr</span>(<span class='self'>self</span>.<span class='ident'>first</span>),
+                        <span class='ident'>GcThing</span>::<span class='ident'>from_cons_ptr</span>(<span class='self'>self</span>.<span class='ident'>second</span>),
+                        <span class='ident'>GcThing</span>::<span class='ident'>from_cons_ptr</span>(<span class='self'>self</span>.<span class='ident'>third</span>));
+        <span class='ident'>refs</span>.<span class='ident'>into_iter</span>()
+    }
+}
+</pre>
+</div>
+            <h2 id='required-methods'>Required Methods</h2>
+            <div class='methods'>
+        <h3 id='tymethod.trace' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#tymethod.trace' class='fnname'>trace</a>(&amp;self) -&gt; <a class='type' href='../../oxischeme/heap/type.IterGcThing.html' title='oxischeme::heap::IterGcThing'>IterGcThing</a></code></h3><div class='docblock'><p>Return an iterable of all of the GC things referenced by this structure.</p>
+</div></div>
+        <h2 id='implementors'>Implementors</h2>
+        <ul class='item-list' id='implementors-list'>
+    <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.Trace.html' title='oxischeme::heap::Trace'>Trace</a> for <a class='struct' href='../../oxischeme/environment/struct.Environment.html' title='oxischeme::environment::Environment'>Environment</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.Trace.html' title='oxischeme::heap::Trace'>Trace</a> for <a class='enum' href='../../oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.Trace.html' title='oxischeme::heap::Trace'>Trace</a> for <a class='struct' href='../../oxischeme/value/struct.Cons.html' title='oxischeme::value::Cons'>Cons</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.Trace.html' title='oxischeme::heap::Trace'>Trace</a> for <a class='struct' href='../../oxischeme/value/struct.Procedure.html' title='oxischeme::value::Procedure'>Procedure</a></code></li>
+</ul><script type="text/javascript" async
+                              src="../../implementors/oxischeme/heap/trait.Trace.js">
+                      </script></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "oxischeme";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

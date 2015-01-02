@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Heap` struct in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Heap">
+
+    <title>oxischeme::heap::Heap - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Arena.html'>Arena</a><a class='struct ' href='struct.ArenaPtr.html'>ArenaPtr</a><a class='struct current' href='struct.Heap.html'>Heap</a><a class='struct ' href='struct.Rooted.html'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html'>ToGcThing</a><a class='trait ' href='trait.Trace.html'>Trace</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='struct' href=''>Heap</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-3062' href='../../src/oxischeme/heap.rs.html#394-403'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Heap {
+    // some fields omitted
+}</pre><div class='docblock'><p>The scheme heap and GC runtime, containing all allocated cons cells,
+environments, procedures, and strings (including strings for symbols).</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h3><div class='docblock'>
+<h2 id="heap-constructors" class='section-header'><a
+                           href="#heap-constructors"><code>Heap</code> Constructors</a></h2></div><div class='impl-items'><h4 id='method.new' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new' class='fnname'>new</a>() -&gt; <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h4>
+<div class='docblock'><p>Create a new <code>Heap</code> with the default capacity.</p>
+</div><h4 id='method.with_arenas' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.with_arenas' class='fnname'>with_arenas</a>(cons_cells: <a class='struct' href='http://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='struct' href='../../oxischeme/heap/struct.Arena.html' title='oxischeme::heap::Arena'>Arena</a>&lt;<a class='struct' href='../../oxischeme/value/struct.Cons.html' title='oxischeme::value::Cons'>Cons</a>&gt;&gt;, strings: <a class='struct' href='http://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='struct' href='../../oxischeme/heap/struct.Arena.html' title='oxischeme::heap::Arena'>Arena</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;&gt;, envs: <a class='struct' href='http://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='struct' href='../../oxischeme/heap/struct.Arena.html' title='oxischeme::heap::Arena'>Arena</a>&lt;<a class='struct' href='../../oxischeme/environment/struct.Environment.html' title='oxischeme::environment::Environment'>Environment</a>&gt;&gt;, procs: <a class='struct' href='http://doc.rust-lang.org/nightly/alloc/boxed/struct.Box.html' title='alloc::boxed::Box'>Box</a>&lt;<a class='struct' href='../../oxischeme/heap/struct.Arena.html' title='oxischeme::heap::Arena'>Arena</a>&lt;<a class='struct' href='../../oxischeme/value/struct.Procedure.html' title='oxischeme::value::Procedure'>Procedure</a>&gt;&gt;) -&gt; <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h4>
+<div class='docblock'><p>Create a new <code>Heap</code> using the given arenas for allocating cons cells and
+strings within.</p>
+</div></div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h3><div class='docblock'>
+<h2 id="heap-allocation-methods" class='section-header'><a
+                           href="#heap-allocation-methods"><code>Heap</code> Allocation Methods</a></h2></div><div class='impl-items'><h4 id='method.allocate_cons' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.allocate_cons' class='fnname'>allocate_cons</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedConsPtr.html' title='oxischeme::value::RootedConsPtr'>RootedConsPtr</a></code></h4>
+<div class='docblock'><p>Allocate a new cons cell and return a pointer to it.</p>
+
+<h2 id="panics" class='section-header'><a
+                           href="#panics">Panics</a></h2>
+<p>Panics if the <code>Arena</code> for cons cells has already reached capacity.</p>
+</div><h4 id='method.allocate_string' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.allocate_string' class='fnname'>allocate_string</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/heap/type.RootedStringPtr.html' title='oxischeme::heap::RootedStringPtr'>RootedStringPtr</a></code></h4>
+<div class='docblock'><p>Allocate a new string and return a pointer to it.</p>
+
+<h2 id="panics" class='section-header'><a
+                           href="#panics">Panics</a></h2>
+<p>Panics if the <code>Arena</code> for strings has already reached capacity.</p>
+</div><h4 id='method.allocate_environment' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.allocate_environment' class='fnname'>allocate_environment</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/environment/type.RootedEnvironmentPtr.html' title='oxischeme::environment::RootedEnvironmentPtr'>RootedEnvironmentPtr</a></code></h4>
+<div class='docblock'><p>Allocate a new <code>Environment</code> and return a pointer to it.</p>
+
+<h2 id="panics" class='section-header'><a
+                           href="#panics">Panics</a></h2>
+<p>Panics if the <code>Arena</code> for environments has already reached capacity.</p>
+</div><h4 id='method.allocate_procedure' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.allocate_procedure' class='fnname'>allocate_procedure</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedProcedurePtr.html' title='oxischeme::value::RootedProcedurePtr'>RootedProcedurePtr</a></code></h4>
+<div class='docblock'><p>Allocate a new <code>Procedure</code> and return a pointer to it.</p>
+
+<h2 id="panics" class='section-header'><a
+                           href="#panics">Panics</a></h2>
+<p>Panics if the <code>Arena</code> for environments has already reached capacity.</p>
+</div></div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h3><div class='docblock'>
+<h2 id="heap-methods-for-garbage-collection" class='section-header'><a
+                           href="#heap-methods-for-garbage-collection"><code>Heap</code> Methods for Garbage Collection</a></h2></div><div class='impl-items'><h4 id='method.collect_garbage' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.collect_garbage' class='fnname'>collect_garbage</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Perform a garbage collection on the heap.</p>
+</div><h4 id='method.add_root' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.add_root' class='fnname'>add_root</a>(&amp;mut self, root: <a class='enum' href='../../oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a>)</code></h4>
+<div class='docblock'><p>Explicitly add the given GC thing as a root.</p>
+</div><h4 id='method.drop_root' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.drop_root' class='fnname'>drop_root</a>(&amp;mut self, root: <a class='enum' href='../../oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a>)</code></h4>
+<div class='docblock'><p>Unroot a GC thing that was explicitly rooted with <code>add_root</code>.</p>
+</div><h4 id='method.increase_gc_pressure' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.increase_gc_pressure' class='fnname'>increase_gc_pressure</a>(&amp;mut self)</code></h4>
+<div class='docblock'><p>Apply pressure to the GC, and if enough pressure has built up, then
+perform a garbage collection.</p>
+</div></div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h3><div class='docblock'>
+<h2 id="heap-methods-and-accessors." class='section-header'><a
+                           href="#heap-methods-and-accessors."><code>Heap</code> Methods and Accessors.</a></h2></div><div class='impl-items'><h4 id='method.global_env' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.global_env' class='fnname'>global_env</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/environment/type.RootedEnvironmentPtr.html' title='oxischeme::environment::RootedEnvironmentPtr'>RootedEnvironmentPtr</a></code></h4>
+<div class='docblock'><p>Get the global environment.</p>
+</div><h4 id='method.get_or_create_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.get_or_create_symbol' class='fnname'>get_or_create_symbol</a>(&amp;mut self, str: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<div class='docblock'><p>Ensure that there is an interned symbol extant for the given <code>String</code>
+and return it.</p>
+</div></div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a></code></h3><div class='docblock'>
+<h2 id="getters-for-well-known-symbols." class='section-header'><a
+                           href="#getters-for-well-known-symbols.">Getters for well known symbols.</a></h2></div><div class='impl-items'><h4 id='method.quote_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.quote_symbol' class='fnname'>quote_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.if_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.if_symbol' class='fnname'>if_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.begin_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.begin_symbol' class='fnname'>begin_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.define_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.define_symbol' class='fnname'>define_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.set_bang_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.set_bang_symbol' class='fnname'>set_bang_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.unspecified_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.unspecified_symbol' class='fnname'>unspecified_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<h4 id='method.lambda_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.lambda_symbol' class='fnname'>lambda_symbol</a>(&amp;mut self) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "oxischeme";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

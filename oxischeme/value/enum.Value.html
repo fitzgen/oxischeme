@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Value` enum in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Value">
+
+    <title>oxischeme::value::Value - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Cons.html'>Cons</a><a class='struct ' href='struct.Primitive.html'>Primitive</a><a class='struct ' href='struct.Procedure.html'>Procedure</a></div><div class='block enum'><h2>Enums</h2><a class='enum current' href='enum.Value.html'>Value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.list.html'>list</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content enum">
+<h1 class='fqn'><span class='in-band'>Enum <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a>::<wbr><a class='enum' href=''>Value</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-9219' href='../../src/oxischeme/value.rs.html#221-251'>[src]</a></span></h1>
+<pre class='rust enum'>pub enum Value {
+    EmptyList,
+    Pair(<a class='type' href='../../oxischeme/value/type.ConsPtr.html' title='oxischeme::value::ConsPtr'>ConsPtr</a>),
+    String(<a class='type' href='../../oxischeme/heap/type.StringPtr.html' title='oxischeme::heap::StringPtr'>StringPtr</a>),
+    Symbol(<a class='type' href='../../oxischeme/heap/type.StringPtr.html' title='oxischeme::heap::StringPtr'>StringPtr</a>),
+    Integer(<a href='http://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>),
+    Boolean(<a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>),
+    Character(<a href='http://doc.rust-lang.org/nightly/core/primitive.char.html'>char</a>),
+    Procedure(<a class='type' href='../../oxischeme/value/type.ProcedurePtr.html' title='oxischeme::value::ProcedurePtr'>ProcedurePtr</a>),
+    Primitive(<a class='struct' href='../../oxischeme/value/struct.Primitive.html' title='oxischeme::value::Primitive'>Primitive</a>),
+}</pre><div class='docblock'><p><code>Value</code> represents a scheme value of any type.</p>
+
+<p>Note that <code>Eq</code> and <code>PartialEq</code> are object identity, not structural
+comparison, same as with <a href="struct.ArenaPtr.html"><code>ArenaPtr</code></a>.</p>
+</div><h2 class='variants'>Variants</h2>
+<table><tr><td id='variant.EmptyList'><a class='stability Unmarked' title='No stability level'></a><code>EmptyList</code></td><td><div class='docblock'><p>The empty list: <code>()</code>.</p>
+</div></td></tr><tr><td id='variant.Pair'><a class='stability Unmarked' title='No stability level'></a><code>Pair</code></td><td><div class='docblock'><p>The scheme pair type is a pointer to a GC-managed <code>Cons</code> cell.</p>
+</div></td></tr><tr><td id='variant.String'><a class='stability Unmarked' title='No stability level'></a><code>String</code></td><td><div class='docblock'><p>The scheme string type is a pointer to a GC-managed <code>String</code>.</p>
+</div></td></tr><tr><td id='variant.Symbol'><a class='stability Unmarked' title='No stability level'></a><code>Symbol</code></td><td><div class='docblock'><p>Scheme symbols are also implemented as a pointer to a GC-managed
+<code>String</code>.</p>
+</div></td></tr><tr><td id='variant.Integer'><a class='stability Unmarked' title='No stability level'></a><code>Integer</code></td><td><div class='docblock'><p>Scheme integers are represented as 64 bit integers.</p>
+</div></td></tr><tr><td id='variant.Boolean'><a class='stability Unmarked' title='No stability level'></a><code>Boolean</code></td><td><div class='docblock'><p>Scheme booleans are represented with <code>bool</code>.</p>
+</div></td></tr><tr><td id='variant.Character'><a class='stability Unmarked' title='No stability level'></a><code>Character</code></td><td><div class='docblock'><p>Scheme characters are <code>char</code>s.</p>
+</div></td></tr><tr><td id='variant.Procedure'><a class='stability Unmarked' title='No stability level'></a><code>Procedure</code></td><td><div class='docblock'><p>A user-defined Scheme procedure is a pointer to a GC-managed
+<code>Procedure</code>.</p>
+</div></td></tr><tr><td id='variant.Primitive'><a class='stability Unmarked' title='No stability level'></a><code>Primitive</code></td><td><div class='docblock'><p>A primitive Scheme procedure is just a pointer to a <code>Primitive</code> type
+function pointer.</p>
+</div></td></tr></table><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='docblock'>
+<h1 id="value-constructors" class='section-header'><a
+                           href="#value-constructors"><code>Value</code> Constructors</a></h1></div><div class='impl-items'><h4 id='method.new_integer' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_integer' class='fnname'>new_integer</a>(i: <a href='http://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
+<div class='docblock'><p>Create a new integer value.</p>
+</div><h4 id='method.new_boolean' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_boolean' class='fnname'>new_boolean</a>(b: <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
+<div class='docblock'><p>Create a new boolean value.</p>
+</div><h4 id='method.new_character' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_character' class='fnname'>new_character</a>(c: <a href='http://doc.rust-lang.org/nightly/core/primitive.char.html'>char</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
+<div class='docblock'><p>Create a new character value.</p>
+</div><h4 id='method.new_pair' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_pair' class='fnname'>new_pair</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, car: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, cdr: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<div class='docblock'><p>Create a new cons pair value with the given car and cdr.</p>
+</div><h4 id='method.new_procedure' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_procedure' class='fnname'>new_procedure</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, params: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, body: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, env: &amp;<a class='type' href='../../oxischeme/environment/type.RootedEnvironmentPtr.html' title='oxischeme::environment::RootedEnvironmentPtr'>RootedEnvironmentPtr</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<div class='docblock'><p>Create a new procedure with the given parameter list and body.</p>
+</div><h4 id='method.new_primitive' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_primitive' class='fnname'>new_primitive</a>(name: &amp;'static <a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>, function: <a class='type' href='../../oxischeme/primitives/type.PrimitiveFunction.html' title='oxischeme::primitives::PrimitiveFunction'>PrimitiveFunction</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
+<h4 id='method.new_string' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_string' class='fnname'>new_string</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, str: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<div class='docblock'><p>Create a new string value with the given string.</p>
+</div><h4 id='method.new_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_symbol' class='fnname'>new_symbol</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, str: <a class='type' href='../../oxischeme/heap/type.RootedStringPtr.html' title='oxischeme::heap::RootedStringPtr'>RootedStringPtr</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
+<div class='docblock'><p>Create a new symbol value with the given string.</p>
+</div></div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='docblock'>
+<h1 id="value-methods" class='section-header'><a
+                           href="#value-methods"><code>Value</code> Methods</a></h1></div><div class='impl-items'><h4 id='method.car' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.car' class='fnname'>car</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>&gt;</code></h4>
+<div class='docblock'><p>Assuming this value is a cons pair, get its car value. Otherwise, return
+<code>None</code>.</p>
+</div><h4 id='method.cdr' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.cdr' class='fnname'>cdr</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>&gt;</code></h4>
+<div class='docblock'><p>Assuming this value is a cons pair, get its cdr value. Otherwise, return
+<code>None</code>.</p>
+</div><h4 id='method.is_pair' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.is_pair' class='fnname'>is_pair</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<div class='docblock'><p>Return true if this value is a pair, false otherwise.</p>
+</div><h4 id='method.is_atom' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.is_atom' class='fnname'>is_atom</a>(&amp;self) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<div class='docblock'><p>Return true if this value is an atom, false otherwise.</p>
+</div><h4 id='method.to_symbol' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.to_symbol' class='fnname'>to_symbol</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='type' href='../../oxischeme/heap/type.RootedStringPtr.html' title='oxischeme::heap::RootedStringPtr'>RootedStringPtr</a>&gt;</code></h4>
+<div class='docblock'><p>Coerce this symbol value to a <code>StringPtr</code> to the symbol&#39;s string name.</p>
+</div><h4 id='method.to_pair' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.to_pair' class='fnname'>to_pair</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedConsPtr.html' title='oxischeme::value::RootedConsPtr'>RootedConsPtr</a>&gt;</code></h4>
+<div class='docblock'><p>Coerce this pair value to a <code>ConsPtr</code> to the cons cell this pair is
+referring to.</p>
+</div><h4 id='method.to_procedure' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.to_procedure' class='fnname'>to_procedure</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedProcedurePtr.html' title='oxischeme::value::RootedProcedurePtr'>RootedProcedurePtr</a>&gt;</code></h4>
+<div class='docblock'><p>Coerce this procedure value to a <code>ProcedurePtr</code> to the <code>Procedure</code> this
+value is referring to.</p>
+</div><h4 id='method.to_integer' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.to_integer' class='fnname'>to_integer</a>(&amp;self) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>&gt;</code></h4>
+<div class='docblock'><p>Coerce this integer value to its underlying <code>i64</code>.</p>
+</div><h4 id='method.len' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.len' class='fnname'>len</a>(&amp;self) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.u64.html'>u64</a>, <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Assuming that this value is a proper list, get the length of the list.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'><h4 id='method.to_gc_thing' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.to_gc_thing' class='fnname'>to_gc_thing</a>(&amp;self) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../../oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a>&gt;</code></h4>
+</div><h3 id='derived_implementations'>Derived Implementations </h3><h3 class='impl'><a class='stability Unstable' title='Unstable: I/O and core have yet to be reconciled'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Show.html' title='core::fmt::Show'>Show</a> for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><a class='stability Unstable' title='Unstable: I/O and core have yet to be reconciled'></a><code>fn <a href='#method.fmt' class='fnname'>fmt</a>(&amp;self, __arg_0: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div><h3 class='impl'><a class='stability Unstable' title='Unstable: Definition may change slightly after trait reform'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.PartialEq.html' title='core::cmp::PartialEq'>PartialEq</a> for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'><h4 id='method.eq' class='method'><a class='stability Unstable' title='Unstable: Definition may change slightly after trait reform'></a><code>fn <a href='#method.eq' class='fnname'>eq</a>(&amp;self, __arg_0: &amp;<a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+<h4 id='method.ne' class='method'><a class='stability Unstable' title='Unstable: Definition may change slightly after trait reform'></a><code>fn <a href='#method.ne' class='fnname'>ne</a>(&amp;self, __arg_0: &amp;<a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a>) -&gt; <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a></code></h4>
+</div><h3 class='impl'><a class='stability Experimental' title='Experimental'></a><code>impl&lt;__S: <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Writer.html' title='core::hash::Writer'>Writer</a>&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a>&lt;__S&gt; for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'><h4 id='method.hash' class='method'><a class='stability Experimental' title='Experimental'></a><code>fn <a href='#method.hash' class='fnname'>hash</a>(&amp;self, __arg_0: &amp;mut __S)</code></h4>
+</div><h3 class='impl'><a class='stability Unstable' title='Unstable: Definition may change slightly after trait reform'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/cmp/trait.Eq.html' title='core::cmp::Eq'>Eq</a> for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'><h4 id='method.assert_receiver_is_total_eq' class='tymethod'><a class='stability Unstable' title='Unstable: Definition may change slightly after trait reform'></a><code>fn <a href='#tymethod.assert_receiver_is_total_eq' class='fnname'>assert_receiver_is_total_eq</a>(&amp;self)</code></h4>
+</div><h3 class='impl'><a class='stability Experimental' title='Experimental'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/kinds/trait.Copy.html' title='core::kinds::Copy'>Copy</a> for <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h3><div class='impl-items'></div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "oxischeme";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

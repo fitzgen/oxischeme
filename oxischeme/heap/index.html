@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `heap` mod in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, heap">
+
+    <title>oxischeme::heap - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod current' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../print/index.html'>print</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content mod">
+<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>heap</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-2084' href='../../src/oxischeme/heap.rs.html#15-755'>[src]</a></span></h1>
+<div class='docblock'><p>The <code>heap</code> module provides memory management for our Scheme implementation.</p>
+
+<h2 id="allocation" class='section-header'><a
+                           href="#allocation">Allocation</a></h2>
+<p>Scheme has a variety of types that must be allocated on the heap: cons cells,
+strings, procedures, and vectors (currently unimplemented). Oxischeme&#39;s
+current allocation strategy is deliberately as simple as possible. We
+represent the heap as a set of &quot;arenas&quot;, one arena for each type that must be
+allocated on the heap. An &quot;arena&quot; is a pre-allocated vector of objects. We
+keep track of an arena&#39;s un-used objects with a &quot;free list&quot; of indices into
+its vector. When we allocate a new object, we remove an entry from the free
+list and return a pointer to the object at that entry&#39;s index. Garbage
+collection adds new entries to the free list when reclaiming dead
+objects. When allocating, if the arena&#39;s vector is already at capacity (ie,
+the free list is empty), we panic.</p>
+
+<h2 id="garbage-collection" class='section-header'><a
+                           href="#garbage-collection">Garbage Collection</a></h2>
+<p>Any type that is heap-allocated must be <em>garbage collected</em> so that the
+memory of no-longer used instances of that type can be reclaimed for
+reuse. This provides the illusion of infinite memory, and frees Scheme
+programmers from manually managing allocations and frees. We refer to
+GC-managed types as &quot;GC things&quot;. Note that a GC thing does not need to be a
+Scheme value type: environments are also managed by the GC, but are not a
+first class Scheme value.</p>
+
+<p>Any structure that has references to a garbage collected type must
+<em>participate in garbage collection</em> by telling the garbage collector about
+all of the GC things it is holding alive. Participation is implemented via
+the <code>Trace</code> trait. Note that the set of types that participate in garbage
+collection is not the same as the set of all GC things. Some GC things do not
+participate in garbage collection: strings do not hold references to any
+other GC things.</p>
+
+<p>A &quot;GC root&quot; is a GC participant that is always reachable. For example, the
+global environment is a root because global variables must always be
+accessible.</p>
+
+<p>We use a simple <em>mark and sweep</em> garbage collection algorithm. In the mark
+phase, we start from the roots and recursively trace every reachable object
+in the heap graph, adding them to our &quot;marked&quot; set. If a GC thing is not
+reachable, then it is impossible for the Scheme program to use it in the
+future, and it is safe for the garbage collector to reclaim it. The
+unreachable objects are the set of GC things that are not in the marked
+set. We find these unreachable objects and return them to their respective
+arena&#39;s free list in the sweep phase.</p>
+
+<h3 id="rooting" class='section-header'><a
+                           href="#rooting">Rooting</a></h3>
+<p>Sometimes it is necessary to temporarily root GC things referenced by
+pointers on the stack. Garbage collection can be triggered by allocating any
+GC thing, and it isn&#39;t always clear which rust functions (or other functions
+called by those functions, or even other functions called by those functions
+called from the first function, and so on) might allocate a GC thing and
+trigger collection. The situation we want to avoid is a rust function using a
+temporary variable that references a GC thing, then calling another function
+which triggers a collection and collects the GC thing that was referred to by
+the temporary variable, and the temporary variable is now a dangling
+pointer. If the rust function accesses it again, that is undefined behavior:
+it might still get the value it was pointing at, or it might be a segfault,
+or it might be a freshly allocated value used by something else! Not good!</p>
+
+<p>Here is what this scenario looks like in psuedo code:</p>
+<pre class='rust '>
+<span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>pointer_to_some_gc_thing</span>;
+<span class='ident'>function_which_can_trigger_gc</span>();
+<span class='comment'>// Oops! A collection was triggered and dereferencing this pointer leads</span>
+<span class='comment'>// to undefined behavior!</span>
+<span class='op'>*</span><span class='ident'>a</span>;
+</pre>
+
+<p>There are two possible solutions to this problem. The first is <em>conservative</em>
+garbage collection, where we walk the stack and if anything on the stack
+looks like it might be a pointer and if coerced to a pointer happens to point
+to a GC thing in the heap, we assume that it <em>is</em> a pointer and we consider
+the GC thing that may or may not actually be pointed to by a variable on the
+stack a GC root. The second is <em>precise rooting</em>. With precise rooting, it is
+the responsibility of the rust function&#39;s author to explicitly root and
+unroot pointers to GC things used in variables on the stack.</p>
+
+<p>Oxischeme uses precise rooting. Precise rooting is implemented with the
+<code>Rooted&lt;GcThingPtr&gt;</code> smart pointer type, which roots its referent upon
+construction and unroots it when the smart pointer goes out of scope and is
+dropped.</p>
+
+<p>Using precise rooting and <code>Rooted</code>, we can solve the dangling pointer
+problem like this:</p>
+<pre class='rust '>
+{
+    <span class='comment'>// The pointed to GC thing gets rooted when wrapped with `Rooted`.</span>
+    <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Rooted</span>::<span class='ident'>new</span>(<span class='ident'>heap</span>, <span class='ident'>pointer_to_some_gc_thing</span>);
+    <span class='ident'>function_which_can_trigger_gc</span>();
+    <span class='comment'>// Dereferencing `a` is now safe, because the referent is a GC root!</span>
+    <span class='op'>*</span><span class='ident'>a</span>;
+}
+<span class='comment'>// `a` goes out of scope, and its referent is unrooted.</span>
+</pre>
+
+<p>Tips for working with precise rooting if your function allocates GC things,
+or calls other functions which allocate GC things:</p>
+
+<ul>
+<li><p>Accept GC thing parameters as <code>&amp;Rooted&lt;T&gt;</code> or <code>&amp;mut Rooted&lt;T&gt;</code> to ensure
+that callers properly root them.</p></li>
+<li><p>Accept a <code>&amp;mut Heap</code> parameter and return <code>Rooted&lt;T&gt;</code> for getters and
+methods that return GC things. This greatly alleviates potential
+foot-guns, as a caller would have to explicitly unwrap the smart pointer
+and store that in a new variable to cause a dangling pointer. It also
+cuts down on <code>Rooted&lt;T&gt;</code> construction boiler plate.</p></li>
+<li><p>Always root GC things whose lifetime spans a call which could trigger a
+collection!</p></li>
+<li><p>When in doubt, Just Root It!</p></li>
+</ul>
+</div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
+<table>
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Arena.html'
+                               title='oxischeme::heap::Arena'>Arena</a></td>
+                        <td class='docblock short'><p>An arena from which to allocate <code>T</code> objects from.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.ArenaPtr.html'
+                               title='oxischeme::heap::ArenaPtr'>ArenaPtr</a></td>
+                        <td class='docblock short'><p>A pointer to a <code>T</code> instance in an arena.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Heap.html'
+                               title='oxischeme::heap::Heap'>Heap</a></td>
+                        <td class='docblock short'><p>The scheme heap and GC runtime, containing all allocated cons cells,
+environments, procedures, and strings (including strings for symbols).</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Rooted.html'
+                               title='oxischeme::heap::Rooted'>Rooted</a></td>
+                        <td class='docblock short'><p>A smart pointer wrapping the pointer type <code>T</code>. It keeps its referent rooted
+while the smart pointer is in scope to prevent dangling pointers caused by a
+garbage collection within the pointers lifespan. For more information see
+the module level documentation about rooting.</p>
+</td>
+                    </tr>
+                </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
+<table>
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='enum' href='enum.GcThing.html'
+                               title='oxischeme::heap::GcThing'>GcThing</a></td>
+                        <td class='docblock short'><p>The union of the various types that are GC things.</p>
+</td>
+                    </tr>
+                </table><h2 id='statics' class='section-header'><a href="#statics">Statics</a></h2>
+<table>
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_CONS_CAPACITY.html'
+                               title='oxischeme::heap::DEFAULT_CONS_CAPACITY'>DEFAULT_CONS_CAPACITY</a></td>
+                        <td class='docblock short'><p>The default capacity of cons cells.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_ENVIRONMENTS_CAPACITY.html'
+                               title='oxischeme::heap::DEFAULT_ENVIRONMENTS_CAPACITY'>DEFAULT_ENVIRONMENTS_CAPACITY</a></td>
+                        <td class='docblock short'><p>The default capacity of environments.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_PROCEDURES_CAPACITY.html'
+                               title='oxischeme::heap::DEFAULT_PROCEDURES_CAPACITY'>DEFAULT_PROCEDURES_CAPACITY</a></td>
+                        <td class='docblock short'><p>The default capacity of environments.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_STRINGS_CAPACITY.html'
+                               title='oxischeme::heap::DEFAULT_STRINGS_CAPACITY'>DEFAULT_STRINGS_CAPACITY</a></td>
+                        <td class='docblock short'><p>The default capacity of strings.</p>
+</td>
+                    </tr>
+                </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
+<table>
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='trait' href='trait.ToGcThing.html'
+                               title='oxischeme::heap::ToGcThing'>ToGcThing</a></td>
+                        <td class='docblock short'><p>A trait for types that can be coerced to a <code>GcThing</code>.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='trait' href='trait.Trace.html'
+                               title='oxischeme::heap::Trace'>Trace</a></td>
+                        <td class='docblock short'><p>The <code>Trace</code> trait allows GC participants to inform the collector of their
+references to other GC things.</p>
+</td>
+                    </tr>
+                </table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
+<table>
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.IterGcThing.html'
+                               title='oxischeme::heap::IterGcThing'>IterGcThing</a></td>
+                        <td class='docblock short'><p>An iterable of <code>GcThing</code>s.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.RootedStringPtr.html'
+                               title='oxischeme::heap::RootedStringPtr'>RootedStringPtr</a></td>
+                        <td class='docblock short'><p>A rooted pointer to a string on the heap.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.StringPtr.html'
+                               title='oxischeme::heap::StringPtr'>StringPtr</a></td>
+                        <td class='docblock short'><p>A pointer to a string on the heap.</p>
+</td>
+                    </tr>
+                </table></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "oxischeme";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>
