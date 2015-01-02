@@ -256,7 +256,7 @@ impl<T> DerefMut<T> for ArenaPtr<T> {
 
 impl<T> fmt::Show for ArenaPtr<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ArenaPtr({}, {})", self.arena.to_uint(), self.index)
+        write!(f, "ArenaPtr({}, {})", self.arena as uint, self.index)
     }
 }
 
@@ -265,7 +265,8 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
     /// comparison. In other words, it is equivalent to the scheme function
     /// `eq?`, not the scheme function `equal?`.
     fn eq(&self, other: &ArenaPtr<T>) -> bool {
-        self.index == other.index && self.arena.to_uint() == other.arena.to_uint()
+        self.index == other.index
+            && (self.arena as uint) == (other.arena as uint)
     }
 }
 
@@ -357,19 +358,12 @@ impl<T: Copy + ToGcThing> Clone for Rooted<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq<Self> for Rooted<T> {
+impl<T: PartialEq> PartialEq for Rooted<T> {
     fn eq(&self, rhs: &Self) -> bool {
         **self == **rhs
     }
 }
-impl<T: PartialEq + Eq> Eq<Self> for Rooted<T> { }
-
-impl<T: PartialEq> PartialEq<T> for Rooted<T> {
-    fn eq(&self, rhs: &T) -> bool {
-        **self == *rhs
-    }
-}
-impl<T: PartialEq + Eq> Eq<T> for Rooted<T> { }
+impl<T: PartialEq + Eq> Eq for Rooted<T> { }
 
 impl<T: fmt::Show> fmt::Show for Rooted<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
