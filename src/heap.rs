@@ -133,6 +133,7 @@ use std::ptr;
 use std::vec::{IntoIter};
 
 use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
+use primitives::{define_primitives};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
             RootedProcedurePtr, RootedValue, Value};
 
@@ -430,7 +431,8 @@ impl Heap {
                        envs: Box<Arena<Environment>>,
                        procs: Box<Arena<Procedure>>) -> Heap {
         let mut e = envs;
-        let global_env = e.allocate();
+        let mut global_env = e.allocate();
+        define_primitives(&mut global_env);
         Heap {
             cons_cells: cons_cells,
             strings: strings,

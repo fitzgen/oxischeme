@@ -21,6 +21,7 @@ use std::io;
 pub mod environment;
 pub mod eval;
 pub mod heap;
+pub mod primitives;
 pub mod print;
 pub mod read;
 pub mod value;

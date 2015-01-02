@@ -21,6 +21,7 @@ use std::hash;
 use environment::{EnvironmentPtr, RootedEnvironmentPtr};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
+use primitives::{PrimitiveFunction};
 
 /// A cons cell is a pair of `car` and `cdr` values. A list is one or more cons
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
@@ -178,7 +179,7 @@ pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 #[deriving(Copy)]
 pub struct Primitive {
     /// The function implementing the primitive.
-    function: fn(&mut Heap, &RootedValue) -> SchemeResult,
+    function: PrimitiveFunction,
     /// The name of the primitive.
     name: &'static str,
 }
@@ -288,6 +289,14 @@ impl Value {
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
+    pub fn new_primitive(name: &'static str,
+                         function: PrimitiveFunction) -> Value {
+        Value::Primitive(Primitive {
+            name: name,
+            function: function
+        })
+    }
+
     /// Create a new string value with the given string.
     pub fn new_string(heap: &mut Heap, str: String) -> RootedValue {
         let mut value = heap.allocate_string();
@@ -358,6 +367,14 @@ impl Value {
         match *self {
             Value::Procedure(p) => Some(Rooted::new(heap, p)),
             _                   => None,
+        }
+    }
+
+    /// Coerce this integer value to its underlying `i64`.
+    pub fn to_integer(&self) -> Option<i64> {
+        match *self {
+            Value::Integer(ref i) => Some(*i),
+            _                     => None,
         }
     }
 

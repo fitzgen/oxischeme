@@ -91,6 +91,11 @@ impl Environment {
         self.bindings.insert(sym, **val);
     }
 
+    /// Define a new variable bound to the given (unrooted) value.
+    pub fn define_unrooted(&mut self, sym: String, val: Value) {
+        self.bindings.insert(sym, val);
+    }
+
     /// Update an *existing* binding to be associated with the new value.
     pub fn update(&mut self, sym: String, val: &RootedValue) -> Result<(), String> {
         if !self.bindings.contains_key(&sym) {
