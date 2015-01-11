@@ -164,9 +164,9 @@ fn define_primitive(env: &mut Environment,
                     act: &mut ActivationPtr,
                     name: &'static str,
                     function: PrimitiveFunction) {
-    let (i, j) = env.define(name.to_string());
+    let (i, _) = env.define(name.to_string());
     assert!(i == 0, "All primitives should be defined on the global activation");
-    act.push_primitive(j, Value::new_primitive(name, function));
+    act.push_value(Value::new_primitive(name, function));
 }
 
 pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
@@ -185,6 +185,8 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
     define_primitive(env, act, "/", divide);
     define_primitive(env, act, "*", multiply);
 }
+
+// TESTS -----------------------------------------------------------------------
 
 #[test]
 fn test_primitives_cons() {

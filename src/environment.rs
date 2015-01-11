@@ -87,11 +87,7 @@ impl Activation {
     }
 
     /// TODO FITZGEN
-    pub fn push_primitive(&mut self, j: u32, val: Value) {
-        assert!(self.parent.is_none(),
-                "Can only define primitives on the top level, global activation");
-        assert!(self.args.len() == j as uint,
-                "Can only define primitives by pushing them to the args vector");
+    pub fn push_value(&mut self, val: Value) {
         self.args.push(val);
     }
 }

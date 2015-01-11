@@ -14,6 +14,8 @@
 
 //! TODO FITZGEN
 
+use std::fmt;
+
 use environment::{RootedActivationPtr};
 use heap::{Heap, Rooted};
 use value::{RootedValue, SchemeResult, Value};
@@ -41,6 +43,7 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
 }
 
 /// TODO FITZGEN
+#[deriving(Show)]
 pub enum Trampoline {
     Value(RootedValue),
     Thunk(Meaning),
@@ -50,11 +53,12 @@ pub enum Trampoline {
 pub type TrampolineResult = Result<Trampoline, String>;
 
 /// TODO FITZGEN
-#[deriving(Clone)]
+#[deriving(Clone, Show)]
 enum MeaningData {
     /// TODO FITZGEN
     Quotation(RootedValue),
     Reference(u32, u32),
+    Definition(Meaning),
     SetVariable(u32, u32, Meaning),
     Conditional(Meaning, Meaning, Meaning),
     Sequence(Meaning, Meaning),
@@ -66,20 +70,19 @@ pub type MeaningEvaluatorFn = fn(&mut Heap,
                                  &mut RootedActivationPtr)
     -> TrampolineResult;
 
-#[allow(unused_variables)]
-fn meaning_quotation_function(_: &mut Heap,
-                              data: &MeaningData,
-                              act: &mut RootedActivationPtr) -> TrampolineResult {
+fn evaluate_quotation(heap: &mut Heap,
+                      data: &MeaningData,
+                      act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Quotation(ref val) = *data {
-        return Ok(Trampoline::Value((*val).clone()));
+        return Ok(Trampoline::Value(Rooted::new(heap, **val)));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
-fn meaning_reference_function(heap: &mut Heap,
-                              data: &MeaningData,
-                              act: &mut RootedActivationPtr) -> TrampolineResult {
+fn evaluate_reference(heap: &mut Heap,
+                      data: &MeaningData,
+                      act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Reference(i, j) = *data {
         return Ok(Trampoline::Value(act.fetch(heap, i, j)));
     }
@@ -87,9 +90,21 @@ fn meaning_reference_function(heap: &mut Heap,
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
-fn meaning_set_variable(heap: &mut Heap,
-                        data: &MeaningData,
-                        act: &mut RootedActivationPtr) -> TrampolineResult {
+fn evaluate_definition(heap: &mut Heap,
+                       data: &MeaningData,
+                       act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Definition(ref definition_value_meaning) = *data {
+        let val = try!(definition_value_meaning.evaluate(heap, act));
+        act.push_value(*val);
+        return Ok(Trampoline::Value(heap.unspecified_symbol()));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+fn evaluate_set_variable(heap: &mut Heap,
+                         data: &MeaningData,
+                         act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::SetVariable(i, j, ref definition_value_meaning) = *data {
         let val = try!(definition_value_meaning.evaluate(heap, act));
         act.update(heap, i, j, &val);
@@ -99,9 +114,9 @@ fn meaning_set_variable(heap: &mut Heap,
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
-fn meaning_conditional(heap: &mut Heap,
-                       data: &MeaningData,
-                       act: &mut RootedActivationPtr) -> TrampolineResult {
+fn evaluate_conditional(heap: &mut Heap,
+                        data: &MeaningData,
+                        act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Conditional(ref condition,
                                     ref consequent,
                                     ref alternative) = *data {
@@ -116,9 +131,9 @@ fn meaning_conditional(heap: &mut Heap,
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
-fn meaning_sequence(heap: &mut Heap,
-                    data: &MeaningData,
-                    act: &mut RootedActivationPtr) -> TrampolineResult {
+fn evaluate_sequence(heap: &mut Heap,
+                     data: &MeaningData,
+                     act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Sequence(ref first, ref second) = *data {
         try!(first.evaluate(heap, act));
         return Ok(Trampoline::Thunk(second.clone()));
@@ -139,7 +154,7 @@ impl Meaning {
     fn new_quotation(form: &RootedValue) -> Meaning {
         Meaning {
             data: box MeaningData::Quotation((*form).clone()),
-            evaluator: meaning_quotation_function,
+            evaluator: evaluate_quotation,
         }
     }
 
@@ -147,7 +162,7 @@ impl Meaning {
     fn new_reference(i: u32, j: u32) -> Meaning {
         Meaning {
             data: box MeaningData::Reference(i, j),
-            evaluator: meaning_reference_function,
+            evaluator: evaluate_reference,
         }
     }
 
@@ -155,7 +170,7 @@ impl Meaning {
     fn new_set_variable(i: u32, j: u32, val: Meaning) -> Meaning {
         Meaning {
             data: box MeaningData::SetVariable(i, j, val),
-            evaluator: meaning_set_variable,
+            evaluator: evaluate_set_variable,
         }
     }
 
@@ -167,7 +182,7 @@ impl Meaning {
             data: box MeaningData::Conditional(condition,
                                                consquent,
                                                alternative),
-            evaluator: meaning_conditional,
+            evaluator: evaluate_conditional,
         }
     }
 
@@ -175,16 +190,15 @@ impl Meaning {
     fn new_sequence(first: Meaning, second: Meaning) -> Meaning {
         Meaning {
             data: box MeaningData::Sequence(first, second),
-            evaluator: meaning_sequence,
+            evaluator: evaluate_sequence,
         }
     }
-}
 
-impl Clone for Meaning {
-    fn clone(&self) -> Self {
+    /// TODO FITZGEN
+    fn new_definition(defined: Meaning) -> Meaning {
         Meaning {
-            data: box self.data.deref().clone(),
-            evaluator: self.evaluator,
+            data: box MeaningData::Definition(defined),
+            evaluator: evaluate_definition,
         }
     }
 }
@@ -204,13 +218,30 @@ impl Meaning {
                 act: &mut RootedActivationPtr) -> SchemeResult {
         let mut trampoline = try!(self.evaluate_to_thunk(heap, act));
         loop {
-            match trampoline {
+            trampoline = match trampoline {
                 Trampoline::Value(v) => { return Ok(v); },
                 Trampoline::Thunk(m) => {
-                    trampoline = try!(m.evaluate_to_thunk(heap, act));
+                    try!(m.evaluate_to_thunk(heap, act))
                 }
             }
         }
+    }
+}
+
+impl Clone for Meaning {
+    fn clone(&self) -> Self {
+        Meaning {
+            data: box self.data.deref().clone(),
+            evaluator: self.evaluator,
+        }
+    }
+}
+
+impl fmt::Show for Meaning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Meaning(data: {}, evaluator: {})",
+               self.data,
+               self.evaluator as uint)
     }
 }
 
@@ -270,6 +301,8 @@ fn analyze_atom(heap: &mut Heap,
             return Ok(Meaning::new_reference(i, j));
         }
 
+        // TODO FITZGEN: add to global environment. At runtime, ensure it is
+        // defined before accessing or else error.
         return Err(format!("Static error: reference to unknown variable: {}",
                            **sym));
     }
@@ -299,8 +332,15 @@ fn analyze_definition(heap: &mut Heap,
         if let Some(str) = sym.to_symbol(heap) {
             let def_value_form = try!(pair.caddr(heap));
             let def_value_meaning = try!(analyze(heap, &def_value_form));
-            let (i, j) = heap.environment.define((**str).clone());
-            return Ok(Meaning::new_set_variable(i, j, def_value_meaning));
+
+            if let Some((0, j)) = heap.environment.lookup(&**str) {
+                // The variable is already defined in this scope, just overwrite
+                // it.
+                return Ok(Meaning::new_set_variable(0, j, def_value_meaning));
+            } else {
+                heap.environment.define((**str).clone());
+                return Ok(Meaning::new_definition(def_value_meaning));
+            }
         }
 
         return Err("Static error: can only define symbols".to_string());
@@ -323,6 +363,10 @@ fn analyze_set(heap: &mut Heap,
             if let Some((i, j)) = heap.environment.lookup(&**str) {
                 return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
             }
+
+            // TODO FITZGEN: should add the global variable here, but mark it
+            // undefined. Generate a meaning that ensures it is defined before
+            // setting.
             return Err(format!(
                 "Static error: cannot set! undefined variable: {}",
                 *str));
@@ -395,4 +439,128 @@ fn analyze_sequence(heap: &mut Heap,
 fn analyze_invocation(heap: &mut Heap,
                       form: &RootedValue) -> MeaningResult {
     return Err("TODO FITZGEN".to_string());
+}
+
+// TESTS -----------------------------------------------------------------------
+
+#[test]
+fn test_eval_integer() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_integer.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(42));
+}
+
+#[test]
+fn test_eval_boolean() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_boolean.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_boolean(true));
+}
+
+#[test]
+fn test_eval_quoted() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_quoted.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::EmptyList);
+}
+
+#[test]
+fn test_eval_if_consequent() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_if_consequent.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
+}
+
+#[test]
+fn test_eval_if_alternative() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_if_alternative.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
+}
+
+#[test]
+fn test_eval_begin() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_begin.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
+}
+
+#[test]
+fn test_eval_variables() {
+    use value::list;
+
+    let heap = &mut Heap::new();
+
+    let define_symbol = heap.define_symbol();
+    let set_bang_symbol = heap.set_bang_symbol();
+    let foo_symbol = heap.get_or_create_symbol("foo".to_string());
+
+    let mut def_items = [
+        define_symbol,
+        foo_symbol,
+        Rooted::new(heap, Value::new_integer(2))
+    ];
+    let def_form = list(heap, &mut def_items);
+    evaluate(heap, &def_form).ok()
+        .expect("Should be able to define");
+
+    let foo_symbol_ = heap.get_or_create_symbol("foo".to_string());
+
+    let def_val = evaluate(heap, &foo_symbol_).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(*def_val, Value::new_integer(2));
+
+    let mut set_items = [
+        set_bang_symbol,
+        foo_symbol_,
+        Rooted::new(heap, Value::new_integer(1))
+    ];
+    let set_form = list(heap, &mut set_items);
+    evaluate(heap, &set_form).ok()
+        .expect("Should be able to define");
+
+    let foo_symbol__ = heap.get_or_create_symbol("foo".to_string());
+
+    let set_val = evaluate(heap, &foo_symbol__).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(*set_val, Value::new_integer(1));
+}
+
+#[test]
+fn test_eval_and_call_lambda() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_and_call_lambda.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(5));
+}
+
+#[test]
+fn test_eval_closures() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
+}
+
+#[test]
+fn test_ref_defined_later() {
+    let mut heap = Heap::new();
+    let result = evaluate_file( &mut heap, "./tests/test_ref_defined_later.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
 }

@@ -505,6 +505,8 @@ pub fn read_from_file(path_name: &str, heap: *mut Heap) -> IoResult<Read<File>> 
     Ok(Read::new(file, heap))
 }
 
+// TESTS -----------------------------------------------------------------------
+
 #[test]
 fn test_read_integers() {
     let input = "5 -5 789 -987";
