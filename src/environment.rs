@@ -12,163 +12,183 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The implementation of the Scheme environment that binds symbols to values.
+//! The implementation of the Scheme environment binding symbols to values.
+//!
+//! This is split into two pieces:
+//!
+//! 1. The `Environment` associates symbols with a concrete location. This is
+//! used during the syntactic analysis.
+//!
+//! 2. `Activation`s are those concrete locations at runtime, and contain just
+//! the values passed in at function invocation. After syntactic analysis, we
+//! only deal with activations, and we no longer need the symbols or the
+//! `Environment`.
 
 use std::collections::{HashMap};
 use std::default::{Default};
 use std::hash;
 
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, ToGcThing, Trace};
-use value::{SchemeResult, Value, RootedValue};
+use value::{Value, RootedValue};
 
-/// The `Environment` associates symbols with values.
-pub struct Environment {
-    parent: Option<EnvironmentPtr>,
-    bindings: HashMap<String, Value>
+/// An `Activation` represents the values extending the lexical environment on
+/// each function invocation.
+pub struct Activation {
+    /// TODO FITZGEN
+    parent: Option<ActivationPtr>,
+    /// TODO FITZGEN
+    args: Vec<Value>,
 }
 
-impl Environment {
-    /// Extend the given environment with the names and associated values
-    /// supplied, resulting in a new environment.
+impl Activation {
+    /// Extend the given `Activation` with the values supplied, resulting in a
+    /// new `Activation` instance.
     pub fn extend(heap: &mut Heap,
-                  parent: &RootedEnvironmentPtr,
-                  names: &RootedValue,
-                  values: &RootedValue) -> Result<RootedEnvironmentPtr, String> {
-        let mut env = heap.allocate_environment();
-        env.set_parent(parent);
+                  parent: &RootedActivationPtr,
+                  values: &RootedValue) -> Result<RootedActivationPtr, String> {
+        let mut act = heap.allocate_activation();
+        act.parent = Some(**parent);
 
-        let names_len = try!(names.len().ok().ok_or(
-            "Improperly formed parameters".to_string()));
         let values_len = try!(values.len().ok().ok_or(
             "Improperly formed values".to_string()));
 
-        if names_len > values_len {
-            return Err("Not enough values".to_string());
-        } else if names_len < values_len {
-            return Err("Too many values".to_string());
+        act.args = Vec::with_capacity(values_len as uint);
+        // TODO FITZGEN: fill args
+        return Ok(act);
+    }
+
+    /// TODO FITZGEN
+    pub fn fetch(&self, heap: &mut Heap, i: u32, j: u32) -> RootedValue {
+        if i == 0 {
+            debug_assert!(j < self.args.len() as u32,
+                          "Activation::fetch: j out of bounds: j = {}, activation length = {}",
+                          j,
+                          self.args.len());
+            return Rooted::new(heap, self.args[j as uint]);
         }
 
-        let mut names_ = names.clone();
-        let mut values_ = values.clone();
-        loop {
-            let n = *names_;
-            match n {
-                Value::EmptyList  => {
-                    return Ok(env);
-                },
-                Value::Pair(ref cons) => {
-                    let sym = try!(cons.car(heap).to_symbol(heap).ok_or(
-                        "Can't extend environment with non-symbol".to_string()));
-                    let val = values_.car(heap).expect(
-                        "Already verified that names.len() == values.len()");
-                    env.define((**sym).clone(), &val);
-
-                    names_.emplace(*cons.cdr(heap));
-
-                    let next_val = values_.cdr(heap).expect(
-                        "Already verified that names.len() == values.len()");
-                    values_.emplace(*next_val);
-                },
-                _                 => {
-                    return Err(
-                        "Can't extend environment with improper list".to_string());
-                }
-            }
-        }
+        return self.parent.expect("Activation::fetch: i out of bounds")
+            .fetch(heap, i - 1, j);
     }
 
-    /// Set the parent of this environment. When looking up bindings, if this
-    /// environment doesn't have the target binding, and this environment has a
-    /// parent environment, we will recurse to the parent and do a lookup in
-    /// that environment, and so on until either there are no more environments
-    /// or we find the binding.
-    pub fn set_parent(&mut self, parent: &RootedEnvironmentPtr) {
-        self.parent = Some(**parent);
-    }
-
-    /// Define a new variable bound to the given value.
-    pub fn define(&mut self, sym: String, val: &RootedValue) {
-        self.bindings.insert(sym, **val);
-    }
-
-    /// Define a new variable bound to the given (unrooted) value.
-    pub fn define_unrooted(&mut self, sym: String, val: Value) {
-        self.bindings.insert(sym, val);
-    }
-
-    /// Update an *existing* binding to be associated with the new value.
-    pub fn update(&mut self, sym: String, val: &RootedValue) -> Result<(), String> {
-        if !self.bindings.contains_key(&sym) {
-            let mut parent_env = try!(self.parent.ok_or(
-                "Cannot set variable before its definition".to_string()));
-            return parent_env.update(sym, val);
+    /// TODO FITZGEN
+    pub fn update(&mut self, heap: &mut Heap, i: u32, j: u32, val: &RootedValue) {
+        if i == 0 {
+            debug_assert!(j < self.args.len() as u32,
+                          "Activation::update: j out of bounds: j = {}, activation length = {}",
+                          j,
+                          self.args.len());
+            self.args[j as uint] = **val;
+            return;
         }
 
-        self.bindings.insert(sym, **val);
-        return Ok(());
+        return self.parent.expect("Activation::update: i out of bounds")
+            .update(heap, i - 1, j, val);
     }
 
-    /// Lookup the value associated with the given symbol.
-    pub fn lookup(&self, heap: &mut Heap, sym: &String) -> SchemeResult {
-        if !self.bindings.contains_key(sym) {
-            match self.parent {
-                Some(env) => return env.lookup(heap, sym),
-                _         => return Err(format!(
-                    "Reference to undefined identifier: {}", sym)),
-            };
-        }
-
-        let val = self.bindings.get(sym).expect(
-            "self.bindings.contains(&sym), so we have to have the value.");
-        return Ok(Rooted::new(heap, *val));
+    /// TODO FITZGEN
+    pub fn push_primitive(&mut self, j: u32, val: Value) {
+        assert!(self.parent.is_none(),
+                "Can only define primitives on the top level, global activation");
+        assert!(self.args.len() == j as uint,
+                "Can only define primitives by pushing them to the args vector");
+        self.args.push(val);
     }
 }
 
-impl<S: hash::Writer> hash::Hash<S> for Environment {
+impl<S: hash::Writer> hash::Hash<S> for Activation {
     fn hash(&self, state: &mut S) {
         self.parent.hash(state);
-        for (k, v) in self.bindings.iter() {
-            k.hash(state);
+        for v in self.args.iter() {
             v.hash(state);
         }
     }
 }
 
-impl Default for Environment {
-    fn default() -> Environment {
-        Environment {
+impl Default for Activation {
+    fn default() -> Activation {
+        Activation {
             parent: None,
-            bindings: HashMap::new()
+            args: vec!(),
         }
     }
 }
 
-impl Trace for Environment {
+impl Trace for Activation {
     fn trace(&self) -> IterGcThing {
-        let mut results = vec!();
-
-        for val in self.bindings.values() {
-            if let Some(gc_thing) = val.to_gc_thing() {
-                results.push(gc_thing);
-            }
-        }
+        let mut results: Vec<GcThing> = self.args.iter()
+            .filter_map(|v| v.to_gc_thing())
+            .collect();
 
         if let Some(parent) = self.parent {
-            results.push(GcThing::from_environment_ptr(parent));
+            results.push(GcThing::from_activation_ptr(parent));
         }
 
         results.into_iter()
     }
 }
 
-/// A pointer to an `Environment` on the heap.
-pub type EnvironmentPtr = ArenaPtr<Environment>;
+/// A pointer to an `Activation` on the heap.
+pub type ActivationPtr = ArenaPtr<Activation>;
 
-impl ToGcThing for EnvironmentPtr {
+impl ToGcThing for ActivationPtr {
     fn to_gc_thing(&self) -> Option<GcThing> {
-        Some(GcThing::from_environment_ptr(*self))
+        Some(GcThing::from_activation_ptr(*self))
     }
 }
 
-/// A rooted pointer to an `Environment` on the heap.
-pub type RootedEnvironmentPtr = Rooted<EnvironmentPtr>;
+/// A rooted pointer to an `Activation` on the heap.
+pub type RootedActivationPtr = Rooted<ActivationPtr>;
+
+/// TODO FITZGEN
+pub struct Environment {
+    /// TODO FITZGEN
+    parent: Option<Box<Environment>>,
+    /// TODO FITZGEN
+    bindings: HashMap<String, u32>,
+    /// TODO FITZGEN
+    depth: u32,
+}
+
+impl Environment {
+    /// TODO FITZGEN
+    pub fn new() -> Environment {
+        Environment {
+            parent: None,
+            bindings: HashMap::new(),
+            depth: 0,
+        }
+    }
+
+    /// TODO FITZGEN
+    // pub fn extend() -> Environment {
+    // }
+
+    /// TODO FITZGEN
+    pub fn define(&mut self, name: String) -> (u32, u32) {
+        if let Some(n) = self.bindings.get(&name) {
+            return (self.depth, *n);
+        }
+
+        let n = self.bindings.len() as u32;
+        self.bindings.insert(name, n);
+        return (self.depth, n);
+    }
+
+    /// TODO FITZGEN
+    pub fn lookup(&self, name: &String) -> Option<(u32, u32)> {
+        self.lookup_helper(0, name)
+    }
+
+    fn lookup_helper(&self, i: u32, name: &String) -> Option<(u32, u32)> {
+        if let Some(j) = self.bindings.get(name) {
+            let coords = (i, *j);
+            return Some(coords);
+        }
+
+        return match self.parent {
+            None             => None,
+            Some(ref parent) => parent.lookup_helper(i + 1, name),
+        }
+    }
+}

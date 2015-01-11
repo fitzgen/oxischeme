@@ -14,7 +14,7 @@
 
 //! Implementation of primitive procedures.
 
-use environment::{EnvironmentPtr};
+use environment::{ActivationPtr, Environment};
 use heap::{Heap, Rooted};
 use value::{RootedValue, SchemeResult, Value};
 
@@ -160,27 +160,30 @@ fn multiply(heap: &mut Heap, args: &RootedValue) -> SchemeResult {
     return Ok(Rooted::new(heap, Value::new_integer(a * b)));
 }
 
-fn define_primitive(env: &mut EnvironmentPtr,
+fn define_primitive(env: &mut Environment,
+                    act: &mut ActivationPtr,
                     name: &'static str,
                     function: PrimitiveFunction) {
-    env.define_unrooted(name.to_string(), Value::new_primitive(name, function));
+    let (i, j) = env.define(name.to_string());
+    assert!(i == 0, "All primitives should be defined on the global activation");
+    act.push_primitive(j, Value::new_primitive(name, function));
 }
 
-pub fn define_primitives(env: &mut EnvironmentPtr) {
-    define_primitive(env, "cons", cons);
-    define_primitive(env, "car", car);
-    define_primitive(env, "cdr", cdr);
-    define_primitive(env, "list", list);
+pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
+    define_primitive(env, act, "cons", cons);
+    define_primitive(env, act, "car", car);
+    define_primitive(env, act, "cdr", cdr);
+    define_primitive(env, act, "list", list);
 
-    define_primitive(env, "null?", null_question);
-    define_primitive(env, "pair?", pair_question);
-    define_primitive(env, "atom?", atom_question);
-    define_primitive(env, "eq?", eq_question);
+    define_primitive(env, act, "null?", null_question);
+    define_primitive(env, act, "pair?", pair_question);
+    define_primitive(env, act, "atom?", atom_question);
+    define_primitive(env, act, "eq?", eq_question);
 
-    define_primitive(env, "+", add);
-    define_primitive(env, "-", subtract);
-    define_primitive(env, "/", divide);
-    define_primitive(env, "*", multiply);
+    define_primitive(env, act, "+", add);
+    define_primitive(env, act, "-", subtract);
+    define_primitive(env, act, "/", divide);
+    define_primitive(env, act, "*", multiply);
 }
 
 #[test]

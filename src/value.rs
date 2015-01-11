@@ -18,7 +18,7 @@ use std::default::{Default};
 use std::fmt;
 use std::hash;
 
-use environment::{EnvironmentPtr, RootedEnvironmentPtr};
+use environment::{ActivationPtr, RootedActivationPtr};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
 use primitives::{PrimitiveFunction};
@@ -94,55 +94,19 @@ impl ToGcThing for ConsPtr {
 /// A rooted pointer to a cons cell on the heap.
 pub type RootedConsPtr = Rooted<ConsPtr>;
 
-/// Procedures are represented by their parameter list, body, and a pointer to
-/// their definition environment.
+/// User defined procedures are represented by their body and a pointer to the
+/// activation that they were defined within.
 #[deriving(Copy, Hash)]
 pub struct Procedure {
-    params: Value,
-    body: Value,
-    env: EnvironmentPtr,
-}
-
-impl Procedure {
-    /// Get this procedure's parameters.
-    pub fn get_params(&self, heap: &mut Heap) -> RootedValue {
-        Rooted::new(heap, self.params)
-    }
-
-    /// Get this procedure's body.
-    pub fn get_body(&self, heap: &mut Heap) -> RootedValue {
-        Rooted::new(heap, self.body)
-    }
-
-    /// Get this procedure's environment.
-    pub fn get_env(&self, heap: &mut Heap) -> RootedEnvironmentPtr {
-        Rooted::new(heap, self.env)
-    }
-
-    /// Set this procedure's parameters.
-    pub fn set_params(&mut self, params: &RootedValue) {
-        self.params = **params;
-    }
-
-    /// Set this procedure's body.
-    pub fn set_body(&mut self, body: &RootedValue) {
-        self.body = **body;
-    }
-
-    /// Set this procedure's environment.
-    pub fn set_env(&mut self, env: &RootedEnvironmentPtr) {
-        self.env = **env;
-    }
+    pub body: Value,
+    pub act: ActivationPtr,
 }
 
 impl Default for Procedure {
-    /// Do not use this method, instead allocate procedures on the heap with
-    /// `Heap::allocate_procedure` and get back a `ProcedurePtr`.
     fn default() -> Procedure {
         Procedure {
-            params: Value::EmptyList,
             body: Value::EmptyList,
-            env: ArenaPtr::null(),
+            act: ArenaPtr::null(),
         }
     }
 }
@@ -151,15 +115,11 @@ impl Trace for Procedure {
     fn trace(&self) -> IterGcThing {
         let mut results = vec!();
 
-        if let Some(params) = self.params.to_gc_thing() {
-            results.push(params);
-        }
-
         if let Some(body) = self.body.to_gc_thing() {
             results.push(body);
         }
 
-        results.push(GcThing::from_environment_ptr(self.env));
+        results.push(GcThing::from_activation_ptr(self.act));
         results.into_iter()
     }
 }
@@ -279,13 +239,11 @@ impl Value {
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
-                         params: &RootedValue,
                          body: &RootedValue,
-                         env: &RootedEnvironmentPtr) -> RootedValue {
+                         act: &RootedActivationPtr) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
-        procedure.set_params(params);
-        procedure.set_body(body);
-        procedure.set_env(env);
+        procedure.body = **body;
+        procedure.act = **act;
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 

@@ -1,4 +1,4 @@
-// Copyright 2014 Nick Fitzgerald
+// Copyright 2015 Nick Fitzgerald
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,16 +12,245 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Evaluating values.
+//! TODO FITZGEN
 
-use environment::{Environment, RootedEnvironmentPtr};
+use environment::{RootedActivationPtr};
 use heap::{Heap, Rooted};
 use value::{RootedValue, SchemeResult, Value};
 
-/// Return true if the value doesn't need to be evaluated because it is
+/// Evaluate the given form in the global environment.
+pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
+    let meaning = try!(analyze(heap, form));
+    let mut act = heap.global_activation();
+    meaning.evaluate(heap, &mut act)
+}
+
+/// Evaluate the file at the given path and return the value of the last form.
+pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
+    use read::read_from_file;
+    let mut reader = try!(read_from_file(file_path, heap).ok().ok_or(
+        "Failed to read from file".to_string()));
+    let mut result = Rooted::new(heap, Value::EmptyList);
+    for form in reader {
+        result.emplace(*try!(evaluate(heap, &form)));
+    }
+    if let Err(ref msg) = *reader.get_result() {
+        return Err(msg.clone());
+    }
+    return Ok(result);
+}
+
+/// TODO FITZGEN
+pub enum Trampoline {
+    Value(RootedValue),
+    Thunk(Meaning),
+}
+
+/// TODO FITZGEN
+pub type TrampolineResult = Result<Trampoline, String>;
+
+/// TODO FITZGEN
+#[deriving(Clone)]
+enum MeaningData {
+    /// TODO FITZGEN
+    Quotation(RootedValue),
+    Reference(u32, u32),
+    SetVariable(u32, u32, Meaning),
+    Conditional(Meaning, Meaning, Meaning),
+    Sequence(Meaning, Meaning),
+}
+
+/// TODO FITZGEN
+pub type MeaningEvaluatorFn = fn(&mut Heap,
+                                 &MeaningData,
+                                 &mut RootedActivationPtr)
+    -> TrampolineResult;
+
+#[allow(unused_variables)]
+fn meaning_quotation_function(_: &mut Heap,
+                              data: &MeaningData,
+                              act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Quotation(ref val) = *data {
+        return Ok(Trampoline::Value((*val).clone()));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+fn meaning_reference_function(heap: &mut Heap,
+                              data: &MeaningData,
+                              act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Reference(i, j) = *data {
+        return Ok(Trampoline::Value(act.fetch(heap, i, j)));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+fn meaning_set_variable(heap: &mut Heap,
+                        data: &MeaningData,
+                        act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::SetVariable(i, j, ref definition_value_meaning) = *data {
+        let val = try!(definition_value_meaning.evaluate(heap, act));
+        act.update(heap, i, j, &val);
+        return Ok(Trampoline::Value(heap.unspecified_symbol()));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+fn meaning_conditional(heap: &mut Heap,
+                       data: &MeaningData,
+                       act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Conditional(ref condition,
+                                    ref consequent,
+                                    ref alternative) = *data {
+        let val = try!(condition.evaluate(heap, act));
+        return Ok(Trampoline::Thunk(if *val == Value::new_boolean(false) {
+            (*alternative).clone()
+        } else {
+            (*consequent).clone()
+        }));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+fn meaning_sequence(heap: &mut Heap,
+                    data: &MeaningData,
+                    act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Sequence(ref first, ref second) = *data {
+        try!(first.evaluate(heap, act));
+        return Ok(Trampoline::Thunk(second.clone()));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
+/// TODO FITZGEN
+pub struct Meaning {
+    data: Box<MeaningData>,
+    evaluator: MeaningEvaluatorFn,
+}
+
+/// ## `Meaning` Constructors
+impl Meaning {
+    /// TODO FITZGEN
+    fn new_quotation(form: &RootedValue) -> Meaning {
+        Meaning {
+            data: box MeaningData::Quotation((*form).clone()),
+            evaluator: meaning_quotation_function,
+        }
+    }
+
+    /// TODO FITZGEN
+    fn new_reference(i: u32, j: u32) -> Meaning {
+        Meaning {
+            data: box MeaningData::Reference(i, j),
+            evaluator: meaning_reference_function,
+        }
+    }
+
+    /// TODO FITZGEN
+    fn new_set_variable(i: u32, j: u32, val: Meaning) -> Meaning {
+        Meaning {
+            data: box MeaningData::SetVariable(i, j, val),
+            evaluator: meaning_set_variable,
+        }
+    }
+
+    /// TODO FITZGEN
+    fn new_conditional(condition: Meaning,
+                       consquent: Meaning,
+                       alternative: Meaning) -> Meaning {
+        Meaning {
+            data: box MeaningData::Conditional(condition,
+                                               consquent,
+                                               alternative),
+            evaluator: meaning_conditional,
+        }
+    }
+
+    /// TODO FITZGEN
+    fn new_sequence(first: Meaning, second: Meaning) -> Meaning {
+        Meaning {
+            data: box MeaningData::Sequence(first, second),
+            evaluator: meaning_sequence,
+        }
+    }
+}
+
+impl Clone for Meaning {
+    fn clone(&self) -> Self {
+        Meaning {
+            data: box self.data.deref().clone(),
+            evaluator: self.evaluator,
+        }
+    }
+}
+
+/// ## `Meaning` Methods
+impl Meaning {
+    /// TODO FITZGEN
+    fn evaluate_to_thunk(&self,
+                         heap: &mut Heap,
+                         act: &mut RootedActivationPtr) -> TrampolineResult {
+        (self.evaluator)(heap, &*self.data, act)
+    }
+
+    /// TODO FITZGEN
+    fn evaluate(&self,
+                heap: &mut Heap,
+                act: &mut RootedActivationPtr) -> SchemeResult {
+        let mut trampoline = try!(self.evaluate_to_thunk(heap, act));
+        loop {
+            match trampoline {
+                Trampoline::Value(v) => { return Ok(v); },
+                Trampoline::Thunk(m) => {
+                    trampoline = try!(m.evaluate_to_thunk(heap, act));
+                }
+            }
+        }
+    }
+}
+
+/// TODO FITZGEN
+pub type MeaningResult = Result<Meaning, String>;
+
+/// TODO FITZGEN: impl Trace for Meaning
+
+/// TODO FITZGEN
+pub fn analyze(heap: &mut Heap,
+               form: &RootedValue) -> MeaningResult {
+    if form.is_atom() {
+        return analyze_atom(heap, form);
+    }
+
+    let pair = form.to_pair(heap).expect(
+        "If a value is not an atom, then it must be a pair.");
+
+    let quote = heap.quote_symbol();
+    let if_symbol = heap.if_symbol();
+    let begin = heap.begin_symbol();
+    let define = heap.define_symbol();
+    let set_bang = heap.set_bang_symbol();
+    let lambda = heap.lambda_symbol();
+
+    match *pair.car(heap) {
+        v if v == *quote     => analyze_quoted(heap, form),
+        v if v == *define    => analyze_definition(heap, form),
+        v if v == *set_bang  => analyze_set(heap, form),
+        v if v == *lambda    => analyze_lambda(heap, form),
+        v if v == *if_symbol => analyze_conditional(heap, form),
+        v if v == *begin     => analyze_sequence(heap, form),
+        _                    => analyze_invocation(heap, form),
+    }
+}
+
+/// Return true if the form doesn't need to be evaluated because it is
 /// "autoquoting" or "self evaluating", false otherwise.
-fn is_auto_quoting(val: &RootedValue) -> bool {
-    match **val {
+fn is_auto_quoting(form: &RootedValue) -> bool {
+    match **form {
         Value::EmptyList    => false,
         Value::Pair(_)      => false,
         Value::Symbol(_)    => false,
@@ -29,388 +258,141 @@ fn is_auto_quoting(val: &RootedValue) -> bool {
     }
 }
 
-/// Evaluate the given form in the global environment.
-pub fn evaluate_in_global_env(heap: &mut Heap,
-                              form: &RootedValue) -> SchemeResult {
-    let mut env = heap.global_env();
-    evaluate(heap, &mut env, form)
-}
+/// TODO FITZGEN
+fn analyze_atom(heap: &mut Heap,
+                form: &RootedValue) -> MeaningResult {
+    if is_auto_quoting(form) {
+        return Ok(Meaning::new_quotation(form));
+    }
 
-/// Evaluate the given form in the given environment.
-pub fn evaluate(heap: &mut Heap,
-                env: &mut RootedEnvironmentPtr,
-                form: &RootedValue) -> SchemeResult {
-    // NB: We use a loop to trampoline tail calls to `evaluate` to ensure that tail
-    // calls don't take up more stack space. Instead of doing
-    //
-    //     return evaluate(heap, new_env, new_form);
-    //
-    // we do
-    //
-    //     env_.emplace(new_env);
-    //     form_.emplace(new_form);
-    //     continue;
-    let mut env_ = &mut env.clone();
-    let mut form_ = &mut form.clone();
-    loop {
-        if form_.is_atom() {
-            return evaluate_atom(heap, env_, form_);
+    if let Some(sym) = form.to_symbol(heap) {
+        if let Some((i, j)) = heap.environment.lookup(&**sym) {
+            return Ok(Meaning::new_reference(i, j));
         }
 
-        let pair = form_.to_pair(heap).expect(
-            "If a value is not an atom, then it must be a pair.");
-
-        let quote = heap.quote_symbol();
-        let if_symbol = heap.if_symbol();
-        let begin = heap.begin_symbol();
-        let define = heap.define_symbol();
-        let set_bang = heap.set_bang_symbol();
-        let lambda = heap.lambda_symbol();
-
-        match *pair.car(heap) {
-            // Quoted forms.
-            v if v == *quote => return evaluate_quoted(heap, form_),
-
-            // Definitions. These are only supposed to be allowed at the top level
-            // and at the beginning of a body, but we are punting on that
-            // restriction for now.
-            v if v == *define => return evaluate_definition(heap, env_, form_),
-
-            // `set!` assignment.
-            v if v == *set_bang => return evaluate_set(heap, env_, form_),
-
-            // Lambda forms.
-            v if v == *lambda => return evaluate_lambda(heap, env_, form_),
-
-            // If expressions.
-            v if v == *if_symbol => {
-                let length = try!(form_.len().ok().ok_or(
-                    "Improperly formed if expression".to_string()));
-                if length != 4 {
-                    return Err("Improperly formed if expression".to_string());
-                }
-
-                let condition_form = try!(pair.cadr(heap));
-                let condition_val = try!(evaluate(heap, env_, &condition_form));
-
-                form_.emplace(*try!(if *condition_val == Value::new_boolean(false) {
-                    // Alternative.
-                    pair.cadddr(heap)
-                } else {
-                    // Consequent.
-                    pair.caddr(heap)
-                }));
-                continue;
-            },
-
-            // `(begin ...)` sequences.
-            v if v == *begin => {
-                let forms = pair.cdr(heap);
-                form_.emplace(*try!(evaluate_sequence(heap, env_, &forms)));
-                continue;
-            },
-
-            // Procedure invocations.
-            procedure        => {
-                // Ensure that the form is a proper list.
-                try!(form_.len().ok().ok_or("Bad invocation form".to_string()));
-
-                let proc_form = Rooted::new(heap, procedure);
-                let proc_val = try!(evaluate(heap, env_, &proc_form));
-
-                let args_form = pair.cdr(heap);
-                let args_val = try!(evaluate_list(heap, env_, &args_form));
-
-                match *proc_val {
-                    Value::Primitive(primitive) => {
-                        return primitive.call(heap, &args_val);
-                    },
-
-                    Value::Procedure(proc_ptr) => {
-                        let proc_env = proc_ptr.get_env(heap);
-                        let proc_params = proc_ptr.get_params(heap);
-                        env_.emplace(*try!(Environment::extend(
-                            heap,
-                            &proc_env,
-                            &proc_params,
-                            &args_val)));
-
-                        let proc_body = proc_ptr.get_body(heap);
-                        form_.emplace(*try!(evaluate_sequence(heap,
-                                                              env_,
-                                                              &proc_body)));
-                        continue;
-                    },
-
-                    _                           => {
-                        return Err(format!("Expected a procedure, found {}",
-                                           *proc_val));
-                    }
-                }
-            },
-        };
-    }
-}
-
-/// Evaluate a `lambda` form.
-fn evaluate_lambda(heap: &mut Heap,
-                   env: &RootedEnvironmentPtr,
-                   form: &RootedValue) -> SchemeResult {
-    let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
-    if length < 3 {
-        return Err("Lambda is missing body".to_string());
+        return Err(format!("Static error: reference to unknown variable: {}",
+                           **sym));
     }
 
-    let pair = form.to_pair(heap).unwrap();
-    let params = pair.cadr(heap).ok().expect("Must be here since length >= 3");
-    let body = pair.cddr(heap).ok().expect("Must be here since length >= 3");
-    return Ok(Value::new_procedure(heap, &params, &body, env));
+    return Err(format!("Static error: Cannot evaluate: {}", **form));
 }
 
-/// Evaluate a `set!` form.
-fn evaluate_set(heap: &mut Heap,
-                env: &mut RootedEnvironmentPtr,
-                form: &RootedValue) -> SchemeResult {
-    let mut env_ = env;
+/// TODO FITZGEN
+fn analyze_quoted(heap: &mut Heap, form: &RootedValue) -> MeaningResult {
+    if let Ok(2) = form.len() {
+        return Ok(Meaning::new_quotation(
+            &form.cdr(heap).unwrap().car(heap).unwrap()));
+    }
+
+    return Err(
+        "Static error: Wrong number of parts in quoted form".to_string());
+}
+
+/// TODO FITZGEN
+fn analyze_definition(heap: &mut Heap,
+                      form: &RootedValue) -> MeaningResult {
     if let Ok(3) = form.len() {
-        let pair = form.to_pair(heap).unwrap();
-        let sym = try!(pair.cadr(heap));
-
-        if let Some(str) = sym.to_symbol(heap) {
-            let new_value_form = try!(pair.caddr(heap));
-            let new_value = try!(evaluate(heap, env_, &new_value_form));
-            try!(env_.update((**str).clone(), &new_value));
-            return Ok(heap.unspecified_symbol());
-        }
-
-        return Err("Can only set! symbols".to_string());
-    }
-
-    return Err("Improperly formed set! expression".to_string());
-}
-
-/// Evaluate a `define` form.
-fn evaluate_definition(heap: &mut Heap,
-                       env: &mut RootedEnvironmentPtr,
-                       form: &RootedValue) -> SchemeResult {
-    let mut env_ = env;
-    if let Ok(3) = form.len() {
-        let pair = form.to_pair(heap).unwrap();
+        let pair = form.to_pair(heap).expect(
+            "If len = 3, then form must be a pair");
         let sym = try!(pair.cadr(heap));
 
         if let Some(str) = sym.to_symbol(heap) {
             let def_value_form = try!(pair.caddr(heap));
-            let def_value = try!(evaluate(heap, env_, &def_value_form));
-            env_.define((**str).clone(), &def_value);
-            return Ok(heap.unspecified_symbol());
+            let def_value_meaning = try!(analyze(heap, &def_value_form));
+            let (i, j) = heap.environment.define((**str).clone());
+            return Ok(Meaning::new_set_variable(i, j, def_value_meaning));
         }
 
-        return Err("Can only define symbols".to_string());
+        return Err("Static error: can only define symbols".to_string());
     }
 
-    return Err("Improperly formed definition".to_string());
+    return Err("Static error: improperly formed definition".to_string());
 }
 
-/// Evaluate a quoted form.
-fn evaluate_quoted(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
-    if let Ok(2) = form.len() {
-        return Ok(form.cdr(heap).unwrap()
-                      .car(heap).unwrap());
+/// TODO FITZGEN
+fn analyze_set(heap: &mut Heap,
+               form: &RootedValue) -> MeaningResult {
+    if let Ok(3) = form.len() {
+        let pair = form.to_pair(heap).expect(
+            "If len = 3, then form must be a pair");
+        let sym = try!(pair.cadr(heap));
+
+        if let Some(str) = sym.to_symbol(heap) {
+            let set_value_form = try!(pair.caddr(heap));
+            let set_value_meaning = try!(analyze(heap, &set_value_form));
+            if let Some((i, j)) = heap.environment.lookup(&**str) {
+                return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
+            }
+            return Err(format!(
+                "Static error: cannot set! undefined variable: {}",
+                *str));
+        }
+
+        return Err("Static error: can only set! symbols".to_string());
     }
 
-    return Err("Wrong number of parts in quoted form".to_string());
+    return Err("Static error: improperly formed set! expression".to_string());
 }
 
-/// Evaluate an atom (ie anything that is not a list).
-fn evaluate_atom(heap: &mut Heap,
-                 env: &mut RootedEnvironmentPtr,
-                 form: &RootedValue) -> SchemeResult {
-    if is_auto_quoting(form) {
-        return Ok(form.clone());
-    }
-
-    if let Value::Symbol(sym) = **form {
-        return env.lookup(heap, sym.deref());
-    }
-
-    return Err(format!("Cannot evaluate: {}", **form));
+/// TODO FITZGEN
+fn analyze_lambda(heap: &mut Heap,
+                  form: &RootedValue) -> MeaningResult {
+    return Err("TODO FITZGEN".to_string());
 }
 
-/// Evaluate each given form, returning the resulting list of values.
-fn evaluate_list(heap: &mut Heap,
-                 env: &mut RootedEnvironmentPtr,
-                 forms: &RootedValue) -> SchemeResult {
-    match **forms {
-        Value::EmptyList      => Ok(Rooted::new(heap, Value::EmptyList)),
-        Value::Pair(ref cons) => {
-            let car = cons.car(heap);
-            let val = try!(evaluate(heap, env, &car));
+/// TODO FITZGEN
+fn analyze_conditional(heap: &mut Heap,
+                       form: &RootedValue) -> MeaningResult {
+    if let Ok(4) = form.len() {
+        let pair = form.to_pair(heap).expect(
+            "If len = 4, then form must be a pair");
 
-            let cdr = cons.cdr(heap);
-            let rest = try!(evaluate_list(heap, env, &cdr));
+        let condition_form = try!(pair.cadr(heap));
+        let condition_meaning = try!(analyze(heap, &condition_form));
 
-            Ok(Value::new_pair(heap, &val, &rest))
-        },
-        _                 => Err("Improper list".to_string()),
+        let consequent_form = try!(pair.caddr(heap));
+        let consequent_meaning = try!(analyze(heap, &consequent_form));
+
+        let alternative_form = try!(pair.cadddr(heap));
+        let alternative_meaning = try!(analyze(heap, &alternative_form));
+
+        return Ok(Meaning::new_conditional(condition_meaning,
+                                           consequent_meaning,
+                                           alternative_meaning));
     }
+
+    return Err("Static error: improperly formed if expression".to_string());
 }
 
-/// Evaluate each expression in the given cons list `exprs` except for the last
-/// expression, whose form is returned (so it can be trampolined to maintain
-/// TCO).
-fn evaluate_sequence(heap: &mut Heap,
-                     env: &mut RootedEnvironmentPtr,
-                     exprs: &RootedValue) -> SchemeResult {
-    let mut e = exprs.clone();
-    loop {
-        let ee = *e;
-        match ee {
-            Value::Pair(ref pair) => {
-                if *pair.cdr(heap) == Value::EmptyList {
-                    return Ok(pair.car(heap));
-                } else {
-                    let car = pair.car(heap);
-                    try!(evaluate(heap, env, &car));
-                    e.emplace(*pair.cdr(heap));
-                }
-            },
-            _                 => {
-                return Err("Bad sequence of expressions".to_string());
-            },
+/// TODO FITZGEN
+fn make_meaning_sequence(heap: &mut Heap,
+                         forms: &RootedValue) -> MeaningResult {
+    if let Some(ref cons) = forms.to_pair(heap) {
+        let first_form = cons.car(heap);
+        let first = try!(analyze(heap, &first_form));
+
+        if *cons.cdr(heap) == Value::EmptyList {
+            return Ok(first);
+        } else {
+            let rest_forms = cons.cdr(heap);
+            let rest = try!(analyze(heap, &rest_forms));
+            return Ok(Meaning::new_sequence(first, rest));
         }
     }
+
+    return Err("Static error: improperly formed sequence".to_string());
 }
 
-/// Evaluate the file at the given path and return the value of the last form.
-pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
-    use read::read_from_file;
-
-    let mut reader = try!(read_from_file(file_path, heap)
-                              .ok()
-                              .ok_or("Failed to read from file".to_string()));
-
-    let mut result = Rooted::new(heap, Value::EmptyList);
-
-    for form in reader {
-        result.emplace(*try!(evaluate_in_global_env(heap, &form)));
-    }
-
-    if let Err(ref msg) = *reader.get_result() {
-        return Err(msg.clone());
-    }
-
-    return Ok(result);
+/// TODO FITZGEN
+fn analyze_sequence(heap: &mut Heap,
+                    form: &RootedValue) -> MeaningResult {
+    let forms = try!(form.cdr(heap).ok_or(
+        "Static error: improperly formed sequence".to_string()));
+    make_meaning_sequence(heap, &forms)
 }
 
-#[test]
-fn test_eval_integer() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_integer.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(42));
-}
-
-#[test]
-fn test_eval_boolean() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_boolean.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_boolean(true));
-}
-
-#[test]
-fn test_eval_quoted() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_quoted.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::EmptyList);
-}
-
-#[test]
-fn test_eval_if_consequent() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_if_consequent.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(1));
-}
-
-#[test]
-fn test_eval_if_alternative() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_if_alternative.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(2));
-}
-
-#[test]
-fn test_eval_begin() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_begin.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(2));
-}
-
-#[test]
-fn test_eval_variables() {
-    use value::list;
-
-    let heap = &mut Heap::new();
-
-    let define_symbol = heap.define_symbol();
-    let set_bang_symbol = heap.set_bang_symbol();
-    let foo_symbol = heap.get_or_create_symbol("foo".to_string());
-
-    let mut def_items = [
-        define_symbol,
-        foo_symbol,
-        Rooted::new(heap, Value::new_integer(2))
-    ];
-    let def_form = list(heap, &mut def_items);
-    evaluate_in_global_env(heap, &def_form).ok()
-        .expect("Should be able to define");
-
-    let foo_symbol_ = heap.get_or_create_symbol("foo".to_string());
-
-    let def_val = evaluate_in_global_env(heap, &foo_symbol_).ok()
-        .expect("Should be able to get a defined symbol's value");
-    assert_eq!(*def_val, Value::new_integer(2));
-
-    let mut set_items = [
-        set_bang_symbol,
-        foo_symbol_,
-        Rooted::new(heap, Value::new_integer(1))
-    ];
-    let set_form = list(heap, &mut set_items);
-    evaluate_in_global_env(heap, &set_form).ok()
-        .expect("Should be able to define");
-
-    let foo_symbol__ = heap.get_or_create_symbol("foo".to_string());
-
-    let set_val = evaluate_in_global_env(heap, &foo_symbol__).ok()
-        .expect("Should be able to get a defined symbol's value");
-    assert_eq!(*set_val, Value::new_integer(1));
-}
-
-#[test]
-fn test_eval_and_call_lambda() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_and_call_lambda.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(5));
-}
-
-#[test]
-fn test_eval_closures() {
-    let mut heap = Heap::new();
-    let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(1));
+/// TODO FITZGEN
+fn analyze_invocation(heap: &mut Heap,
+                      form: &RootedValue) -> MeaningResult {
+    return Err("TODO FITZGEN".to_string());
 }

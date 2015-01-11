@@ -41,7 +41,7 @@ pub fn main() {
 
         print!("oxischeme> ");
         for form in reader {
-            match eval::evaluate_in_global_env(heap, &form) {
+            match eval::evaluate(heap, &form) {
                 Ok(val) => {
                     print::print(heap, &mut stdout, &val).ok().expect("IO ERROR!");
                 },

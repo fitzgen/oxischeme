@@ -35,7 +35,7 @@
 //! reuse. This provides the illusion of infinite memory, and frees Scheme
 //! programmers from manually managing allocations and frees. We refer to
 //! GC-managed types as "GC things". Note that a GC thing does not need to be a
-//! Scheme value type: environments are also managed by the GC, but are not a
+//! Scheme value type: activations are also managed by the GC, but are not a
 //! first class Scheme value.
 //!
 //! Any structure that has references to a garbage collected type must
@@ -47,7 +47,7 @@
 //! other GC things.
 //!
 //! A "GC root" is a GC participant that is always reachable. For example, the
-//! global environment is a root because global variables must always be
+//! global activation is a root because global variables must always be
 //! accessible.
 //!
 //! We use a simple *mark and sweep* garbage collection algorithm. In the mark
@@ -132,7 +132,7 @@ use std::fmt;
 use std::ptr;
 use std::vec::{IntoIter};
 
-use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
+use environment::{Activation, ActivationPtr, RootedActivationPtr, Environment};
 use primitives::{define_primitives};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
             RootedProcedurePtr, RootedValue, Value};
@@ -384,15 +384,19 @@ impl ToGcThing for StringPtr {
 pub type RootedStringPtr = Rooted<StringPtr>;
 
 /// The scheme heap and GC runtime, containing all allocated cons cells,
-/// environments, procedures, and strings (including strings for symbols).
+/// activations, procedures, and strings (including strings for symbols).
 pub struct Heap {
+    /// TODO FITZGEN
+    pub environment: Environment,
+
     cons_cells: Box<Arena<Cons>>,
     strings: Box<Arena<String>>,
-    environments: Box<Arena<Environment>>,
+    activations: Box<Arena<Activation>>,
     procedures: Box<Arena<Procedure>>,
+
     roots: HashMap<GcThing, uint>,
     symbol_table: HashMap<String, StringPtr>,
-    global_environment: EnvironmentPtr,
+    global_activation: ActivationPtr,
     allocations: uint,
 }
 
@@ -402,10 +406,10 @@ pub static DEFAULT_CONS_CAPACITY : uint = 1 << 12;
 /// The default capacity of strings.
 pub static DEFAULT_STRINGS_CAPACITY : uint = 1 << 12;
 
-/// The default capacity of environments.
-pub static DEFAULT_ENVIRONMENTS_CAPACITY : uint = 1 << 12;
+/// The default capacity of activations.
+pub static DEFAULT_ACTIVATIONS_CAPACITY : uint = 1 << 12;
 
-/// The default capacity of environments.
+/// The default capacity of procedures.
 pub static DEFAULT_PROCEDURES_CAPACITY : uint = 1 << 12;
 
 /// ## `Heap` Constructors
@@ -414,7 +418,7 @@ impl Heap {
     pub fn new() -> Heap {
         Heap::with_arenas(Arena::new(DEFAULT_CONS_CAPACITY),
                           Arena::new(DEFAULT_STRINGS_CAPACITY),
-                          Arena::new(DEFAULT_ENVIRONMENTS_CAPACITY),
+                          Arena::new(DEFAULT_ACTIVATIONS_CAPACITY),
                           Arena::new(DEFAULT_PROCEDURES_CAPACITY))
     }
 
@@ -422,19 +426,24 @@ impl Heap {
     /// strings within.
     pub fn with_arenas(cons_cells: Box<Arena<Cons>>,
                        strings: Box<Arena<String>>,
-                       envs: Box<Arena<Environment>>,
+                       acts: Box<Arena<Activation>>,
                        procs: Box<Arena<Procedure>>) -> Heap {
-        let mut e = envs;
-        let mut global_env = e.allocate();
-        define_primitives(&mut global_env);
+        let mut a = acts;
+        let mut global_act = a.allocate();
+        let mut env = Environment::new();
+        define_primitives(&mut env, &mut global_act);
+
         Heap {
+            environment: env,
+
             cons_cells: cons_cells,
             strings: strings,
-            environments: e,
+            activations: a,
             procedures: procs,
+
+            global_activation: global_act,
             roots: HashMap::new(),
             symbol_table: HashMap::new(),
-            global_environment: global_env,
             allocations: 0,
         }
     }
@@ -464,14 +473,14 @@ impl Heap {
         Rooted::new(self, s)
     }
 
-    /// Allocate a new `Environment` and return a pointer to it.
+    /// Allocate a new `Activation` and return a pointer to it.
     ///
     /// ## Panics
     ///
-    /// Panics if the `Arena` for environments has already reached capacity.
-    pub fn allocate_environment(&mut self) -> RootedEnvironmentPtr {
+    /// Panics if the `Arena` for activations has already reached capacity.
+    pub fn allocate_activation(&mut self) -> RootedActivationPtr {
         self.on_allocation();
-        let e = self.environments.allocate();
+        let e = self.activations.allocate();
         Rooted::new(self, e)
     }
 
@@ -479,7 +488,7 @@ impl Heap {
     ///
     /// ## Panics
     ///
-    /// Panics if the `Arena` for environments has already reached capacity.
+    /// Panics if the `Arena` for procedures has already reached capacity.
     pub fn allocate_procedure(&mut self) -> RootedProcedurePtr {
         self.on_allocation();
         let p = self.procedures.allocate();
@@ -522,21 +531,21 @@ impl Heap {
         // Second, divide the marked set by arena, and sweep each arena.
 
         let mut live_strings = HashSet::new();
-        let mut live_envs = HashSet::new();
+        let mut live_acts = HashSet::new();
         let mut live_cons_cells = HashSet::new();
         let mut live_procs = HashSet::new();
 
         for thing in marked.into_iter() {
             match thing {
-                GcThing::String(p)      => live_strings.insert(p.index),
-                GcThing::Environment(p) => live_envs.insert(p.index),
-                GcThing::Cons(p)        => live_cons_cells.insert(p.index),
-                GcThing::Procedure(p)   => live_procs.insert(p.index),
+                GcThing::String(p)     => live_strings.insert(p.index),
+                GcThing::Activation(p) => live_acts.insert(p.index),
+                GcThing::Cons(p)       => live_cons_cells.insert(p.index),
+                GcThing::Procedure(p)  => live_procs.insert(p.index),
             };
         }
 
         self.strings.sweep(live_strings);
-        self.environments.sweep(live_envs);
+        self.activations.sweep(live_acts);
         self.cons_cells.sweep(live_cons_cells);
         self.procedures.sweep(live_procs);
     }
@@ -575,7 +584,7 @@ impl Heap {
             .map(|s| GcThing::from_string_ptr(*s))
             .collect();
 
-        roots.push(GcThing::from_environment_ptr(self.global_environment));
+        roots.push(GcThing::from_activation_ptr(self.global_activation));
 
         for root in self.roots.keys() {
             roots.push(*root);
@@ -589,7 +598,7 @@ impl Heap {
         self.cons_cells.is_full()
             || self.strings.is_full()
             || self.procedures.is_full()
-            || self.environments.is_full()
+            || self.activations.is_full()
     }
 
     /// A method that should be called on every allocation. If any arenas are
@@ -618,10 +627,10 @@ impl Heap {
 
 /// ## `Heap` Methods and Accessors.
 impl Heap {
-    /// Get the global environment.
-    pub fn global_env(&mut self) -> RootedEnvironmentPtr {
-        let env = self.global_environment;
-        Rooted::new(self, env)
+    /// Get the global activation.
+    pub fn global_activation(&mut self) -> RootedActivationPtr {
+        let act = self.global_activation;
+        Rooted::new(self, act)
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`
@@ -709,7 +718,7 @@ pub trait Trace {
 pub enum GcThing {
     Cons(ConsPtr),
     String(StringPtr),
-    Environment(EnvironmentPtr),
+    Activation(ActivationPtr),
     Procedure(ProcedurePtr),
 }
 
@@ -730,20 +739,20 @@ impl GcThing {
         GcThing::Procedure(procedure)
     }
 
-    /// Create a `GcThing` from a `EnvironmentPtr`.
-    pub fn from_environment_ptr(env: EnvironmentPtr) -> GcThing {
-        GcThing::Environment(env)
+    /// Create a `GcThing` from an `ActivationPtr`.
+    pub fn from_activation_ptr(act: ActivationPtr) -> GcThing {
+        GcThing::Activation(act)
     }
 }
 
 impl Trace for GcThing {
     fn trace(&self) -> IterGcThing {
         match *self {
-            GcThing::Cons(cons)       => cons.trace(),
-            GcThing::Environment(env) => env.trace(),
-            GcThing::Procedure(p)     => p.trace(),
+            GcThing::Cons(cons)      => cons.trace(),
+            GcThing::Activation(act) => act.trace(),
+            GcThing::Procedure(p)    => p.trace(),
             // Strings don't hold any strong references to other `GcThing`s.
-            GcThing::String(_)        => vec!().into_iter(),
+            GcThing::String(_)       => vec!().into_iter(),
         }
     }
 }
