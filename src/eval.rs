@@ -419,7 +419,7 @@ fn make_meaning_sequence(heap: &mut Heap,
             return Ok(first);
         } else {
             let rest_forms = cons.cdr(heap);
-            let rest = try!(analyze(heap, &rest_forms));
+            let rest = try!(make_meaning_sequence(heap, &rest_forms));
             return Ok(Meaning::new_sequence(first, rest));
         }
     }

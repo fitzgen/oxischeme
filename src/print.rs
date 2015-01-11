@@ -14,10 +14,16 @@
 
 //! Printing values' text representations.
 
-use std::io::{IoResult};
+use std::io::{IoResult, stdout};
 
 use heap::{Heap, Rooted};
 use value::{RootedConsPtr, RootedValue, Value};
+
+/// TODO FITZGEN
+pub fn print_to_stdout(heap: &mut Heap, form: &RootedValue) -> IoResult<()> {
+    try!(print(heap, &mut stdout(), form));
+    write!(&mut stdout(), "\n")
+}
 
 /// Print the given value's text representation to the given writer.
 pub fn print<W: Writer>(heap: &mut Heap,
