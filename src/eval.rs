@@ -55,20 +55,19 @@ pub type TrampolineResult = Result<Trampoline, String>;
 /// TODO FITZGEN
 #[deriving(Clone, Show)]
 enum MeaningData {
-    /// TODO FITZGEN
     Quotation(RootedValue),
     Reference(u32, u32),
     Definition(Meaning),
     SetVariable(u32, u32, Meaning),
     Conditional(Meaning, Meaning, Meaning),
     Sequence(Meaning, Meaning),
+    Lambda(u32, 
 }
 
 /// TODO FITZGEN
-pub type MeaningEvaluatorFn = fn(&mut Heap,
-                                 &MeaningData,
-                                 &mut RootedActivationPtr)
-    -> TrampolineResult;
+type MeaningEvaluatorFn = fn(&mut Heap,
+                             &MeaningData,
+                             &mut RootedActivationPtr) -> TrampolineResult;
 
 fn evaluate_quotation(heap: &mut Heap,
                       data: &MeaningData,
@@ -142,6 +141,17 @@ fn evaluate_sequence(heap: &mut Heap,
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
+fn evaluate_lambda(heap: &mut Heap,
+                   data: &MeaningData,
+                   act: &mut RootedActivationPtr) -> TrampolineResult {
+    if let MeaningData::Lambda(arity, ref body) = *data {
+        return Ok(Trampoline::Value(
+            Value::new_procedure(heap, arity, (*body).clone())));
+    }
+
+    panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
+}
+
 /// TODO FITZGEN
 pub struct Meaning {
     data: Box<MeaningData>,
@@ -199,6 +209,14 @@ impl Meaning {
         Meaning {
             data: box MeaningData::Definition(defined),
             evaluator: evaluate_definition,
+        }
+    }
+
+    /// TODO FITZGEN
+    fn new_lambda(arity: u32, body: Meaning) -> Meaning {
+        Meaning {
+            data: box MeaningData::Lambda(arity, body),
+            evaluator: evaluate_lambda
         }
     }
 }
@@ -381,7 +399,23 @@ fn analyze_set(heap: &mut Heap,
 /// TODO FITZGEN
 fn analyze_lambda(heap: &mut Heap,
                   form: &RootedValue) -> MeaningResult {
-    return Err("TODO FITZGEN".to_string());
+    let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
+    if length < 3 {
+        return Err("Lambda is missing body".to_string());
+    }
+
+    let pair = form.to_pair(heap).unwrap();
+
+    let params = pair.cadr(heap).ok().expect("Must be here since length >= 3");
+    let arity = try!(params.len().ok().ok_or(
+        "Bad lambda parameters"/.to_string()));
+
+    // TODO FITZGEN: extend environment with parameters.
+
+    let body = pair.cddr(heap).ok().expect("Must be here since length >= 3");
+    let body_meaning = make_meaning_sequence(heap, &body);
+
+    retur Ok(Meaning::new_lambda(arity, body_meaning));
 }
 
 /// TODO FITZGEN

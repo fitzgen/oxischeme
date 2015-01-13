@@ -90,6 +90,11 @@ impl Activation {
     pub fn push_value(&mut self, val: Value) {
         self.args.push(val);
     }
+
+    /// TODO FITZGEN
+    pub fn len(&self) -> u32 {
+        self.args.len() as u32
+    }
 }
 
 impl<S: hash::Writer> hash::Hash<S> for Activation {

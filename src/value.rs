@@ -239,11 +239,13 @@ impl Value {
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
-                         body: &RootedValue,
-                         act: &RootedActivationPtr) -> RootedValue {
+                         arity: u32,
+                         act: &RootedActivationPtr,
+                         body: Meaning) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
-        procedure.body = **body;
+        procedure.arity = arity;
         procedure.act = **act;
+        procedure.body = body;
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
