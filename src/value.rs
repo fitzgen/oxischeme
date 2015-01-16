@@ -178,7 +178,7 @@ impl<S: hash::Writer> hash::Hash<S> for Primitive {
 
 impl Primitive {
     #[inline]
-    pub fn call(&self, heap: &mut Heap, args: &RootedValue) -> SchemeResult {
+    pub fn call(&self, heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
         let f = self.function;
         f(heap, args)
     }

@@ -45,15 +45,10 @@ impl Activation {
     /// new `Activation` instance.
     pub fn extend(heap: &mut Heap,
                   parent: &RootedActivationPtr,
-                  values: &RootedValue) -> Result<RootedActivationPtr, String> {
+                  values: Vec<RootedValue>) -> Result<RootedActivationPtr, String> {
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
-
-        let values_len = try!(values.len().ok().ok_or(
-            "Improperly formed values".to_string()));
-
-        act.args = Vec::with_capacity(values_len as uint);
-        // TODO FITZGEN: fill args
+        act.args = values.into_iter().map(|rooted_val| *rooted_val).collect();
         return Ok(act);
     }
 
