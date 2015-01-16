@@ -17,7 +17,7 @@
 use std::fmt;
 
 use environment::{RootedActivationPtr};
-use heap::{Heap, Rooted};
+use heap::{Heap, IterGcThing, Rooted, Trace};
 use value::{RootedValue, SchemeResult, Value};
 
 /// Evaluate the given form in the global environment.
@@ -61,7 +61,7 @@ enum MeaningData {
     SetVariable(u32, u32, Meaning),
     Conditional(Meaning, Meaning, Meaning),
     Sequence(Meaning, Meaning),
-    Lambda(u32, 
+    Lambda(u32, Meaning),
 }
 
 /// TODO FITZGEN
@@ -69,6 +69,7 @@ type MeaningEvaluatorFn = fn(&mut Heap,
                              &MeaningData,
                              &mut RootedActivationPtr) -> TrampolineResult;
 
+#[allow(unused_variables)]
 fn evaluate_quotation(heap: &mut Heap,
                       data: &MeaningData,
                       act: &mut RootedActivationPtr) -> TrampolineResult {
@@ -146,7 +147,7 @@ fn evaluate_lambda(heap: &mut Heap,
                    act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Lambda(arity, ref body) = *data {
         return Ok(Trampoline::Value(
-            Value::new_procedure(heap, arity, (*body).clone())));
+            Value::new_procedure(heap, arity, act, (*body).clone())));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -264,9 +265,15 @@ impl fmt::Show for Meaning {
 }
 
 /// TODO FITZGEN
-pub type MeaningResult = Result<Meaning, String>;
+impl Trace for Meaning {
+    fn trace(&self) -> IterGcThing {
+        // TODO FITZGEN
+        vec!().into_iter()
+    }
+}
 
-/// TODO FITZGEN: impl Trace for Meaning
+/// TODO FITZGEN
+pub type MeaningResult = Result<Meaning, String>;
 
 /// TODO FITZGEN
 pub fn analyze(heap: &mut Heap,
@@ -408,14 +415,14 @@ fn analyze_lambda(heap: &mut Heap,
 
     let params = pair.cadr(heap).ok().expect("Must be here since length >= 3");
     let arity = try!(params.len().ok().ok_or(
-        "Bad lambda parameters"/.to_string()));
+        "Bad lambda parameters".to_string()));
 
     // TODO FITZGEN: extend environment with parameters.
 
     let body = pair.cddr(heap).ok().expect("Must be here since length >= 3");
-    let body_meaning = make_meaning_sequence(heap, &body);
+    let body_meaning = try!(make_meaning_sequence(heap, &body));
 
-    retur Ok(Meaning::new_lambda(arity, body_meaning));
+    return Ok(Meaning::new_lambda(arity as u32, body_meaning));
 }
 
 /// TODO FITZGEN
@@ -472,7 +479,7 @@ fn analyze_sequence(heap: &mut Heap,
 /// TODO FITZGEN
 fn analyze_invocation(heap: &mut Heap,
                       form: &RootedValue) -> MeaningResult {
-    return Err("TODO FITZGEN".to_string());
+    return Err("TODO FITZGEN: invocations".to_string());
 }
 
 // TESTS -----------------------------------------------------------------------

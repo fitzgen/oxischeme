@@ -17,8 +17,10 @@
 use std::default::{Default};
 use std::fmt;
 use std::hash;
+use std::mem;
 
 use environment::{ActivationPtr, RootedActivationPtr};
+use eval::{Meaning};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
 use primitives::{PrimitiveFunction};
@@ -96,33 +98,48 @@ pub type RootedConsPtr = Rooted<ConsPtr>;
 
 /// User defined procedures are represented by their body and a pointer to the
 /// activation that they were defined within.
-#[deriving(Copy, Hash)]
 pub struct Procedure {
-    pub body: Value,
+    pub arity: u32,
+    pub body: Option<Box<Meaning>>,
     pub act: ActivationPtr,
 }
 
 impl Default for Procedure {
     fn default() -> Procedure {
         Procedure {
-            body: Value::EmptyList,
+            body: None,
             act: ArenaPtr::null(),
+            arity: 0,
         }
     }
 }
 
 impl Trace for Procedure {
     fn trace(&self) -> IterGcThing {
-        let mut results = vec!();
-
-        if let Some(body) = self.body.to_gc_thing() {
-            results.push(body);
-        }
+        let mut results: Vec<GcThing> = if let Some(ref body) = self.body {
+            body.trace().collect()
+        } else {
+            panic!("Should never trace a non-initialized Procedure")
+        };
 
         results.push(GcThing::from_activation_ptr(self.act));
         results.into_iter()
     }
 }
+
+impl<S: hash::Writer> hash::Hash<S> for Procedure {
+    fn hash(&self, state: &mut S) {
+        self.arity.hash(state);
+        self.act.hash(state);
+        if let Some(ref body) = self.body {
+            unsafe {
+                let v : uint = mem::transmute(body);
+                v.hash(state);
+            }
+        }
+    }
+}
+
 
 /// A pointer to a `Procedure` on the heap.
 pub type ProcedurePtr = ArenaPtr<Procedure>;
@@ -245,7 +262,7 @@ impl Value {
         let mut procedure = heap.allocate_procedure();
         procedure.arity = arity;
         procedure.act = **act;
-        procedure.body = body;
+        procedure.body = Some(box body);
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
