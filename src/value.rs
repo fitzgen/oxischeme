@@ -17,7 +17,6 @@
 use std::default::{Default};
 use std::fmt;
 use std::hash;
-use std::mem;
 
 use environment::{ActivationPtr, RootedActivationPtr};
 use eval::{Meaning};
@@ -101,14 +100,14 @@ pub type RootedConsPtr = Rooted<ConsPtr>;
 pub struct Procedure {
     pub arity: u32,
     pub body: Option<Box<Meaning>>,
-    pub act: ActivationPtr,
+    pub act: Option<ActivationPtr>,
 }
 
 impl Default for Procedure {
     fn default() -> Procedure {
         Procedure {
             body: None,
-            act: ArenaPtr::null(),
+            act: None,
             arity: 0,
         }
     }
@@ -116,13 +115,12 @@ impl Default for Procedure {
 
 impl Trace for Procedure {
     fn trace(&self) -> IterGcThing {
-        let mut results: Vec<GcThing> = if let Some(ref body) = self.body {
-            body.trace().collect()
-        } else {
-            panic!("Should never trace a non-initialized Procedure")
-        };
-
-        results.push(GcThing::from_activation_ptr(self.act));
+        let mut results: Vec<GcThing> = self.body.as_ref()
+            .expect("Should never trace an uninitialized Procedure")
+            .trace()
+            .collect();
+        results.push(GcThing::from_activation_ptr(
+            self.act.expect("Should never trace an uninitialized Procedure")));
         results.into_iter()
     }
 }
@@ -131,12 +129,9 @@ impl<S: hash::Writer> hash::Hash<S> for Procedure {
     fn hash(&self, state: &mut S) {
         self.arity.hash(state);
         self.act.hash(state);
-        if let Some(ref body) = self.body {
-            unsafe {
-                let v : uint = mem::transmute(body);
-                v.hash(state);
-            }
-        }
+        self.body.as_ref()
+            .expect("Should never hash an uninitialized Procedure")
+            .hash(state);
     }
 }
 
@@ -261,7 +256,7 @@ impl Value {
                          body: Meaning) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
         procedure.arity = arity;
-        procedure.act = **act;
+        procedure.act = Some(**act);
         procedure.body = Some(box body);
         Rooted::new(heap, Value::Procedure(*procedure))
     }
@@ -366,6 +361,13 @@ impl Value {
             _                => Err(()),
         }
     }
+
+    /// TODO FITZGEN
+    pub fn iter(&self) -> ConsIterator {
+        ConsIterator {
+            val: *self
+        }
+    }
 }
 
 impl ToGcThing for Value {
@@ -384,6 +386,27 @@ pub type RootedValue = Rooted<Value>;
 
 /// Either a Scheme `RootedValue`, or a `String` containing an error message.
 pub type SchemeResult = Result<RootedValue, String>;
+
+/// TODO FITZGEN
+#[deriving(Copy)]
+pub struct ConsIterator {
+    val: Value
+}
+
+/// TODO FITZGEN
+impl Iterator<Result<Value, ()>> for ConsIterator {
+    fn next(&mut self) -> Option<Result<Value, ()>> {
+        match self.val {
+            Value::EmptyList => None,
+            Value::Pair(cons) => {
+                let Cons { car, cdr } = *cons;
+                self.val = cdr;
+                Some(Ok(car))
+            },
+            _ => Some(Err(())),
+        }
+    }
+}
 
 /// A helper utility to create a cons list from the given values.
 pub fn list(heap: &mut Heap, values: &[RootedValue]) -> RootedValue {

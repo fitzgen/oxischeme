@@ -15,6 +15,7 @@
 //! TODO FITZGEN
 
 use std::fmt;
+use std::hash;
 
 use environment::{Activation, RootedActivationPtr};
 use heap::{Heap, IterGcThing, Rooted, Trace};
@@ -23,6 +24,7 @@ use value::{RootedValue, SchemeResult, Value};
 /// Evaluate the given form in the global environment.
 pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
     let meaning = try!(analyze(heap, form));
+    println!("FITZGEN: meaning = {}", &meaning);
     let mut act = heap.global_activation();
     meaning.evaluate(heap, &mut act)
 }
@@ -32,13 +34,16 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
     use read::read_from_file;
     let mut reader = try!(read_from_file(file_path, heap).ok().ok_or(
         "Failed to read from file".to_string()));
+
     let mut result = Rooted::new(heap, Value::EmptyList);
     for form in reader {
         result.emplace(*try!(evaluate(heap, &form)));
     }
+
     if let Err(ref msg) = *reader.get_result() {
         return Err(msg.clone());
     }
+
     return Ok(result);
 }
 
@@ -53,7 +58,7 @@ pub enum Trampoline {
 pub type TrampolineResult = Result<Trampoline, String>;
 
 /// TODO FITZGEN
-#[deriving(Clone, Show)]
+#[deriving(Clone, Hash, Show)]
 enum MeaningData {
     /// The quoted value.
     Quotation(RootedValue),
@@ -140,11 +145,12 @@ fn evaluate_conditional(heap: &mut Heap,
                                     ref consequent,
                                     ref alternative) = *data {
         let val = try!(condition.evaluate(heap, act));
-        return Ok(Trampoline::Thunk(*act, if *val == Value::new_boolean(false) {
-            (*alternative).clone()
-        } else {
-            (*consequent).clone()
-        }));
+        return Ok(Trampoline::Thunk(Rooted::new(heap, **act),
+                                    if *val == Value::new_boolean(false) {
+                                        (*alternative).clone()
+                                    } else {
+                                        (*consequent).clone()
+                                    }));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -155,7 +161,7 @@ fn evaluate_sequence(heap: &mut Heap,
                      act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Sequence(ref first, ref second) = *data {
         try!(first.evaluate(heap, act));
-        return Ok(Trampoline::Thunk(*act, second.clone()));
+        return Ok(Trampoline::Thunk(Rooted::new(heap, **act), second.clone()));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -175,28 +181,40 @@ fn evaluate_lambda(heap: &mut Heap,
 fn evaluate_invocation(heap: &mut Heap,
                        data: &MeaningData,
                        act: &mut RootedActivationPtr) -> TrampolineResult {
+    println!("FITZGEN: evaluating invocation");
     if let MeaningData::Invocation(ref procedure, ref params) = *data {
-        let args = try!(params.iter().map(|p| p.evaluate(heap, act)).collect());
+        println!("FITZGEN:     evaluating procedure (");
         let proc_val = try!(procedure.evaluate(heap, act));
+
+        println!("FITZGEN:     evaluating arguments");
+        let args = try!(params.iter().map(|p| p.evaluate(heap, act)).collect());
+
         match *proc_val {
             Value::Primitive(primitive) => {
+                println!("FITZGEN:     found a primitive, calling it");
                 let result = try!(primitive.call(heap, args));
+                println!("FITZGEN:     result = {}", &result);
+                println!("FITZGEN:     done evaling primitive )");
                 return Ok(Trampoline::Value(result));
             },
 
             Value::Procedure(proc_ptr) => {
+                println!("FITZGEN:     found a user defined procedure");
+
                 match proc_ptr.arity.cmp(&(args.len() as u32)) {
                     Less => return Err("Too many arguments passed".to_string()),
                     Greater => return Err("Too few arguments passed".to_string()),
                     _ => { },
                 }
 
-                let new_act = try!(Activation::extend(heap, act, args));
-                let body = proc_ptr.body
-                    .expect("Allocated procedures should always have a body")
-                    .deref()
-                    .clone();
-                return Ok(Trampoline::Thunk( new_act, body));
+                println!("FITZGEN:     found right number of args, extending activation");
+                let new_act = Activation::extend(heap, act, args);
+                if let Some(ref body) = proc_ptr.body {
+                    println!("FITZGEN:     returning new thunk )");
+                    return Ok(Trampoline::Thunk(new_act, body.deref().clone()));
+                } else {
+                    panic!("Should never see an uninitialized procedure!");
+                }
             },
 
             _ => {
@@ -299,12 +317,26 @@ impl Meaning {
     fn evaluate(&self,
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
+        println!("FITZGEN: Meaning::evaluate (");
+        println!("FITZGEN: Meaning::evaluate self = {}", self);
+
         let mut trampoline = try!(self.evaluate_to_thunk(heap, act));
+        if let Trampoline::Value(v) = trampoline {
+            println!("FITZGEN: Meaning::evaluate early return )");
+            return Ok(v);
+        }
+
         let mut act_ = Rooted::new(heap, **act);
         loop {
+            println!("FITZGEN: Meaning::evaluate trampoline = {}", trampoline);
+            println!("FITZGEN: Meaning::evaluate act_ = {}", act_);
             match trampoline {
-                Trampoline::Value(v) => { return Ok(v); },
+                Trampoline::Value(v) => {
+                    println!("FITZGEN: Meaning::evaluate )");
+                    return Ok(v);
+                },
                 Trampoline::Thunk(a, m) => {
+                    println!("FITZGEN: Meaning::evaluate emplacing: {}", &a);
                     act_.emplace(*a);
                     trampoline = try!(m.evaluate_to_thunk(heap, &mut act_));
                 }
@@ -322,11 +354,19 @@ impl Clone for Meaning {
     }
 }
 
+impl<S: hash::Writer> hash::Hash<S> for Meaning {
+    fn hash(&self, state: &mut S) {
+        let u = self.evaluator as uint;
+        u.hash(state);
+        self.data.hash(state);
+    }
+}
+
 impl fmt::Show for Meaning {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Meaning(data: {}, evaluator: {})",
-               self.data,
-               self.evaluator as uint)
+        write!(f, "Meaning(0x{:x}, {})",
+               self.evaluator as uint,
+               self.data)
     }
 }
 
@@ -479,16 +519,32 @@ fn analyze_lambda(heap: &mut Heap,
 
     let pair = form.to_pair(heap).unwrap();
 
-    let params = pair.cadr(heap).ok().expect("Must be here since length >= 3");
-    let arity = try!(params.len().ok().ok_or(
-        "Bad lambda parameters".to_string()));
+    let body = pair.cddr(heap)
+        .ok().expect("Must be here since length >= 3");
 
-    // TODO FITZGEN: extend environment with parameters.
+    let params_res : Result<Vec<Value>, _> = pair.cadr(heap)
+        .ok().expect("Must be here since length >= 3")
+        .iter().collect();
 
-    let body = pair.cddr(heap).ok().expect("Must be here since length >= 3");
-    let body_meaning = try!(make_meaning_sequence(heap, &body));
+    match params_res {
+        Err(_) => return Err("Bad lambda parameters".to_string()),
+        Ok(params) => {
+            let arity = params.len();
 
-    return Ok(Meaning::new_lambda(arity as u32, body_meaning));
+            let param_names = try!(params.into_iter().map(|p| {
+                let sym = try!(p.to_symbol(heap)
+                    .ok_or(format!("Can only define symbol parameters, found {}",
+                                   p)));
+                Ok((**sym).clone())
+            }).collect());
+
+            let body_meaning = try!(heap.with_extended_env(param_names, |heap| {
+                make_meaning_sequence(heap, &body)
+            }));
+
+            return Ok(Meaning::new_lambda(arity as u32, body_meaning));
+        }
+    };
 }
 
 /// TODO FITZGEN
@@ -544,23 +600,18 @@ fn analyze_sequence(heap: &mut Heap,
 
 /// TODO FITZGEN
 fn make_meaning_vector(heap: &mut Heap,
-                       arity: u32,
-                       forms: &RootedValue) -> Result<Vec<Meaning>, String> {
-    let mut meanings = Vec::with_capacity(arity as uint);
-
-    let forms_ = Rooted::new(heap, **forms);
-    loop {
-        match *forms_ {
-            Value::EmptyList => { return Ok(meanings) },
-            Value::Pair(ref cons) => {
-                let car = cons.car(heap);
-                let m = try!(analyze(heap, &car));
-                meanings.push(m);
-                forms.emplace(*cons.cdr(heap));
-            },
-            _ => {
-                panic!("Passed improper list to `make_meaning_vector`!");
-            }
+                       forms: &RootedValue,
+                       mut meanings: Vec<Meaning>) -> Result<Vec<Meaning>, String> {
+    match **forms {
+        Value::EmptyList => { return Ok(meanings) },
+        Value::Pair(ref cons) => {
+            let car = cons.car(heap);
+            meanings.push(try!(analyze(heap, &car)));
+            let rest = cons.cdr(heap);
+            return make_meaning_vector(heap, &rest, meanings);
+        },
+        _ => {
+            panic!("Passed improper list to `make_meaning_vector`!");
         }
     }
 }
@@ -575,9 +626,8 @@ fn analyze_invocation(heap: &mut Heap,
         let params_form = cons.cdr(heap);
         let arity = try!(params_form.len().ok().ok_or(
             "Static error: improperly formed invocation".to_string()));
-        let params_meaning = try!(make_meaning_vector(heap,
-                                                      arity as u32,
-                                                      &params_form));
+        let params_meaning = try!(make_meaning_vector(
+            heap, &params_form, Vec::with_capacity(arity as uint)));
 
         return Ok(Meaning::new_invocation(proc_meaning, params_meaning));
     }

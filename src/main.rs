@@ -17,6 +17,7 @@
 #![feature(default_type_params, unsafe_destructor)]
 
 use std::io;
+use std::os;
 
 pub mod environment;
 pub mod eval;
@@ -26,13 +27,11 @@ pub mod print;
 pub mod read;
 pub mod value;
 
-/// The main Read-Eval-Print-Loop.
-pub fn main() {
+/// Start a Read -> Evaluate -> Print loop.
+pub fn repl(heap: &mut heap::Heap) {
     println!("Welcome to oxischeme!");
     println!("C-c to exit.");
     println!("");
-
-    let heap = &mut heap::Heap::new();
 
     loop {
         let mut stdout = io::stdio::stdout();
@@ -65,5 +64,29 @@ pub fn main() {
                 stdout.flush().ok().expect("IO ERROR!");
             }
         }
+    }
+}
+
+/// TODO FITZGEN
+pub fn main() {
+    let heap = &mut heap::Heap::new();
+
+    let mut args_were_passed = false;
+
+    for file_path in os::args().iter().skip(1) {
+        args_were_passed = true;
+
+        match eval::evaluate_file(heap, file_path.as_slice()) {
+            Ok(_) => { },
+            Err(msg) => {
+                let mut stderr = io::stdio::stderr();
+                (write!(&mut stderr, "Error: {}", msg)).ok().expect("IO ERROR!");
+                return;
+            }
+        }
+    }
+
+    if !args_were_passed {
+        repl(heap);
     }
 }

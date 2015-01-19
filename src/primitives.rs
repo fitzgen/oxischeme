@@ -14,8 +14,11 @@
 
 //! Implementation of primitive procedures.
 
+use std::io;
+
 use environment::{ActivationPtr, Environment};
 use heap::{Heap, Rooted};
+use print::{print};
 use value::{RootedValue, SchemeResult, Value};
 
 /// The function signature for primitives.
@@ -32,15 +35,15 @@ pub type PrimitiveFunction = fn(&mut Heap, Vec<RootedValue>) -> SchemeResult;
 // }
 
 fn cons(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-    if let [car, cdr] = args.as_slice() {
-        Ok(Value::new_pair(heap, &car, &cdr))
+    if let [ref car, ref cdr] = args.as_slice() {
+        Ok(Value::new_pair(heap, car, cdr))
     } else {
         Err("Bad arguments".to_string())
     }
 }
 
 fn car(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-    if let [arg] = args.as_slice() {
+    if let [ref arg] = args.as_slice() {
         arg.car(heap).ok_or(
             format!("Cannot take car of non-cons: {}", arg))
     } else {
@@ -49,7 +52,7 @@ fn car(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 }
 
 fn cdr(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-    if let [arg] = args.as_slice() {
+    if let [ref arg] = args.as_slice() {
         arg.cdr(heap).ok_or(
             format!("Cannot take cdr of non-cons: {}", arg))
     } else {
@@ -60,6 +63,15 @@ fn cdr(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 // fn list(_: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 //     return Ok(args.clone());
 // }
+
+fn print_(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    let mut stdout = io::stdio::stdout();
+    for val in args.iter() {
+        print(heap, &mut stdout, val).ok().expect("IO ERROR!");
+        (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+    }
+    Ok(heap.unspecified_symbol())
+}
 
 // fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 //     try!(require_arity("null?", args, 1));
@@ -170,6 +182,8 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
     define_primitive(env, act, "car", car);
     define_primitive(env, act, "cdr", cdr);
     // define_primitive(env, act, "list", list);
+
+    define_primitive(env, act, "print", print_);
 
     // define_primitive(env, act, "null?", null_question);
     // define_primitive(env, act, "pair?", pair_question);

@@ -45,11 +45,15 @@ impl Activation {
     /// new `Activation` instance.
     pub fn extend(heap: &mut Heap,
                   parent: &RootedActivationPtr,
-                  values: Vec<RootedValue>) -> Result<RootedActivationPtr, String> {
+                  values: Vec<RootedValue>) -> RootedActivationPtr {
+        println!("FITZGEN: extending activation");
+        println!("FITZGEN:     parent = {}", parent);
+        println!("FITZGEN:     values = {}", &values);
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
         act.args = values.into_iter().map(|rooted_val| *rooted_val).collect();
-        return Ok(act);
+        println!("FITZGEN:     new activation = {}", &act);
+        return act;
     }
 
     /// TODO FITZGEN
@@ -139,52 +143,56 @@ pub type RootedActivationPtr = Rooted<ActivationPtr>;
 /// TODO FITZGEN
 pub struct Environment {
     /// TODO FITZGEN
-    parent: Option<Box<Environment>>,
-    /// TODO FITZGEN
-    bindings: HashMap<String, u32>,
-    /// TODO FITZGEN
-    depth: u32,
+    bindings: Vec<HashMap<String, u32>>,
 }
 
 impl Environment {
     /// TODO FITZGEN
     pub fn new() -> Environment {
         Environment {
-            parent: None,
-            bindings: HashMap::new(),
-            depth: 0,
+            bindings: vec!(HashMap::new())
         }
     }
 
     /// TODO FITZGEN
-    // pub fn extend() -> Environment {
-    // }
+    pub fn extend(&mut self, names: Vec<String>) {
+        self.bindings.push(HashMap::new());
+        for n in names.into_iter() {
+            self.define(n);
+        }
+    }
+
+    /// TODO FITZGEN
+    pub fn pop(&mut self) {
+        assert!(self.bindings.len() > 1,
+                "Should never pop off the global environment");
+        self.bindings.pop();
+    }
+
+    /// TODO FITZGEN
+    fn youngest<'a>(&'a mut self) -> &'a mut HashMap<String, u32> {
+        let last_idx = self.bindings.len() - 1;
+        &mut self.bindings[last_idx]
+    }
 
     /// TODO FITZGEN
     pub fn define(&mut self, name: String) -> (u32, u32) {
-        if let Some(n) = self.bindings.get(&name) {
-            return (self.depth, *n);
+        if let Some(n) = self.youngest().get(&name) {
+            return (0, *n);
         }
 
-        let n = self.bindings.len() as u32;
-        self.bindings.insert(name, n);
-        return (self.depth, n);
+        let n = self.youngest().len() as u32;
+        self.youngest().insert(name, n);
+        return (0, n);
     }
 
     /// TODO FITZGEN
     pub fn lookup(&self, name: &String) -> Option<(u32, u32)> {
-        self.lookup_helper(0, name)
-    }
-
-    fn lookup_helper(&self, i: u32, name: &String) -> Option<(u32, u32)> {
-        if let Some(j) = self.bindings.get(name) {
-            let coords = (i, *j);
-            return Some(coords);
+        for (i, bindings) in self.bindings.iter().rev().enumerate() {
+            if let Some(j) = bindings.get(name) {
+                return Some((i as u32, *j));
+            }
         }
-
-        return match self.parent {
-            None             => None,
-            Some(ref parent) => parent.lookup_helper(i + 1, name),
-        }
+        return None;
     }
 }
