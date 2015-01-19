@@ -291,9 +291,6 @@ impl<T: ToGcThing> Rooted<T> {
     /// Unroot the current referent and replace it with the given referent,
     /// which then gets rooted.
     pub fn emplace(&mut self, rhs: T) {
-        println!("FITZGEN: inside Rooted<T>::emplace");
-        println!("FITZGEN:     old value = {}", &self.ptr);
-        println!("FITZGEN:     new value = {}", &rhs);
         self.drop_root();
         self.ptr = rhs;
         self.add_root();
@@ -301,8 +298,6 @@ impl<T: ToGcThing> Rooted<T> {
 
     /// Add the current referent as a GC root.
     fn add_root(&mut self) {
-        println!("FITZGEN: inside Rooted<T>::add_root");
-        println!("FITZGEN:     self.ptr = {}", &self.ptr);
         if let Some(r) = self.ptr.to_gc_thing() {
             unsafe {
                 self.heap.as_mut()
@@ -314,8 +309,6 @@ impl<T: ToGcThing> Rooted<T> {
 
     /// Unroot the current referent.
     fn drop_root(&mut self) {
-        println!("FITZGEN: inside Rooted<T>::drop_root");
-        println!("FITZGEN:     self.ptr = {}", &self.ptr);
         unsafe {
             let heap = self.heap.as_mut()
                 .expect("Rooted<T>::drop should always have a Heap");
@@ -395,7 +388,7 @@ pub struct Heap {
     activations: Box<Arena<Activation>>,
     procedures: Box<Arena<Procedure>>,
 
-    roots: HashMap<GcThing, uint>,
+    roots: Vec<(GcThing, uint)>,
     symbol_table: HashMap<String, StringPtr>,
     global_activation: ActivationPtr,
     allocations: uint,
@@ -443,7 +436,7 @@ impl Heap {
             procedures: procs,
 
             global_activation: global_act,
-            roots: HashMap::new(),
+            roots: vec!(),
             symbol_table: HashMap::new(),
             allocations: 0,
         }
@@ -480,10 +473,8 @@ impl Heap {
     ///
     /// Panics if the `Arena` for activations has already reached capacity.
     pub fn allocate_activation(&mut self) -> RootedActivationPtr {
-        println!("FITZGEN: allocating a new activation");
         self.on_allocation();
         let a = self.activations.allocate();
-        println!("FITZGEN:      activation = {}", &a);
         Rooted::new(self, a)
     }
 
@@ -555,22 +546,33 @@ impl Heap {
 
     /// Explicitly add the given GC thing as a root.
     pub fn add_root(&mut self, root: GcThing) {
-        let zero = 0u;
-        let current_count = *self.roots.get(&root).unwrap_or(&zero);
-        self.roots.insert(root, current_count + 1);
+        for pair in self.roots.iter_mut() {
+            let (ref r, ref mut count) = *pair;
+            if *r == root {
+                *count += 1;
+                return;
+            }
+        }
+        self.roots.push((root, 1));
     }
 
     /// Unroot a GC thing that was explicitly rooted with `add_root`.
     pub fn drop_root<T: ToGcThing>(&mut self, root: &Rooted<T>) {
         if let Some(r) = root.to_gc_thing() {
-            let current_count = *(self.roots.get(&r))
-                .unwrap();
-                // .expect("Should never drop_root a gc thing that isn't rooted");
-            if current_count == 1 {
-                self.roots.remove(&r);
-            } else {
-                self.roots.insert(r, current_count - 1);
-            }
+            self.roots = self.roots.iter().fold(vec!(), |mut v, pair| {
+                let (ref rr, ref count) = *pair;
+                if r == *rr {
+                    if *count == 1 {
+                        return v;
+                    } else {
+                        v.push((*rr, *count - 1));
+                    }
+                } else {
+                    v.push((*rr, *count));
+                }
+
+                return v;
+            });
         }
     }
 
@@ -592,7 +594,8 @@ impl Heap {
 
         roots.push(GcThing::from_activation_ptr(self.global_activation));
 
-        for root in self.roots.keys() {
+        for pair in self.roots.iter() {
+            let (ref root, _) = *pair;
             roots.push(*root);
         }
 

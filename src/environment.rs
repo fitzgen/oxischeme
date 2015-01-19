@@ -46,13 +46,9 @@ impl Activation {
     pub fn extend(heap: &mut Heap,
                   parent: &RootedActivationPtr,
                   values: Vec<RootedValue>) -> RootedActivationPtr {
-        println!("FITZGEN: extending activation");
-        println!("FITZGEN:     parent = {}", parent);
-        println!("FITZGEN:     values = {}", &values);
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
         act.args = values.into_iter().map(|rooted_val| *rooted_val).collect();
-        println!("FITZGEN:     new activation = {}", &act);
         return act;
     }
 
