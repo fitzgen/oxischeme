@@ -24,16 +24,6 @@ use value::{RootedValue, SchemeResult, Value};
 /// The function signature for primitives.
 pub type PrimitiveFunction = fn(&mut Heap, Vec<RootedValue>) -> SchemeResult;
 
-// fn require_arity(name: &'static str,
-//                  args: Vec<RootedValue>,
-//                  n: u64) -> Result<(), String> {
-//     match n.cmp(args.len()) {
-//         Eq      => Ok(()),
-//         Less    => Err("Too many arguments".to_string()),
-//         Greater => Err("Too few arguments".to_string()),
-//     }
-// }
-
 fn cons(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     if let [ref car, ref cdr] = args.as_slice() {
         Ok(Value::new_pair(heap, car, cdr))
@@ -74,15 +64,13 @@ fn print_(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     Ok(heap.unspecified_symbol())
 }
 
-// fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("null?", args, 1));
-//     let arg = args.car(heap)
-//         .expect("If length = 1, then we must have a car");
-//     Ok(Rooted::new(heap, Value::new_boolean(match *arg {
-//         Value::EmptyList => true,
-//         _                => false,
-//     })))
-// }
+fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref arg] = args.as_slice() {
+        Ok(Rooted::new(heap, Value::new_boolean(**arg == Value::EmptyList)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
 // fn pair_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 //     try!(require_arity("pair?", args, 1));
@@ -186,7 +174,7 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
 
     define_primitive(env, act, "print", print_);
 
-    // define_primitive(env, act, "null?", null_question);
+    define_primitive(env, act, "null?", null_question);
     // define_primitive(env, act, "pair?", pair_question);
     // define_primitive(env, act, "atom?", atom_question);
     // define_primitive(env, act, "eq?", eq_question);
@@ -255,19 +243,19 @@ fn test_primitives_list() {
                Value::EmptyList);
 }
 
-// #[test]
-// fn test_primitives_null() {
-//     use eval::evaluate_file;
+#[test]
+fn test_primitives_null() {
+    use eval::evaluate_file;
 
-//     let heap = &mut Heap::new();
-//     let result = evaluate_file(heap, "./tests/test_primitives_null.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     let pair = result.to_pair(heap)
-//         .expect("Result should be a pair");
-//     assert_eq!(*pair.car(heap), Value::new_boolean(true));
-//     assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-// }
+    let heap = &mut Heap::new();
+    let result = evaluate_file(heap, "./tests/test_primitives_null.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    let pair = result.to_pair(heap)
+        .expect("Result should be a pair");
+    assert_eq!(*pair.car(heap), Value::new_boolean(true));
+    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+}
 
 // #[test]
 // fn test_primitives_arithmetic() {
