@@ -129,6 +129,7 @@ use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::default::{Default};
 use std::fmt;
+use std::ops::{Deref, DerefMut};
 use std::vec::{IntoIter};
 
 use environment::{Activation, ActivationPtr, RootedActivationPtr, Environment};
@@ -138,7 +139,7 @@ use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
-type FreeList = Vec<uint>;
+type FreeList = Vec<usize>;
 
 /// An arena from which to allocate `T` objects from.
 pub struct Arena<T> {
@@ -149,18 +150,18 @@ pub struct Arena<T> {
 impl<T: Default> Arena<T> {
     /// Create a new `Arena` with the capacity to allocate the given number of
     /// `T` instances.
-    pub fn new(capacity: uint) -> Box<Arena<T>> {
+    pub fn new(capacity: usize) -> Box<Arena<T>> {
         assert!(capacity > 0);
-        box Arena {
+        Box::new(Arena {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
-        }
+        })
     }
 }
 
 impl<T> Arena<T> {
     /// Get this heap's capacity for simultaneously allocated cons cells.
-    pub fn capacity(&self) -> uint {
+    pub fn capacity(&self) -> usize {
         self.pool.len()
     }
 
@@ -186,7 +187,7 @@ impl<T> Arena<T> {
     }
 
     /// Sweep the arena and add any reclaimed objects back to the free list.
-    pub fn sweep(&mut self, live: HashSet<uint>) {
+    pub fn sweep(&mut self, live: HashSet<usize>) {
         self.free = range(0, self.capacity())
             .filter(|n| !live.contains(n))
             .collect();
@@ -194,24 +195,24 @@ impl<T> Arena<T> {
 }
 
 /// A pointer to a `T` instance in an arena.
-#[allow(raw_pointer_deriving)]
-#[deriving(Hash)]
+#[allow(raw_pointer_derive)]
+#[derive(Hash)]
 pub struct ArenaPtr<T> {
     arena: *mut Arena<T>,
-    index: uint,
+    index: usize,
 }
 
 // XXX: We have to manually declare that ArenaPtr<T> is copy-able because if we
-// use `#[deriving(Copy)]` it wants T to be copy-able as well, despite the fact
+// use `#[derive(Copy)]` it wants T to be copy-able as well, despite the fact
 // that we only need to copy our pointer to the Arena<T>, not any T or the Arena
 // itself.
-impl<T> ::std::kinds::Copy for ArenaPtr<T> { }
+impl<T> ::std::marker::Copy for ArenaPtr<T> { }
 
 impl<T> ArenaPtr<T> {
     /// Create a new `ArenaPtr` to the `T` instance at the given index in the
     /// provided arena. **Not** publicly exposed, and should only be called by
     /// `Arena::allocate`.
-    fn new(arena: *mut Arena<T>, index: uint) -> ArenaPtr<T> {
+    fn new(arena: *mut Arena<T>, index: usize) -> ArenaPtr<T> {
         unsafe {
             let arena_ref = arena.as_ref()
                 .expect("ArenaPtr<T>::new should be passed a valid Arena.");
@@ -224,7 +225,8 @@ impl<T> ArenaPtr<T> {
     }
 }
 
-impl<T> Deref<T> for ArenaPtr<T> {
+impl<T> Deref for ArenaPtr<T> {
+    type Target = T;
     fn deref<'a>(&'a self) -> &'a T {
         unsafe {
             let arena = self.arena.as_ref()
@@ -234,7 +236,7 @@ impl<T> Deref<T> for ArenaPtr<T> {
     }
 }
 
-impl<T> DerefMut<T> for ArenaPtr<T> {
+impl<T> DerefMut for ArenaPtr<T> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         unsafe {
             let arena = self.arena.as_mut()
@@ -256,7 +258,7 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
     /// `eq?`, not the scheme function `equal?`.
     fn eq(&self, other: &ArenaPtr<T>) -> bool {
         self.index == other.index
-            && (self.arena as uint) == (other.arena as uint)
+            && (self.arena as usize) == (other.arena as usize)
     }
 }
 
@@ -272,6 +274,8 @@ pub trait ToGcThing: fmt::Show {
 /// while the smart pointer is in scope to prevent dangling pointers caused by a
 /// garbage collection within the pointers lifespan. For more information see
 /// the module level documentation about rooting.
+#[allow(raw_pointer_derive)]
+#[derive(Hash, Show)]
 pub struct Rooted<T> {
     heap: *mut Heap,
     ptr: T,
@@ -323,13 +327,14 @@ impl<T: ToGcThing> ToGcThing for Rooted<T> {
     }
 }
 
-impl<T> Deref<T> for Rooted<T> {
+impl<T> Deref for Rooted<T> {
+    type Target = T;
     fn deref<'a>(&'a self) -> &'a T {
         &self.ptr
     }
 }
 
-impl<T> DerefMut<T> for Rooted<T> {
+impl<T> DerefMut for Rooted<T> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         &mut self.ptr
     }
@@ -359,12 +364,6 @@ impl<T: PartialEq> PartialEq for Rooted<T> {
 }
 impl<T: PartialEq + Eq> Eq for Rooted<T> { }
 
-impl<T: fmt::Show> fmt::Show for Rooted<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Rooted({})", self.ptr)
-    }
-}
-
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;
 
@@ -388,23 +387,23 @@ pub struct Heap {
     activations: Box<Arena<Activation>>,
     procedures: Box<Arena<Procedure>>,
 
-    roots: Vec<(GcThing, uint)>,
+    roots: Vec<(GcThing, usize)>,
     symbol_table: HashMap<String, StringPtr>,
     global_activation: ActivationPtr,
-    allocations: uint,
+    allocations: usize,
 }
 
 /// The default capacity of cons cells.
-pub static DEFAULT_CONS_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_CONS_CAPACITY : usize = 1 << 12;
 
 /// The default capacity of strings.
-pub static DEFAULT_STRINGS_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_STRINGS_CAPACITY : usize = 1 << 12;
 
 /// The default capacity of activations.
-pub static DEFAULT_ACTIVATIONS_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_ACTIVATIONS_CAPACITY : usize = 1 << 12;
 
 /// The default capacity of procedures.
-pub static DEFAULT_PROCEDURES_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_PROCEDURES_CAPACITY : usize = 1 << 12;
 
 /// ## `Heap` Constructors
 impl Heap {
@@ -492,7 +491,7 @@ impl Heap {
 
 /// The maximum number of things to allocate before triggering a garbage
 /// collection.
-const MAX_GC_PRESSURE : uint = 1 << 8;
+const MAX_GC_PRESSURE : usize = 1 << 8;
 
 /// ## `Heap` Methods for Garbage Collection
 impl Heap {
@@ -645,7 +644,7 @@ impl Heap {
     /// TODO FITZGEN
     pub fn with_extended_env<T>(&mut self,
                                 names: Vec<String>,
-                                block: |&mut Heap| -> T) -> T {
+                                block: &Fn(&mut Heap) -> T) -> T {
         self.environment.extend(names);
         let result = block(self);
         self.environment.pop();
@@ -733,7 +732,7 @@ pub trait Trace {
 }
 
 /// The union of the various types that are GC things.
-#[deriving(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Show)]
 pub enum GcThing {
     Cons(ConsPtr),
     String(StringPtr),

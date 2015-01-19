@@ -14,7 +14,8 @@
 
 //! A Scheme implementation, in Rust.
 
-#![feature(default_type_params, unsafe_destructor)]
+#![feature(unsafe_destructor)]
+#![allow(unstable)]
 
 use std::io;
 use std::os;
@@ -23,7 +24,6 @@ pub mod environment;
 pub mod eval;
 pub mod heap;
 pub mod primitives;
-pub mod print;
 pub mod read;
 pub mod value;
 
@@ -42,7 +42,7 @@ pub fn repl(heap: &mut heap::Heap) {
         for form in reader {
             match eval::evaluate(heap, &form) {
                 Ok(val) => {
-                    print::print(heap, &mut stdout, &val).ok().expect("IO ERROR!");
+                    print!("{}", *val);
                 },
                 Err(e) => {
                     (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");

@@ -59,7 +59,7 @@ impl Activation {
                           "Activation::fetch: j out of bounds: j = {}, activation length = {}",
                           j,
                           self.args.len());
-            return Rooted::new(heap, self.args[j as uint]);
+            return Rooted::new(heap, self.args[j as usize]);
         }
 
         return self.parent.expect("Activation::fetch: i out of bounds")
@@ -73,7 +73,7 @@ impl Activation {
                           "Activation::update: j out of bounds: j = {}, activation length = {}",
                           j,
                           self.args.len());
-            self.args[j as uint] = **val;
+            self.args[j as usize] = **val;
             return;
         }
 
@@ -92,7 +92,7 @@ impl Activation {
     }
 }
 
-impl<S: hash::Writer> hash::Hash<S> for Activation {
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Activation {
     fn hash(&self, state: &mut S) {
         self.parent.hash(state);
         for v in self.args.iter() {

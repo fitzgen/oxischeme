@@ -28,7 +28,7 @@ use primitives::{PrimitiveFunction};
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[deriving(Copy, Eq, Hash, PartialEq)]
+#[derive(Copy, Eq, Hash, PartialEq)]
 pub struct Cons {
     car: Value,
     cdr: Value,
@@ -125,7 +125,7 @@ impl Trace for Procedure {
     }
 }
 
-impl<S: hash::Writer> hash::Hash<S> for Procedure {
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Procedure {
     fn hash(&self, state: &mut S) {
         self.arity.hash(state);
         self.act.hash(state);
@@ -148,7 +148,7 @@ impl ToGcThing for ProcedurePtr {
 pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 
 /// A primitive procedure, such as Scheme's `+` or `cons`.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Primitive {
     /// The function implementing the primitive.
     function: PrimitiveFunction,
@@ -158,15 +158,15 @@ pub struct Primitive {
 
 impl PartialEq for Primitive {
     fn eq(&self, rhs: &Self) -> bool {
-        self.function as uint == rhs.function as uint
+        self.function as usize == rhs.function as usize
     }
 }
 
 impl Eq for Primitive { }
 
-impl<S: hash::Writer> hash::Hash<S> for Primitive {
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Primitive {
     fn hash(&self, state: &mut S) {
-        let u = self.function as uint;
+        let u = self.function as usize;
         u.hash(state);
     }
 }
@@ -189,7 +189,7 @@ impl fmt::Show for Primitive {
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
 /// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
-#[deriving(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
@@ -257,7 +257,7 @@ impl Value {
         let mut procedure = heap.allocate_procedure();
         procedure.arity = arity;
         procedure.act = Some(**act);
-        procedure.body = Some(box body);
+        procedure.body = Some(Box::new(body));
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
@@ -382,19 +382,74 @@ impl ToGcThing for Value {
     }
 }
 
+/// Print the given cons pair, without the containing "(" and ")".
+fn print_pair(f: &mut fmt::Formatter, cons: &ConsPtr) -> fmt::Result {
+    try!(write!(f, "{}", &cons.car));
+    match cons.cdr {
+        Value::EmptyList => Ok(()),
+        Value::Pair(ref cdr) => {
+            try!(write!(f, " "));
+            print_pair(f, cdr)
+        },
+        ref val => {
+            try!(write!(f, " . "));
+            write!(f, "{}", val)
+        },
+    }
+}
+
+impl fmt::String for Value {
+    /// Print the given value's text representation to the given writer. This is
+    /// the opposite of `Read`.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Value::EmptyList        => write!(f, "()"),
+            Value::Pair(ref cons)   => {
+                try!(write!(f, "("));
+                try!(print_pair(f, cons));
+                write!(f, ")")
+            },
+            Value::String(ref str)  => {
+                try!(write!(f, "\""));
+                try!(write!(f, "{}", **str));
+                write!(f, "\"")
+            },
+            Value::Symbol(ref s)    => write!(f, "{}", **s),
+            Value::Integer(ref i)   => write!(f, "{}", i),
+            Value::Boolean(ref b)   => {
+                write!(f, "{}", if *b {
+                    "#t"
+                } else {
+                    "#f"
+                })
+            },
+            Value::Character(ref c) => match *c {
+                '\n' => write!(f, "#\\newline"),
+                '\t' => write!(f, "#\\tab"),
+                ' '  => write!(f, "#\\space"),
+                _    => write!(f, "#\\{}", c),
+            },
+            Value::Procedure(ref p) => write!(f, "{:?}", p),
+            Value::Primitive(ref p) => write!(f, "{:?}", p),
+        }
+    }
+}
+
 pub type RootedValue = Rooted<Value>;
 
 /// Either a Scheme `RootedValue`, or a `String` containing an error message.
 pub type SchemeResult = Result<RootedValue, String>;
 
 /// TODO FITZGEN
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct ConsIterator {
     val: Value
 }
 
 /// TODO FITZGEN
-impl Iterator<Result<Value, ()>> for ConsIterator {
+impl Iterator for ConsIterator {
+    type Item = Result<Value, ()>;
+
     fn next(&mut self) -> Option<Result<Value, ()>> {
         match self.val {
             Value::EmptyList => None,
@@ -413,8 +468,8 @@ pub fn list(heap: &mut Heap, values: &[RootedValue]) -> RootedValue {
     list_helper(heap, &mut values.iter())
 }
 
-fn list_helper<'a, T: Iterator<&'a RootedValue>>(heap: &mut Heap,
-                                                 values: &mut T) -> RootedValue {
+fn list_helper<'a, T: Iterator<Item=&'a RootedValue>>(heap: &mut Heap,
+                                                      values: &mut T) -> RootedValue {
     match values.next() {
         None      => Rooted::new(heap, Value::EmptyList),
         Some(car) => {

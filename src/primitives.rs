@@ -14,11 +14,8 @@
 
 //! Implementation of primitive procedures.
 
-use std::io;
-
 use environment::{ActivationPtr, Environment};
 use heap::{Heap, Rooted};
-use print::{print};
 use value::{RootedValue, SchemeResult, Value};
 
 /// The function signature for primitives.
@@ -35,7 +32,7 @@ fn cons(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 fn car(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     if let [ref arg] = args.as_slice() {
         arg.car(heap).ok_or(
-            format!("Cannot take car of non-cons: {}", arg))
+            format!("Cannot take car of non-cons: {}", **arg))
     } else {
         Err("Bad arguments".to_string())
     }
@@ -44,7 +41,7 @@ fn car(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
 fn cdr(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     if let [ref arg] = args.as_slice() {
         arg.cdr(heap).ok_or(
-            format!("Cannot take cdr of non-cons: {}", arg))
+            format!("Cannot take cdr of non-cons: {}", **arg))
     } else {
         Err("Bad arguments".to_string())
     }
@@ -55,11 +52,9 @@ fn list(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     return Ok(value::list(heap, args.as_slice()));
 }
 
-fn print_(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-    let mut stdout = io::stdio::stdout();
+fn print(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     for val in args.iter() {
-        print(heap, &mut stdout, val).ok().expect("IO ERROR!");
-        (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
+        println!("{}", **val);
     }
     Ok(heap.unspecified_symbol())
 }
@@ -168,7 +163,7 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
     define_primitive(env, act, "cdr", cdr);
     define_primitive(env, act, "list", list);
 
-    define_primitive(env, act, "print", print_);
+    define_primitive(env, act, "print", print);
 
     define_primitive(env, act, "null?", null_question);
     define_primitive(env, act, "pair?", pair_question);

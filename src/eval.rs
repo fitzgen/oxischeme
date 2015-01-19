@@ -14,6 +14,7 @@
 
 //! TODO FITZGEN
 
+use std::cmp::{Ordering};
 use std::fmt;
 use std::hash;
 
@@ -47,7 +48,7 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
 }
 
 /// TODO FITZGEN
-#[deriving(Show)]
+#[derive(Show)]
 pub enum Trampoline {
     Value(RootedValue),
     Thunk(RootedActivationPtr, Meaning),
@@ -57,7 +58,7 @@ pub enum Trampoline {
 pub type TrampolineResult = Result<Trampoline, String>;
 
 /// TODO FITZGEN
-#[deriving(Clone, Hash, Show)]
+#[derive(Clone, Hash, Show)]
 enum MeaningData {
     /// The quoted value.
     Quotation(RootedValue),
@@ -91,6 +92,12 @@ enum MeaningData {
 type MeaningEvaluatorFn = fn(&mut Heap,
                              &MeaningData,
                              &mut RootedActivationPtr) -> TrampolineResult;
+
+impl fmt::Show for MeaningEvaluatorFn {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "0x{:x}", *self as usize)
+    }
+}
 
 #[allow(unused_variables)]
 fn evaluate_quotation(heap: &mut Heap,
@@ -193,14 +200,14 @@ fn evaluate_invocation(heap: &mut Heap,
 
             Value::Procedure(proc_ptr) => {
                 match proc_ptr.arity.cmp(&(args.len() as u32)) {
-                    Less => return Err("Too many arguments passed".to_string()),
-                    Greater => return Err("Too few arguments passed".to_string()),
+                    Ordering::Less => return Err("Too many arguments passed".to_string()),
+                    Ordering::Greater => return Err("Too few arguments passed".to_string()),
                     _ => { },
                 }
 
                 let new_act = Activation::extend(heap, act, args);
                 if let Some(ref body) = proc_ptr.body {
-                    return Ok(Trampoline::Thunk(new_act, body.deref().clone()));
+                    return Ok(Trampoline::Thunk(new_act, (**body).clone()));
                 } else {
                     panic!("Should never see an uninitialized procedure!");
                 }
@@ -217,6 +224,7 @@ fn evaluate_invocation(heap: &mut Heap,
 }
 
 /// TODO FITZGEN
+#[derive(Show)]
 pub struct Meaning {
     data: Box<MeaningData>,
     evaluator: MeaningEvaluatorFn,
@@ -227,7 +235,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_quotation(form: &RootedValue) -> Meaning {
         Meaning {
-            data: box MeaningData::Quotation((*form).clone()),
+            data: Box::new(MeaningData::Quotation((*form).clone())),
             evaluator: evaluate_quotation,
         }
     }
@@ -235,7 +243,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_reference(i: u32, j: u32) -> Meaning {
         Meaning {
-            data: box MeaningData::Reference(i, j),
+            data: Box::new(MeaningData::Reference(i, j)),
             evaluator: evaluate_reference,
         }
     }
@@ -243,7 +251,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_set_variable(i: u32, j: u32, val: Meaning) -> Meaning {
         Meaning {
-            data: box MeaningData::SetVariable(i, j, val),
+            data: Box::new(MeaningData::SetVariable(i, j, val)),
             evaluator: evaluate_set_variable,
         }
     }
@@ -253,9 +261,9 @@ impl Meaning {
                        consquent: Meaning,
                        alternative: Meaning) -> Meaning {
         Meaning {
-            data: box MeaningData::Conditional(condition,
-                                               consquent,
-                                               alternative),
+            data: Box::new(MeaningData::Conditional(condition,
+                                                    consquent,
+                                                    alternative)),
             evaluator: evaluate_conditional,
         }
     }
@@ -263,7 +271,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_sequence(first: Meaning, second: Meaning) -> Meaning {
         Meaning {
-            data: box MeaningData::Sequence(first, second),
+            data: Box::new(MeaningData::Sequence(first, second)),
             evaluator: evaluate_sequence,
         }
     }
@@ -271,7 +279,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_definition(defined: Meaning) -> Meaning {
         Meaning {
-            data: box MeaningData::Definition(defined),
+            data: Box::new(MeaningData::Definition(defined)),
             evaluator: evaluate_definition,
         }
     }
@@ -279,7 +287,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_lambda(arity: u32, body: Meaning) -> Meaning {
         Meaning {
-            data: box MeaningData::Lambda(arity, body),
+            data: Box::new(MeaningData::Lambda(arity, body)),
             evaluator: evaluate_lambda
         }
     }
@@ -287,7 +295,7 @@ impl Meaning {
     /// TODO FITZGEN
     fn new_invocation(procedure: Meaning, params: Vec<Meaning>) -> Meaning {
         Meaning {
-            data: box MeaningData::Invocation(procedure, params),
+            data: Box::new(MeaningData::Invocation(procedure, params)),
             evaluator: evaluate_invocation,
         }
     }
@@ -329,27 +337,27 @@ impl Meaning {
 impl Clone for Meaning {
     fn clone(&self) -> Self {
         Meaning {
-            data: box self.data.deref().clone(),
+            data: self.data.clone(),
             evaluator: self.evaluator,
         }
     }
 }
 
-impl<S: hash::Writer> hash::Hash<S> for Meaning {
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Meaning {
     fn hash(&self, state: &mut S) {
-        let u = self.evaluator as uint;
+        let u = self.evaluator as usize;
         u.hash(state);
         self.data.hash(state);
     }
 }
 
-impl fmt::Show for Meaning {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Meaning(0x{:x}, {})",
-               self.evaluator as uint,
-               self.data)
-    }
-}
+// impl fmt::Show for Meaning {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "Meaning(0x{:x}, {?})",
+//                self.evaluator as usize,
+//                self.data)
+//     }
+// }
 
 /// TODO FITZGEN
 impl Trace for Meaning {
@@ -481,7 +489,7 @@ fn analyze_set(heap: &mut Heap,
             // setting.
             return Err(format!(
                 "Static error: cannot set! undefined variable: {}",
-                *str));
+                **str));
         }
 
         return Err("Static error: can only set! symbols".to_string());
@@ -503,29 +511,27 @@ fn analyze_lambda(heap: &mut Heap,
     let body = pair.cddr(heap)
         .ok().expect("Must be here since length >= 3");
 
-    let params_res : Result<Vec<Value>, _> = pair.cadr(heap)
-        .ok().expect("Must be here since length >= 3")
-        .iter().collect();
+    let mut params = vec!();
+    let mut arity = 0;
+    let params_form = pair.cadr(heap).ok().expect(
+        "Must be here since length >= 3");
+    for p in params_form.iter() {
+        arity += 1;
+        params.push(try!(p.ok().ok_or("Bad lambda parameters".to_string())));
+    }
 
-    match params_res {
-        Err(_) => return Err("Bad lambda parameters".to_string()),
-        Ok(params) => {
-            let arity = params.len();
+    let param_names = try!(params.into_iter().map(|p| {
+        let sym = try!(p.to_symbol(heap)
+                       .ok_or(format!("Can only define symbol parameters, found {}",
+                                      p)));
+        Ok((**sym).clone())
+    }).collect());
 
-            let param_names = try!(params.into_iter().map(|p| {
-                let sym = try!(p.to_symbol(heap)
-                    .ok_or(format!("Can only define symbol parameters, found {}",
-                                   p)));
-                Ok((**sym).clone())
-            }).collect());
+    let body_meaning = try!(heap.with_extended_env(param_names, &|heap| {
+        make_meaning_sequence(heap, &body)
+    }));
 
-            let body_meaning = try!(heap.with_extended_env(param_names, |heap| {
-                make_meaning_sequence(heap, &body)
-            }));
-
-            return Ok(Meaning::new_lambda(arity as u32, body_meaning));
-        }
-    };
+    return Ok(Meaning::new_lambda(arity as u32, body_meaning));
 }
 
 /// TODO FITZGEN
@@ -608,7 +614,7 @@ fn analyze_invocation(heap: &mut Heap,
         let arity = try!(params_form.len().ok().ok_or(
             "Static error: improperly formed invocation".to_string()));
         let params_meaning = try!(make_meaning_vector(
-            heap, &params_form, Vec::with_capacity(arity as uint)));
+            heap, &params_form, Vec::with_capacity(arity as usize)));
 
         return Ok(Meaning::new_invocation(proc_meaning, params_meaning));
     }
