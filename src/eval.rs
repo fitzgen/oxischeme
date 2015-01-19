@@ -647,6 +647,7 @@ fn test_eval_quoted() {
 
 // #[test]
 // fn test_eval_if_consequent() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file(&mut heap, "./tests/test_eval_if_consequent.scm")
 //         .ok()
@@ -656,6 +657,7 @@ fn test_eval_quoted() {
 
 // #[test]
 // fn test_eval_if_alternative() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file(&mut heap, "./tests/test_eval_if_alternative.scm")
 //         .ok()
@@ -665,6 +667,7 @@ fn test_eval_quoted() {
 
 // #[test]
 // fn test_eval_begin() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file(&mut heap, "./tests/test_eval_begin.scm")
 //         .ok()
@@ -672,49 +675,50 @@ fn test_eval_quoted() {
 //     assert_eq!(*result, Value::new_integer(2));
 // }
 
-// #[test]
-// fn test_eval_variables() {
-//     use value::list;
+#[test]
+fn test_eval_variables() {
+    use value::list;
 
-//     let heap = &mut Heap::new();
+    let heap = &mut Heap::new();
 
-//     let define_symbol = heap.define_symbol();
-//     let set_bang_symbol = heap.set_bang_symbol();
-//     let foo_symbol = heap.get_or_create_symbol("foo".to_string());
+    let define_symbol = heap.define_symbol();
+    let set_bang_symbol = heap.set_bang_symbol();
+    let foo_symbol = heap.get_or_create_symbol("foo".to_string());
 
-//     let mut def_items = [
-//         define_symbol,
-//         foo_symbol,
-//         Rooted::new(heap, Value::new_integer(2))
-//     ];
-//     let def_form = list(heap, &mut def_items);
-//     evaluate(heap, &def_form).ok()
-//         .expect("Should be able to define");
+    let mut def_items = [
+        define_symbol,
+        foo_symbol,
+        Rooted::new(heap, Value::new_integer(2))
+    ];
+    let def_form = list(heap, &mut def_items);
+    evaluate(heap, &def_form).ok()
+        .expect("Should be able to define");
 
-//     let foo_symbol_ = heap.get_or_create_symbol("foo".to_string());
+    let foo_symbol_ = heap.get_or_create_symbol("foo".to_string());
 
-//     let def_val = evaluate(heap, &foo_symbol_).ok()
-//         .expect("Should be able to get a defined symbol's value");
-//     assert_eq!(*def_val, Value::new_integer(2));
+    let def_val = evaluate(heap, &foo_symbol_).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(*def_val, Value::new_integer(2));
 
-//     let mut set_items = [
-//         set_bang_symbol,
-//         foo_symbol_,
-//         Rooted::new(heap, Value::new_integer(1))
-//     ];
-//     let set_form = list(heap, &mut set_items);
-//     evaluate(heap, &set_form).ok()
-//         .expect("Should be able to define");
+    let mut set_items = [
+        set_bang_symbol,
+        foo_symbol_,
+        Rooted::new(heap, Value::new_integer(1))
+    ];
+    let set_form = list(heap, &mut set_items);
+    evaluate(heap, &set_form).ok()
+        .expect("Should be able to define");
 
-//     let foo_symbol__ = heap.get_or_create_symbol("foo".to_string());
+    let foo_symbol__ = heap.get_or_create_symbol("foo".to_string());
 
-//     let set_val = evaluate(heap, &foo_symbol__).ok()
-//         .expect("Should be able to get a defined symbol's value");
-//     assert_eq!(*set_val, Value::new_integer(1));
-// }
+    let set_val = evaluate(heap, &foo_symbol__).ok()
+        .expect("Should be able to get a defined symbol's value");
+    assert_eq!(*set_val, Value::new_integer(1));
+}
 
 // #[test]
 // fn test_eval_and_call_lambda() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file(&mut heap, "./tests/test_eval_and_call_lambda.scm")
 //         .ok()
@@ -724,6 +728,7 @@ fn test_eval_quoted() {
 
 // #[test]
 // fn test_eval_closures() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
 //         .ok()
@@ -733,6 +738,7 @@ fn test_eval_quoted() {
 
 // #[test]
 // fn test_ref_defined_later() {
+//     // TODO FITZGEN: known failing
 //     let mut heap = Heap::new();
 //     let result = evaluate_file( &mut heap, "./tests/test_ref_defined_later.scm")
 //         .ok()
@@ -740,11 +746,11 @@ fn test_eval_quoted() {
 //     assert_eq!(*result, Value::new_integer(1));
 // }
 
-// #[test]
-// fn test_rooting_bug() {
-//     let mut heap = Heap::new();
-//     evaluate_file( &mut heap, "./tests/rooting-bug.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert!(true, "Should be able to evaluate that file without panicking.");
-// }
+#[test]
+fn test_rooting_bug() {
+    let mut heap = Heap::new();
+    evaluate_file( &mut heap, "./tests/rooting-bug.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert!(true, "Should be able to evaluate that file without panicking.");
+}
