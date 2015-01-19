@@ -34,35 +34,23 @@ pub fn repl(heap: &mut heap::Heap) {
     println!("");
 
     loop {
-        let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
         let mut reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
         for form in reader {
             match eval::evaluate(heap, &form) {
-                Ok(val) => {
-                    print!("{}", *val);
-                },
-                Err(e) => {
-                    (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
-                },
+                Ok(val) => println!("{}", *val),
+                Err(e)  => println!("Error: {}", e),
             };
-            (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
 
             heap.collect_garbage();
-
-            (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
-            stdout.flush().ok().expect("IO ERROR!");
+            print!("oxischeme> ");
         }
 
         match *reader.get_result() {
             Ok(_) => return,
-            Err(ref msg) => {
-                (write!(&mut stdout, "{}", msg)).ok().expect("IO ERROR!");
-                (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
-                stdout.flush().ok().expect("IO ERROR!");
-            }
+            Err(ref msg) => println!("{}", msg),
         }
     }
 }
