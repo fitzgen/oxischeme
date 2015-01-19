@@ -72,90 +72,86 @@ fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     }
 }
 
-// fn pair_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("pair?", args, 1));
-//     let arg = args.car(heap)
-//         .expect("If length = 1, then we must have a car");
-//     Ok(Rooted::new(heap, Value::new_boolean(match *arg {
-//         Value::Pair(_) => true,
-//         _              => false,
-//     })))
-// }
+fn pair_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref arg] = args.as_slice() {
+        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+            Value::Pair(_) => true,
+            _              => false,
+        })))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn atom_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("pair?", args, 1));
-//     let arg = args.car(heap)
-//         .expect("If length = 1, then we must have a car");
-//     Ok(Rooted::new(heap, Value::new_boolean(match *arg {
-//         Value::Pair(_) => false,
-//         _              => true,
-//     })))
-// }
+fn atom_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref arg] = args.as_slice() {
+        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+            Value::Pair(_) => false,
+            _              => true,
+        })))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn eq_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("eq?", args, 2));
-//     let pair = args.to_pair(heap)
-//         .expect("If length = 2, it must be a pair");
-//     let a = pair.car(heap);
-//     let b = pair.cadr(heap).ok()
-//         .expect("If length = 2, then it has a cadr");
-//     Ok(Rooted::new(heap, Value::new_boolean(a == b)))
-// }
+fn eq_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref a, ref b] = args.as_slice() {
+        Ok(Rooted::new(heap, Value::new_boolean(*a == *b)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn add(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("+", args, 2));
-//     let pair = args.to_pair(heap)
-//         .expect("If length = 2, it must be a pair");
-//     let a = try!(pair.car(heap).to_integer().ok_or(
-//         "Cannot use + with non-numbers".to_string()));
-//     let b = try!(pair.cadr(heap).ok()
-//                      .expect("If length = 2, then it has a cadr")
-//                      .to_integer().ok_or(
-//                          "Cannot use + with non-numbers".to_string()));
-//     return Ok(Rooted::new(heap, Value::new_integer(a + b)));
-// }
+fn add(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref a, ref b] = args.as_slice() {
+        let first = try!(a.to_integer().ok_or(
+            "Cannot use + with non-numbers".to_string()));
+        let second = try!(b.to_integer().ok_or(
+                     "Cannot use + with non-numbers".to_string()));
+        Ok(Rooted::new(heap, Value::new_integer(first + second)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn subtract(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("-", args, 2));
-//     let pair = args.to_pair(heap)
-//         .expect("If length = 2, it must be a pair");
-//     let a = try!(pair.car(heap).to_integer().ok_or(
-//         "Cannot use - with non-numbers".to_string()));
-//     let b = try!(pair.cadr(heap).ok()
-//                      .expect("If length = 2, then it has a cadr")
-//                      .to_integer().ok_or(
-//                          "Cannot use - with non-numbers".to_string()));
-//     return Ok(Rooted::new(heap, Value::new_integer(a - b)));
-// }
+fn subtract(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref a, ref b] = args.as_slice() {
+        let first = try!(a.to_integer().ok_or(
+            "Cannot use - with non-numbers".to_string()));
+        let second = try!(b.to_integer().ok_or(
+                     "Cannot use - with non-numbers".to_string()));
+        Ok(Rooted::new(heap, Value::new_integer(first - second)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn divide(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("/", args, 2));
-//     let pair = args.to_pair(heap)
-//         .expect("If length = 2, it must be a pair");
-//     let a = try!(pair.car(heap).to_integer().ok_or(
-//         "Cannot use + with non-numbers".to_string()));
-//     let b = try!(pair.cadr(heap).ok()
-//                      .expect("If length = 2, then it has a cadr")
-//                      .to_integer().ok_or(
-//                          "Cannot use / with non-numbers".to_string()));
-//     if b == 0 {
-//         return Err("Divide by zero".to_string());
-//     }
-//     return Ok(Rooted::new(heap, Value::new_integer(a / b)));
-// }
+fn divide(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref a, ref b] = args.as_slice() {
+        let first = try!(a.to_integer().ok_or(
+            "Cannot use / with non-numbers".to_string()));
+        let second = try!(b.to_integer().ok_or(
+                     "Cannot use / with non-numbers".to_string()));
+        if second == 0 {
+            return Err("Divide by zero".to_string());
+        }
+        Ok(Rooted::new(heap, Value::new_integer(first / second)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
-// fn multiply(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-//     try!(require_arity("*", args, 2));
-//     let pair = args.to_pair(heap)
-//         .expect("If length = 2, it must be a pair");
-//     let a = try!(pair.car(heap).to_integer().ok_or(
-//         "Cannot use + with non-numbers".to_string()));
-//     let b = try!(pair.cadr(heap).ok()
-//                      .expect("If length = 2, then it has a cadr")
-//                      .to_integer().ok_or(
-//                          "Cannot use * with non-numbers".to_string()));
-//     return Ok(Rooted::new(heap, Value::new_integer(a * b)));
-// }
+fn multiply(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref a, ref b] = args.as_slice() {
+        let first = try!(a.to_integer().ok_or(
+            "Cannot use * with non-numbers".to_string()));
+        let second = try!(b.to_integer().ok_or(
+                     "Cannot use * with non-numbers".to_string()));
+        Ok(Rooted::new(heap, Value::new_integer(first * second)))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
 
 fn define_primitive(env: &mut Environment,
                     act: &mut ActivationPtr,
@@ -175,14 +171,14 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
     define_primitive(env, act, "print", print_);
 
     define_primitive(env, act, "null?", null_question);
-    // define_primitive(env, act, "pair?", pair_question);
-    // define_primitive(env, act, "atom?", atom_question);
-    // define_primitive(env, act, "eq?", eq_question);
+    define_primitive(env, act, "pair?", pair_question);
+    define_primitive(env, act, "atom?", atom_question);
+    define_primitive(env, act, "eq?", eq_question);
 
-    // define_primitive(env, act, "+", add);
-    // define_primitive(env, act, "-", subtract);
-    // define_primitive(env, act, "/", divide);
-    // define_primitive(env, act, "*", multiply);
+    define_primitive(env, act, "+", add);
+    define_primitive(env, act, "-", subtract);
+    define_primitive(env, act, "/", divide);
+    define_primitive(env, act, "*", multiply);
 }
 
 // TESTS -----------------------------------------------------------------------
@@ -257,55 +253,55 @@ fn test_primitives_null() {
     assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
 }
 
-// #[test]
-// fn test_primitives_arithmetic() {
-//     use eval::evaluate_file;
+#[test]
+fn test_primitives_arithmetic() {
+    use eval::evaluate_file;
 
-//     let heap = &mut Heap::new();
-//     let result = evaluate_file(heap, "./tests/test_primitives_arithmetic.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(42));
-// }
+    let heap = &mut Heap::new();
+    let result = evaluate_file(heap, "./tests/test_primitives_arithmetic.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(42));
+}
 
-// #[test]
-// fn test_primitives_pair() {
-//     use eval::evaluate_file;
+#[test]
+fn test_primitives_pair() {
+    use eval::evaluate_file;
 
-//     let heap = &mut Heap::new();
-//     let result = evaluate_file(heap, "./tests/test_primitives_pair.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     let pair = result.to_pair(heap)
-//         .expect("Result should be a pair");
-//     assert_eq!(*pair.car(heap), Value::new_boolean(true));
-//     assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-// }
+    let heap = &mut Heap::new();
+    let result = evaluate_file(heap, "./tests/test_primitives_pair.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    let pair = result.to_pair(heap)
+        .expect("Result should be a pair");
+    assert_eq!(*pair.car(heap), Value::new_boolean(true));
+    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+}
 
-// #[test]
-// fn test_primitives_atom() {
-//     use eval::evaluate_file;
+#[test]
+fn test_primitives_atom() {
+    use eval::evaluate_file;
 
-//     let heap = &mut Heap::new();
-//     let result = evaluate_file(heap, "./tests/test_primitives_atom.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     let pair = result.to_pair(heap)
-//         .expect("Result should be a pair");
-//     assert_eq!(*pair.car(heap), Value::new_boolean(true));
-//     assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-// }
+    let heap = &mut Heap::new();
+    let result = evaluate_file(heap, "./tests/test_primitives_atom.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    let pair = result.to_pair(heap)
+        .expect("Result should be a pair");
+    assert_eq!(*pair.car(heap), Value::new_boolean(true));
+    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+}
 
-// #[test]
-// fn test_primitives_eq() {
-//     use eval::evaluate_file;
+#[test]
+fn test_primitives_eq() {
+    use eval::evaluate_file;
 
-//     let heap = &mut Heap::new();
-//     let result = evaluate_file(heap, "./tests/test_primitives_eq.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     let pair = result.to_pair(heap)
-//         .expect("Result should be a pair");
-//     assert_eq!(*pair.car(heap), Value::new_boolean(true));
-//     assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-// }
+    let heap = &mut Heap::new();
+    let result = evaluate_file(heap, "./tests/test_primitives_eq.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    let pair = result.to_pair(heap)
+        .expect("Result should be a pair");
+    assert_eq!(*pair.car(heap), Value::new_boolean(true));
+    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+}
