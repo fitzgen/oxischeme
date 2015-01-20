@@ -777,15 +777,14 @@ fn test_eval_variables() {
     assert_eq!(*set_val, Value::new_integer(1));
 }
 
-// #[test]
-// fn test_eval_and_call_lambda() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file(&mut heap, "./tests/test_eval_and_call_lambda.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(5));
-// }
+#[test]
+fn test_eval_and_call_lambda() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_and_call_lambda.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(5));
+}
 
 // #[test]
 // fn test_eval_closures() {
