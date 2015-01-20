@@ -355,6 +355,7 @@ impl Meaning {
 /// ## `Meaning` Methods
 impl Meaning {
     /// TODO FITZGEN
+    #[inline]
     fn evaluate_to_thunk(&self,
                          heap: &mut Heap,
                          act: &mut RootedActivationPtr) -> TrampolineResult {
@@ -366,24 +367,25 @@ impl Meaning {
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
         println!("FITZGEN: (Meaning::evaluate: {}", self);
-        let mut trampoline = try!(self.evaluate_to_thunk(heap, act));
 
-        match trampoline {
+        match try!(self.evaluate_to_thunk(heap, act)) {
             Trampoline::Value(v) => {
                 println!("FITZGEN:   (return {}))", *v);
                 return Ok(v);
             },
-            Trampoline::Thunk(mut act, mut meaning) => {
+            Trampoline::Thunk(act, meaning) => {
+                let mut a = act;
+                let mut m = meaning;
                 loop {
-                    trampoline = try!(meaning.evaluate_to_thunk(heap, &mut act));
-                    match trampoline {
+                    println!("FITZGEN: (trampolining {})", m);
+                    match try!(m.evaluate_to_thunk(heap, &mut a)) {
                         Trampoline::Value(v) => {
                             println!("FITZGEN:   (return {}))", *v);
                             return Ok(v);
                         },
-                        Trampoline::Thunk(a, m) => {
-                            act = a;
-                            meaning = m;
+                        Trampoline::Thunk(aa, mm) => {
+                            a = aa;
+                            m = mm;
                         },
                     }
                 }
@@ -707,35 +709,32 @@ fn test_eval_quoted() {
     assert_eq!(*result, Value::EmptyList);
 }
 
-// #[test]
-// fn test_eval_if_consequent() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file(&mut heap, "./tests/test_eval_if_consequent.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(1));
-// }
+#[test]
+fn test_eval_if_consequent() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_if_consequent.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
+}
 
-// #[test]
-// fn test_eval_if_alternative() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file(&mut heap, "./tests/test_eval_if_alternative.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(2));
-// }
+#[test]
+fn test_eval_if_alternative() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_if_alternative.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
+}
 
-// #[test]
-// fn test_eval_begin() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file(&mut heap, "./tests/test_eval_begin.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(2));
-// }
+#[test]
+fn test_eval_begin() {
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_begin.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(2));
+}
 
 #[test]
 fn test_eval_variables() {
