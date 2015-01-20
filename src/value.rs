@@ -246,7 +246,9 @@ impl Value {
         let mut cons = heap.allocate_cons();
         cons.set_car(car);
         cons.set_cdr(cdr);
-        Rooted::new(heap, Value::Pair(*cons))
+        let p = Rooted::new(heap, Value::Pair(*cons));
+        println!("FITZGEN: (allocated pair: {})", *p);
+        p
     }
 
     /// Create a new procedure with the given parameter list and body.
@@ -429,8 +431,8 @@ impl fmt::String for Value {
                 ' '  => write!(f, "#\\space"),
                 _    => write!(f, "#\\{}", c),
             },
-            Value::Procedure(ref p) => write!(f, "{:?}", p),
-            Value::Primitive(ref p) => write!(f, "{:?}", p),
+            Value::Procedure(ref p) => write!(f, "#<procedure {:?}>", p),
+            Value::Primitive(ref p) => write!(f, "#<procedure {:?}>", p),
         }
     }
 }

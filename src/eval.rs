@@ -25,6 +25,7 @@ use value::{RootedValue, SchemeResult, Value};
 /// Evaluate the given form in the global environment.
 pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
     let meaning = try!(analyze(heap, form));
+    println!("FITZGEN: meaning = {}", meaning);
     let mut act = heap.global_activation();
     meaning.evaluate(heap, &mut act)
 }
@@ -86,6 +87,48 @@ enum MeaningData {
 
     /// Procedure and parameters.
     Invocation(Meaning, Vec<Meaning>),
+}
+
+impl fmt::String for MeaningData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            MeaningData::Quotation(ref val) => {
+                write!(f, "(quotation {})", **val)
+            },
+            MeaningData::Reference(i, j) => {
+                write!(f, "(reference {} {})", i, j)
+            },
+            MeaningData::Definition(ref val) => {
+                write!(f, "(definition {})", val)
+            },
+            MeaningData::SetVariable(i, j, ref val) => {
+                write!(f, "(set-variable {} {} {})", i, j, val)
+            },
+            MeaningData::Conditional(ref condition,
+                                     ref consequent,
+                                     ref alternative) => {
+                write!(f, "(conditional {} {} {})",
+                       condition,
+                       consequent,
+                       alternative)
+            },
+            MeaningData::Sequence(ref first, ref second) => {
+                write!(f, "(sequence {} {})", first, second)
+            },
+            MeaningData::Lambda(arity, ref body) => {
+                write!(f, "(lambda {} {})", arity, body)
+            },
+            MeaningData::Invocation(ref procedure, ref arguments) => {
+                try!(write!(f, "(invocation {} [", procedure));
+                let mut is_first = true;
+                for arg in arguments.iter() {
+                    try!(write!(f, "{}{}", if is_first { "" } else { " " }, arg));
+                    is_first = false;
+                }
+                write!(f, "])")
+            },
+        }
+    }
 }
 
 /// TODO FITZGEN
@@ -188,13 +231,19 @@ fn evaluate_invocation(heap: &mut Heap,
                        data: &MeaningData,
                        act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Invocation(ref procedure, ref params) = *data {
+        println!("FITZGEN: (procedure ");
         let proc_val = try!(procedure.evaluate(heap, act));
+        println!("FITZGEN: )");
 
+        println!("FITZGEN: (args ");
         let args = try!(params.iter().map(|p| p.evaluate(heap, act)).collect());
+        println!("FITZGEN: )");
 
         match *proc_val {
             Value::Primitive(primitive) => {
+                println!("FITZGEN: (primitive ");
                 let result = try!(primitive.call(heap, args));
+                println!("FITZGEN: (return {}))", *result);
                 return Ok(Trampoline::Value(result));
             },
 
@@ -206,7 +255,9 @@ fn evaluate_invocation(heap: &mut Heap,
                 }
 
                 let new_act = Activation::extend(heap, act, args);
+                println!("FITZGEN: (user-defined");
                 if let Some(ref body) = proc_ptr.body {
+                    println!("FITZGEN:   (trampoline {})", *body);
                     return Ok(Trampoline::Thunk(new_act, (**body).clone()));
                 } else {
                     panic!("Should never see an uninitialized procedure!");
@@ -314,20 +365,27 @@ impl Meaning {
     fn evaluate(&self,
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
+        println!("FITZGEN: (Meaning::evaluate: {}", self);
         let mut trampoline = try!(self.evaluate_to_thunk(heap, act));
-        if let Trampoline::Value(v) = trampoline {
-            return Ok(v);
-        }
 
-        let mut act_ = Rooted::new(heap, **act);
-        loop {
-            match trampoline {
-                Trampoline::Value(v) => {
-                    return Ok(v);
-                },
-                Trampoline::Thunk(a, m) => {
-                    act_.emplace(*a);
-                    trampoline = try!(m.evaluate_to_thunk(heap, &mut act_));
+        match trampoline {
+            Trampoline::Value(v) => {
+                println!("FITZGEN:   (return {}))", *v);
+                return Ok(v);
+            },
+            Trampoline::Thunk(mut act, mut meaning) => {
+                loop {
+                    trampoline = try!(meaning.evaluate_to_thunk(heap, &mut act));
+                    match trampoline {
+                        Trampoline::Value(v) => {
+                            println!("FITZGEN:   (return {}))", *v);
+                            return Ok(v);
+                        },
+                        Trampoline::Thunk(a, m) => {
+                            act = a;
+                            meaning = m;
+                        },
+                    }
                 }
             }
         }
@@ -343,6 +401,12 @@ impl Clone for Meaning {
     }
 }
 
+impl fmt::String for Meaning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", *self.data)
+    }
+}
+
 impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Meaning {
     fn hash(&self, state: &mut S) {
         let u = self.evaluator as usize;
@@ -350,14 +414,6 @@ impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Meaning {
         self.data.hash(state);
     }
 }
-
-// impl fmt::Show for Meaning {
-//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-//         write!(f, "Meaning(0x{:x}, {?})",
-//                self.evaluator as usize,
-//                self.data)
-//     }
-// }
 
 /// TODO FITZGEN
 impl Trace for Meaning {
