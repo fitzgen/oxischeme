@@ -16,12 +16,14 @@
 //!
 //! This is split into two pieces:
 //!
-//! 1. The `Environment` associates symbols with a concrete location. This is
-//! used during the syntactic analysis.
+//! 1. The `Environment` associates symbol names with a concrete location where
+//! the symbol's value can be found at runime. This is static information used
+//! during the syntactic analysis.
 //!
-//! 2. `Activation`s are those concrete locations at runtime, and contain just
-//! the values passed in at function invocation. After syntactic analysis, we
-//! only deal with activations, and we no longer need the symbols or the
+//! 2. `Activation`s are instances of lexical blocks (either a lambda invocation,
+//! or the global top level) at runtime. They only contain values and none of the
+//! metadata mapping names to these values. After syntactic analysis, we only
+//! deal with activations, and we no longer need the symbols nor the
 //! `Environment`.
 
 use std::collections::{HashMap};
@@ -32,13 +34,16 @@ use std::hash;
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, ToGcThing, Trace};
 use value::{Value, RootedValue};
 
-/// An `Activation` represents the values extending the lexical environment on
-/// each function invocation.
+/// An `Activation` represents a runtime instance of a lexical block (either a
+/// lambda or the global top-level).
 pub struct Activation {
-    /// TODO FITZGEN
+    /// The parent scope, or `None` if this is the global activation.
     parent: Option<ActivationPtr>,
-    /// TODO FITZGEN
-    args: Vec<Option<Value>>,
+    /// For a lambda with N arguments, the first N slots are those arguments
+    /// respectively. The rest are local definitions. If a slot is `None`, then
+    /// it's variable hasn't been defined yet (but is referenced by something
+    /// and potentially will be defined in the future).
+    vals: Vec<Option<Value>>,
 }
 
 impl Activation {
@@ -49,25 +54,25 @@ impl Activation {
                   values: Vec<RootedValue>) -> RootedActivationPtr {
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
-        act.args = values.into_iter().map(|v| Some(*v)).collect();
+        act.vals = values.into_iter().map(|v| Some(*v)).collect();
         return act;
     }
 
-    /// TODO FITZGEN
+    /// Fetch the j'th variable from the i'th lexical activation.
     ///
-    /// Returns an error when trying to fetch a value that has not yet ben
-    /// defined.
+    /// Returns an error when trying to fetch the value of a variable that has
+    /// not yet been defined.
     pub fn fetch(&self,
                  heap: &mut Heap,
                  i: u32,
                  j: u32) -> Result<RootedValue, ()> {
         if i == 0 {
             let jj = j as usize;
-            if jj >= self.args.len() {
+            if jj >= self.vals.len() {
                 return Err(());
             }
 
-            if let Some(val) = self.args[jj] {
+            if let Some(val) = self.vals[jj] {
                 return Ok(Rooted::new(heap, val));
             }
 
@@ -78,9 +83,10 @@ impl Activation {
             .fetch(heap, i - 1, j);
     }
 
-    /// TODO FITZGEN
+    /// Set the j'th variable from the i'th lexical activation to the given
+    /// value.
     ///
-    /// Returns an error when trying to set a value that has not yet been
+    /// Returns an error when trying to set a variable that has not yet been
     /// defined.
     pub fn update(&mut self,
                   i: u32,
@@ -88,11 +94,11 @@ impl Activation {
                   val: &RootedValue) -> Result<(), ()> {
         if i == 0 {
             let jj = j as usize;
-            if jj >= self.args.len() || self.args[jj].is_none() {
+            if jj >= self.vals.len() || self.vals[jj].is_none() {
                 return Err(());
             }
 
-            self.args[jj] = Some(**val);
+            self.vals[jj] = Some(**val);
             return Ok(());
         }
 
@@ -100,30 +106,28 @@ impl Activation {
             .update(i - 1, j, val);
     }
 
-    /// TODO FITZGEN
     fn fill_to(&mut self, n: u32) {
         while self.len() < n + 1 {
-            self.args.push(None);
+            self.vals.push(None);
         }
     }
 
-    /// TODO FITZGEN
+    /// Define the j'th variable of this activation to be the given value.
     pub fn define(&mut self, j: u32, val: Value) {
         self.fill_to(j);
-        self.args[j as usize] = Some(val);
+        self.vals[j as usize] = Some(val);
     }
 
-    /// TODO FITZGEN
     #[inline]
-    pub fn len(&self) -> u32 {
-        self.args.len() as u32
+    fn len(&self) -> u32 {
+        self.vals.len() as u32
     }
 }
 
 impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Activation {
     fn hash(&self, state: &mut S) {
         self.parent.hash(state);
-        for v in self.args.iter() {
+        for v in self.vals.iter() {
             v.hash(state);
         }
     }
@@ -133,14 +137,14 @@ impl Default for Activation {
     fn default() -> Activation {
         Activation {
             parent: None,
-            args: vec!(),
+            vals: vec!(),
         }
     }
 }
 
 impl Trace for Activation {
     fn trace(&self) -> IterGcThing {
-        let mut results: Vec<GcThing> = self.args.iter()
+        let mut results: Vec<GcThing> = self.vals.iter()
             .filter_map(|v| {
                 if let Some(val) = *v {
                     val.to_gc_thing()
@@ -160,7 +164,7 @@ impl Trace for Activation {
 
 impl fmt::String for Activation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        try!(write!(f, "(activation :length {}\n", self.args.len()));
+        try!(write!(f, "(activation :length {}\n", self.vals.len()));
         try!(write!(f, "            :parent "));
         if let Some(ref p) = self.parent {
             write!(f, "Some({}))", **p)
@@ -182,21 +186,25 @@ impl ToGcThing for ActivationPtr {
 /// A rooted pointer to an `Activation` on the heap.
 pub type RootedActivationPtr = Rooted<ActivationPtr>;
 
-/// TODO FITZGEN
+/// The `Environment` represents what we know about bindings statically, during
+/// syntactic analysis.
 pub struct Environment {
-    /// TODO FITZGEN
+    /// A hash map for each lexical block we are currently in, which maps from a
+    /// variable name to its position in any activations that get created for
+    /// this block.
     bindings: Vec<HashMap<String, u32>>,
 }
 
 impl Environment {
-    /// TODO FITZGEN
+    /// Create a new `Environemnt`.
     pub fn new() -> Environment {
         Environment {
             bindings: vec!(HashMap::new())
         }
     }
 
-    /// TODO FITZGEN
+    /// Extend the environment with a new lexical block with the given set of
+    /// variables.
     pub fn extend(&mut self, names: Vec<String>) {
         self.bindings.push(HashMap::new());
         for n in names.into_iter() {
@@ -204,20 +212,15 @@ impl Environment {
         }
     }
 
-    /// TODO FITZGEN
+    /// Pop off the youngest lexical block.
     pub fn pop(&mut self) {
         assert!(self.bindings.len() > 1,
                 "Should never pop off the global environment");
         self.bindings.pop();
     }
 
-    /// TODO FITZGEN
-    fn youngest<'a>(&'a mut self) -> &'a mut HashMap<String, u32> {
-        let last_idx = self.bindings.len() - 1;
-        &mut self.bindings[last_idx]
-    }
-
-    /// TODO FITZGEN
+    /// Define a variable in the youngest block and return the coordinates to
+    /// get its value from an activation at runtime.
     pub fn define(&mut self, name: String) -> (u32, u32) {
         if let Some(n) = self.youngest().get(&name) {
             return (0, *n);
@@ -228,14 +231,14 @@ impl Environment {
         return (0, n);
     }
 
-    /// TODO FITZGEN
+    /// Define a global variable and return its activation coordinates.
     pub fn define_global(&mut self, name: String) -> (u32, u32) {
         let n = self.bindings[0].len() as u32;
         self.bindings[0].insert(name, n);
         return ((self.bindings.len() - 1) as u32, n);
     }
 
-    /// TODO FITZGEN
+    /// Get the activation coordinates associated with the given variable name.
     pub fn lookup(&self, name: &String) -> Option<(u32, u32)> {
         for (i, bindings) in self.bindings.iter().rev().enumerate() {
             if let Some(j) = bindings.get(name) {
@@ -243,5 +246,10 @@ impl Environment {
             }
         }
         return None;
+    }
+
+    fn youngest<'a>(&'a mut self) -> &'a mut HashMap<String, u32> {
+        let last_idx = self.bindings.len() - 1;
+        &mut self.bindings[last_idx]
     }
 }

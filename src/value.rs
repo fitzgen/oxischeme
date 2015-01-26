@@ -362,7 +362,7 @@ impl Value {
         }
     }
 
-    /// TODO FITZGEN
+    /// Iterate over this list value.
     pub fn iter(&self) -> ConsIterator {
         ConsIterator {
             val: *self
@@ -440,13 +440,18 @@ pub type RootedValue = Rooted<Value>;
 /// Either a Scheme `RootedValue`, or a `String` containing an error message.
 pub type SchemeResult = Result<RootedValue, String>;
 
-/// TODO FITZGEN
+/// An iterator which yields `Ok` for each value in a cons-list and finishes
+/// with `None` when the end of the list is reached (the scheme empty list
+/// value) or `Err` when iterating over an improper list.
+///
+/// For example: the list `(1 2 3)` would yield `Ok(1)`, `Ok(2)`, `Ok(3)`,
+/// `None`, while the improper list `(1 2 . 3)` would yield `Ok(1)`, `Ok(2)`,
+/// `Err`.
 #[derive(Copy)]
 pub struct ConsIterator {
     val: Value
 }
 
-/// TODO FITZGEN
 impl Iterator for ConsIterator {
     type Item = Result<Value, ()>;
 

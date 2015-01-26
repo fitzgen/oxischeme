@@ -379,7 +379,7 @@ pub type RootedStringPtr = Rooted<StringPtr>;
 /// The scheme heap and GC runtime, containing all allocated cons cells,
 /// activations, procedures, and strings (including strings for symbols).
 pub struct Heap {
-    /// TODO FITZGEN
+    /// The static environment.
     pub environment: Environment,
 
     cons_cells: Box<Arena<Cons>>,
@@ -641,7 +641,8 @@ impl Heap {
         Rooted::new(self, act)
     }
 
-    /// TODO FITZGEN
+    /// Extend the environment with a new lexical block containing the given
+    /// variables and then perform some work before popping the new block.
     pub fn with_extended_env<T>(&mut self,
                                 names: Vec<String>,
                                 block: &Fn(&mut Heap) -> T) -> T {

@@ -55,7 +55,8 @@ pub fn repl(heap: &mut heap::Heap) {
     }
 }
 
-/// TODO FITZGEN
+/// Given no arguments, start the REPL. Otherwise, treat each argument as a file
+/// path and read and evaluate each of them in turn.
 pub fn main() {
     let heap = &mut heap::Heap::new();
 

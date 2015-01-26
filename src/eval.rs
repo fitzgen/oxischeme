@@ -130,7 +130,8 @@ impl fmt::String for MeaningData {
     }
 }
 
-/// TODO FITZGEN
+/// Type signature for the evaulator functions which evaluate only a specific
+/// syntactic form.
 type MeaningEvaluatorFn = fn(&mut Heap,
                              &MeaningData,
                              &mut RootedActivationPtr) -> TrampolineResult;
@@ -287,7 +288,6 @@ pub struct Meaning {
 
 /// ## `Meaning` Constructors
 impl Meaning {
-    /// TODO FITZGEN
     fn new_quotation(form: &RootedValue) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Quotation((*form).clone())),
@@ -295,7 +295,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_reference(i: u32, j: u32) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Reference(i, j)),
@@ -303,7 +302,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_set_variable(i: u32, j: u32, val: Meaning) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::SetVariable(i, j, val)),
@@ -311,7 +309,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_conditional(condition: Meaning,
                        consquent: Meaning,
                        alternative: Meaning) -> Meaning {
@@ -323,7 +320,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_sequence(first: Meaning, second: Meaning) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Sequence(first, second)),
@@ -331,7 +327,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_definition(i: u32, j: u32, defined: Meaning) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Definition(i, j, defined)),
@@ -339,7 +334,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_lambda(arity: u32, body: Meaning) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Lambda(arity, body)),
@@ -347,7 +341,6 @@ impl Meaning {
         }
     }
 
-    /// TODO FITZGEN
     fn new_invocation(procedure: Meaning, params: Vec<Meaning>) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Invocation(procedure, params)),
@@ -358,7 +351,7 @@ impl Meaning {
 
 /// ## `Meaning` Methods
 impl Meaning {
-    /// TODO FITZGEN
+    /// Evaluate this form no further than until the next thunk.
     #[inline]
     fn evaluate_to_thunk(&self,
                          heap: &mut Heap,
@@ -366,7 +359,8 @@ impl Meaning {
         (self.evaluator)(heap, &*self.data, act)
     }
 
-    /// TODO FITZGEN
+    /// Evaluate this form completely, trampolining all thunks until a value is
+    /// produced.
     fn evaluate(&self,
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
@@ -416,7 +410,6 @@ impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Meaning {
     }
 }
 
-/// TODO FITZGEN
 impl Trace for Meaning {
     fn trace(&self) -> IterGcThing {
         // TODO FITZGEN
@@ -424,7 +417,7 @@ impl Trace for Meaning {
     }
 }
 
-/// TODO FITZGEN
+/// Either a `Meaning`, or a `String` explaining the error.
 pub type MeaningResult = Result<Meaning, String>;
 
 /// TODO FITZGEN
