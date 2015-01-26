@@ -26,6 +26,7 @@
 
 use std::collections::{HashMap};
 use std::default::{Default};
+use std::fmt;
 use std::hash;
 
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, ToGcThing, Trace};
@@ -48,7 +49,7 @@ impl Activation {
                   values: Vec<RootedValue>) -> RootedActivationPtr {
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
-        act.args = values.into_iter().map(|rooted_val| *rooted_val).collect();
+        act.args = values.into_iter().map(|v| *v).collect();
         return act;
     }
 
@@ -121,6 +122,18 @@ impl Trace for Activation {
         }
 
         results.into_iter()
+    }
+}
+
+impl fmt::String for Activation {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        try!(write!(f, "(activation :length {}\n", self.args.len()));
+        try!(write!(f, "            :parent "));
+        if let Some(ref p) = self.parent {
+            write!(f, "Some({}))", **p)
+        } else {
+            write!(f, "None)")
+        }
     }
 }
 

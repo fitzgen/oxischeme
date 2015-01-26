@@ -181,7 +181,7 @@ impl Primitive {
 
 impl fmt::Show for Primitive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Primitive({})", self.name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -246,9 +246,7 @@ impl Value {
         let mut cons = heap.allocate_cons();
         cons.set_car(car);
         cons.set_cdr(cdr);
-        let p = Rooted::new(heap, Value::Pair(*cons));
-        println!("FITZGEN: (allocated pair: {})", *p);
-        p
+        Rooted::new(heap, Value::Pair(*cons))
     }
 
     /// Create a new procedure with the given parameter list and body.

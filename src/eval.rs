@@ -25,7 +25,6 @@ use value::{RootedValue, SchemeResult, Value};
 /// Evaluate the given form in the global environment.
 pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
     let meaning = try!(analyze(heap, form));
-    println!("FITZGEN: meaning = {}", meaning);
     let mut act = heap.global_activation();
     meaning.evaluate(heap, &mut act)
 }
@@ -231,36 +230,35 @@ fn evaluate_invocation(heap: &mut Heap,
                        data: &MeaningData,
                        act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Invocation(ref procedure, ref params) = *data {
-        println!("FITZGEN: (procedure ");
         let proc_val = try!(procedure.evaluate(heap, act));
-        println!("FITZGEN: )");
-
-        println!("FITZGEN: (args ");
         let args = try!(params.iter().map(|p| p.evaluate(heap, act)).collect());
-        println!("FITZGEN: )");
 
         match *proc_val {
             Value::Primitive(primitive) => {
-                println!("FITZGEN: (primitive ");
                 let result = try!(primitive.call(heap, args));
-                println!("FITZGEN: (return {}))", *result);
                 return Ok(Trampoline::Value(result));
             },
 
             Value::Procedure(proc_ptr) => {
                 match proc_ptr.arity.cmp(&(args.len() as u32)) {
-                    Ordering::Less => return Err("Too many arguments passed".to_string()),
-                    Ordering::Greater => return Err("Too few arguments passed".to_string()),
-                    _ => { },
-                }
+                    Ordering::Less => {
+                        return Err("Too many arguments passed".to_string());
+                    },
+                    Ordering::Greater => {
+                        return Err("Too few arguments passed".to_string());
+                    },
+                    _ => {
+                        let proc_act = proc_ptr.act.as_ref()
+                            .expect("Should never see an uninitialized procedure!");
+                        let rooted_proc_act = Rooted::new(heap, *proc_act);
+                        let body = proc_ptr.body.as_ref()
+                            .expect("Should never see an uninitialized procedure!");
 
-                let new_act = Activation::extend(heap, act, args);
-                println!("FITZGEN: (user-defined");
-                if let Some(ref body) = proc_ptr.body {
-                    println!("FITZGEN:   (trampoline {})", *body);
-                    return Ok(Trampoline::Thunk(new_act, (**body).clone()));
-                } else {
-                    panic!("Should never see an uninitialized procedure!");
+                        let new_act = Activation::extend(heap,
+                                                         &rooted_proc_act,
+                                                         args);
+                        return Ok(Trampoline::Thunk(new_act, (**body).clone()));
+                    },
                 }
             },
 
@@ -366,21 +364,16 @@ impl Meaning {
     fn evaluate(&self,
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
-        println!("FITZGEN: (Meaning::evaluate: {}", self);
-
         match try!(self.evaluate_to_thunk(heap, act)) {
             Trampoline::Value(v) => {
-                println!("FITZGEN:   (return {}))", *v);
                 return Ok(v);
             },
             Trampoline::Thunk(act, meaning) => {
                 let mut a = act;
                 let mut m = meaning;
                 loop {
-                    println!("FITZGEN: (trampolining {})", m);
                     match try!(m.evaluate_to_thunk(heap, &mut a)) {
                         Trampoline::Value(v) => {
-                            println!("FITZGEN:   (return {}))", *v);
                             return Ok(v);
                         },
                         Trampoline::Thunk(aa, mm) => {
@@ -786,15 +779,15 @@ fn test_eval_and_call_lambda() {
     assert_eq!(*result, Value::new_integer(5));
 }
 
-// #[test]
-// fn test_eval_closures() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(1));
-// }
+#[test]
+fn test_eval_closures() {
+    // TODO FITZGEN: known failing
+    let mut heap = Heap::new();
+    let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
+}
 
 // #[test]
 // fn test_ref_defined_later() {

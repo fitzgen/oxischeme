@@ -6,4 +6,5 @@
 (define cdr (lambda (z)
               (z (lambda (p q) q))))
 
-(car (cdr (cons 2 (cons 1 '()))))
+(define x (cons 2 (cons 1 '())))
+(car (cdr x))
