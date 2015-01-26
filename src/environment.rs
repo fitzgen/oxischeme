@@ -38,7 +38,7 @@ pub struct Activation {
     /// TODO FITZGEN
     parent: Option<ActivationPtr>,
     /// TODO FITZGEN
-    args: Vec<Value>,
+    args: Vec<Option<Value>>,
 }
 
 impl Activation {
@@ -49,18 +49,29 @@ impl Activation {
                   values: Vec<RootedValue>) -> RootedActivationPtr {
         let mut act = heap.allocate_activation();
         act.parent = Some(**parent);
-        act.args = values.into_iter().map(|v| *v).collect();
+        act.args = values.into_iter().map(|v| Some(*v)).collect();
         return act;
     }
 
     /// TODO FITZGEN
-    pub fn fetch(&self, heap: &mut Heap, i: u32, j: u32) -> RootedValue {
+    ///
+    /// Returns an error when trying to fetch a value that has not yet ben
+    /// defined.
+    pub fn fetch(&self,
+                 heap: &mut Heap,
+                 i: u32,
+                 j: u32) -> Result<RootedValue, ()> {
         if i == 0 {
-            debug_assert!(j < self.args.len() as u32,
-                          "Activation::fetch: j out of bounds: j = {}, activation length = {}",
-                          j,
-                          self.args.len());
-            return Rooted::new(heap, self.args[j as usize]);
+            let jj = j as usize;
+            if jj >= self.args.len() {
+                return Err(());
+            }
+
+            if let Some(val) = self.args[jj] {
+                return Ok(Rooted::new(heap, val));
+            }
+
+            return Err(());
         }
 
         return self.parent.expect("Activation::fetch: i out of bounds")
@@ -68,26 +79,42 @@ impl Activation {
     }
 
     /// TODO FITZGEN
-    pub fn update(&mut self, heap: &mut Heap, i: u32, j: u32, val: &RootedValue) {
+    ///
+    /// Returns an error when trying to set a value that has not yet been
+    /// defined.
+    pub fn update(&mut self,
+                  i: u32,
+                  j: u32,
+                  val: &RootedValue) -> Result<(), ()> {
         if i == 0 {
-            debug_assert!(j < self.args.len() as u32,
-                          "Activation::update: j out of bounds: j = {}, activation length = {}",
-                          j,
-                          self.args.len());
-            self.args[j as usize] = **val;
-            return;
+            let jj = j as usize;
+            if jj >= self.args.len() || self.args[jj].is_none() {
+                return Err(());
+            }
+
+            self.args[jj] = Some(**val);
+            return Ok(());
         }
 
         return self.parent.expect("Activation::update: i out of bounds")
-            .update(heap, i - 1, j, val);
+            .update(i - 1, j, val);
     }
 
     /// TODO FITZGEN
-    pub fn push_value(&mut self, val: Value) {
-        self.args.push(val);
+    fn fill_to(&mut self, n: u32) {
+        while self.len() < n + 1 {
+            self.args.push(None);
+        }
     }
 
     /// TODO FITZGEN
+    pub fn define(&mut self, j: u32, val: Value) {
+        self.fill_to(j);
+        self.args[j as usize] = Some(val);
+    }
+
+    /// TODO FITZGEN
+    #[inline]
     pub fn len(&self) -> u32 {
         self.args.len() as u32
     }
@@ -114,7 +141,13 @@ impl Default for Activation {
 impl Trace for Activation {
     fn trace(&self) -> IterGcThing {
         let mut results: Vec<GcThing> = self.args.iter()
-            .filter_map(|v| v.to_gc_thing())
+            .filter_map(|v| {
+                if let Some(val) = *v {
+                    val.to_gc_thing()
+                } else {
+                    None
+                }
+            })
             .collect();
 
         if let Some(parent) = self.parent {
@@ -193,6 +226,13 @@ impl Environment {
         let n = self.youngest().len() as u32;
         self.youngest().insert(name, n);
         return (0, n);
+    }
+
+    /// TODO FITZGEN
+    pub fn define_global(&mut self, name: String) -> (u32, u32) {
+        let n = self.bindings[0].len() as u32;
+        self.bindings[0].insert(name, n);
+        return ((self.bindings.len() - 1) as u32, n);
     }
 
     /// TODO FITZGEN

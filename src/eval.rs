@@ -68,7 +68,7 @@ enum MeaningData {
 
     /// Push a new binding to the current activation with the value of the given
     /// meaning.
-    Definition(Meaning),
+    Definition(u32, u32, Meaning),
 
     /// Set the (i'th activation, j'th binding) to the value of the given
     /// meaning.
@@ -97,8 +97,8 @@ impl fmt::String for MeaningData {
             MeaningData::Reference(i, j) => {
                 write!(f, "(reference {} {})", i, j)
             },
-            MeaningData::Definition(ref val) => {
-                write!(f, "(definition {})", val)
+            MeaningData::Definition(i, j, ref val) => {
+                write!(f, "(definition {} {} {})", i, j, val)
             },
             MeaningData::SetVariable(i, j, ref val) => {
                 write!(f, "(set-variable {} {} {})", i, j, val)
@@ -156,7 +156,9 @@ fn evaluate_reference(heap: &mut Heap,
                       data: &MeaningData,
                       act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Reference(i, j) = *data {
-        return Ok(Trampoline::Value(act.fetch(heap, i, j)));
+        let val = try!(act.fetch(heap, i, j).ok().ok_or(
+            "Reference to variable that hasn't been defined".to_string()));
+        return Ok(Trampoline::Value(val));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -165,9 +167,12 @@ fn evaluate_reference(heap: &mut Heap,
 fn evaluate_definition(heap: &mut Heap,
                        data: &MeaningData,
                        act: &mut RootedActivationPtr) -> TrampolineResult {
-    if let MeaningData::Definition(ref definition_value_meaning) = *data {
+    if let MeaningData::Definition(i, j, ref definition_value_meaning) = *data {
+        debug_assert!(i == 0,
+                      "Definitions should always be in the youngest activation");
+
         let val = try!(definition_value_meaning.evaluate(heap, act));
-        act.push_value(*val);
+        act.define(j, *val);
         return Ok(Trampoline::Value(heap.unspecified_symbol()));
     }
 
@@ -179,7 +184,8 @@ fn evaluate_set_variable(heap: &mut Heap,
                          act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::SetVariable(i, j, ref definition_value_meaning) = *data {
         let val = try!(definition_value_meaning.evaluate(heap, act));
-        act.update(heap, i, j, &val);
+        try!(act.update(i, j, &val).ok().ok_or(
+            "Cannot set variable before it has been defined".to_string()));
         return Ok(Trampoline::Value(heap.unspecified_symbol()));
     }
 
@@ -326,9 +332,9 @@ impl Meaning {
     }
 
     /// TODO FITZGEN
-    fn new_definition(defined: Meaning) -> Meaning {
+    fn new_definition(i: u32, j: u32, defined: Meaning) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Definition(defined)),
+            data: Box::new(MeaningData::Definition(i, j, defined)),
             evaluator: evaluate_definition,
         }
     }
@@ -472,10 +478,10 @@ fn analyze_atom(heap: &mut Heap,
             return Ok(Meaning::new_reference(i, j));
         }
 
-        // TODO FITZGEN: add to global environment. At runtime, ensure it is
-        // defined before accessing or else error.
-        return Err(format!("Static error: reference to unknown variable: {}",
-                           **sym));
+        // This is a reference to a global variable that hasn't been defined
+        // yet.
+        let (i, j) = heap.environment.define_global((**sym).clone());
+        return Ok(Meaning::new_reference(i, j));
     }
 
     return Err(format!("Static error: Cannot evaluate: {}", **form));
@@ -504,14 +510,8 @@ fn analyze_definition(heap: &mut Heap,
             let def_value_form = try!(pair.caddr(heap));
             let def_value_meaning = try!(analyze(heap, &def_value_form));
 
-            if let Some((0, j)) = heap.environment.lookup(&**str) {
-                // The variable is already defined in this scope, just overwrite
-                // it.
-                return Ok(Meaning::new_set_variable(0, j, def_value_meaning));
-            } else {
-                heap.environment.define((**str).clone());
-                return Ok(Meaning::new_definition(def_value_meaning));
-            }
+            let (i, j) = heap.environment.define((**str).clone());
+            return Ok(Meaning::new_definition(i, j, def_value_meaning));
         }
 
         return Err("Static error: can only define symbols".to_string());
@@ -535,12 +535,10 @@ fn analyze_set(heap: &mut Heap,
                 return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
             }
 
-            // TODO FITZGEN: should add the global variable here, but mark it
-            // undefined. Generate a meaning that ensures it is defined before
-            // setting.
-            return Err(format!(
-                "Static error: cannot set! undefined variable: {}",
-                **str));
+            // This is setting a global variable that isn't defined yet, but
+            // could be defined later. The check will happen at evaluation time.
+            let (i, j) = heap.environment.define_global((**str).clone());
+            return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
         }
 
         return Err("Static error: can only set! symbols".to_string());
@@ -781,7 +779,6 @@ fn test_eval_and_call_lambda() {
 
 #[test]
 fn test_eval_closures() {
-    // TODO FITZGEN: known failing
     let mut heap = Heap::new();
     let result = evaluate_file(&mut heap, "./tests/test_eval_closures.scm")
         .ok()
@@ -789,15 +786,23 @@ fn test_eval_closures() {
     assert_eq!(*result, Value::new_integer(1));
 }
 
-// #[test]
-// fn test_ref_defined_later() {
-//     // TODO FITZGEN: known failing
-//     let mut heap = Heap::new();
-//     let result = evaluate_file( &mut heap, "./tests/test_ref_defined_later.scm")
-//         .ok()
-//         .expect("Should be able to eval a file.");
-//     assert_eq!(*result, Value::new_integer(1));
-// }
+#[test]
+fn test_ref_defined_later() {
+    let mut heap = Heap::new();
+    let result = evaluate_file( &mut heap, "./tests/test_ref_defined_later.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(1));
+}
+
+#[test]
+fn test_set_defined_later() {
+    let mut heap = Heap::new();
+    let result = evaluate_file( &mut heap, "./tests/test_set_defined_later.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert_eq!(*result, Value::new_integer(5));
+}
 
 #[test]
 fn test_rooting_bug() {

@@ -152,9 +152,9 @@ fn define_primitive(env: &mut Environment,
                     act: &mut ActivationPtr,
                     name: &'static str,
                     function: PrimitiveFunction) {
-    let (i, _) = env.define(name.to_string());
+    let (i, j) = env.define(name.to_string());
     assert!(i == 0, "All primitives should be defined on the global activation");
-    act.push_value(Value::new_primitive(name, function));
+    act.define(j, Value::new_primitive(name, function));
 }
 
 pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
