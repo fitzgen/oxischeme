@@ -246,7 +246,7 @@ impl<T> DerefMut for ArenaPtr<T> {
     }
 }
 
-impl<T> fmt::Show for ArenaPtr<T> {
+impl<T> fmt::Debug for ArenaPtr<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "ArenaPtr({:p}, {})", &self.arena, &self.index)
     }
@@ -265,7 +265,7 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
 impl<T> cmp::Eq for ArenaPtr<T> { }
 
 /// A trait for types that can be coerced to a `GcThing`.
-pub trait ToGcThing: fmt::Show {
+pub trait ToGcThing: fmt::Debug {
     /// Coerce this value to a `GcThing`.
     fn to_gc_thing(&self) -> Option<GcThing>;
 }
@@ -275,7 +275,7 @@ pub trait ToGcThing: fmt::Show {
 /// garbage collection within the pointers lifespan. For more information see
 /// the module level documentation about rooting.
 #[allow(raw_pointer_derive)]
-#[derive(Hash, Show)]
+#[derive(Hash, Debug)]
 pub struct Rooted<T> {
     heap: *mut Heap,
     ptr: T,
@@ -733,7 +733,7 @@ pub trait Trace {
 }
 
 /// The union of the various types that are GC things.
-#[derive(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Debug)]
 pub enum GcThing {
     Cons(ConsPtr),
     String(StringPtr),

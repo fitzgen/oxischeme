@@ -162,12 +162,12 @@ impl Trace for Activation {
     }
 }
 
-impl fmt::String for Activation {
+impl fmt::Debug for Activation {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         try!(write!(f, "(activation :length {}\n", self.vals.len()));
         try!(write!(f, "            :parent "));
         if let Some(ref p) = self.parent {
-            write!(f, "Some({}))", **p)
+            write!(f, "Some({:?}))", **p)
         } else {
             write!(f, "None)")
         }

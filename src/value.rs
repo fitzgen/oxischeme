@@ -179,7 +179,7 @@ impl Primitive {
     }
 }
 
-impl fmt::Show for Primitive {
+impl fmt::Debug for Primitive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
@@ -189,7 +189,7 @@ impl fmt::Show for Primitive {
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
 /// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
-#[derive(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Debug)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
@@ -398,7 +398,7 @@ fn print_pair(f: &mut fmt::Formatter, cons: &ConsPtr) -> fmt::Result {
     }
 }
 
-impl fmt::String for Value {
+impl fmt::Display for Value {
     /// Print the given value's text representation to the given writer. This is
     /// the opposite of `Read`.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
