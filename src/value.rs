@@ -115,13 +115,13 @@ impl Default for Procedure {
 
 impl Trace for Procedure {
     fn trace(&self) -> IterGcThing {
-        let mut results: Vec<GcThing> = self.body.as_ref()
-            .expect("Should never trace an uninitialized Procedure")
-            .trace()
-            .collect();
-        results.push(GcThing::from_activation_ptr(
-            self.act.expect("Should never trace an uninitialized Procedure")));
-        results.into_iter()
+        // We don't need to trace the body because a `Meaning` can only contain
+        // rooted GC things to ensure that quotations will always return the
+        // same object rather than generate new equivalent-but-not-`eq?`
+        // objects.
+
+        vec!(GcThing::from_activation_ptr(self.act.expect(
+            "Should never trace an uninitialized Procedure"))).into_iter()
     }
 }
 
