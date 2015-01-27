@@ -1,0 +1,10 @@
+(function() {var implementors = {};
+implementors['oxischeme'] = ["<a class='stability Stable' title='Stable'></a>impl&lt;T&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='struct' href='oxischeme/heap/struct.ArenaPtr.html' title='oxischeme::heap::ArenaPtr'>ArenaPtr</a>&lt;T&gt;","<a class='stability Stable' title='Stable'></a>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='enum' href='oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a>","<a class='stability Stable' title='Stable'></a>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='struct' href='oxischeme/value/struct.Cons.html' title='oxischeme::value::Cons'>Cons</a>","<a class='stability Stable' title='Stable'></a>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='struct' href='oxischeme/value/struct.Primitive.html' title='oxischeme::value::Primitive'>Primitive</a>","<a class='stability Stable' title='Stable'></a>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='enum' href='oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a>","<a class='stability Stable' title='Stable'></a>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/marker/trait.Copy.html' title='core::marker::Copy'>Copy</a> for <a class='struct' href='oxischeme/value/struct.ConsIterator.html' title='oxischeme::value::ConsIterator'>ConsIterator</a>",];
+
+            if (window.register_implementors) {
+                window.register_implementors(implementors);
+            } else {
+                window.pending_implementors = implementors;
+            }
+        
+})()

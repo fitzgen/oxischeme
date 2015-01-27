@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `EnvironmentPtr` type in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, EnvironmentPtr">
+    <meta name="description" content="API documentation for the Rust `DEFAULT_ACTIVATIONS_CAPACITY` static in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, DEFAULT_ACTIVATIONS_CAPACITY">
 
-    <title>oxischeme::environment::EnvironmentPtr - Rust</title>
+    <title>oxischeme::heap::DEFAULT_ACTIVATIONS_CAPACITY - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Environment.html'>Environment</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Arena.html'>Arena</a><a class='struct ' href='struct.ArenaPtr.html'>ArenaPtr</a><a class='struct ' href='struct.Heap.html'>Heap</a><a class='struct ' href='struct.Rooted.html'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html'>ToGcThing</a><a class='trait ' href='trait.Trace.html'>Trace</a></div>
     </section>
 
     <nav class="sub">
@@ -40,12 +40,12 @@
         </form>
     </nav>
 
-    <section id='main' class="content type">
-<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a>::<wbr><a class='type' href=''>EnvironmentPtr</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+    <section id='main' class="content static">
+<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='static' href=''>DEFAULT_ACTIVATIONS_CAPACITY</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-614' href='../../src/oxischeme/environment.rs.html#165'>[src]</a></span></h1>
-<pre class='rust typedef'>type EnvironmentPtr = <a class='struct' href='../../oxischeme/heap/struct.ArenaPtr.html' title='oxischeme::heap::ArenaPtr'>ArenaPtr</a>&lt;<a class='struct' href='../../oxischeme/environment/struct.Environment.html' title='oxischeme::environment::Environment'>Environment</a>&gt;;</pre><div class='docblock'><p>A pointer to an <code>Environment</code> on the heap.</p>
+        </span><a id='src-6795' href='../../src/oxischeme/heap.rs.html#403'>[src]</a></span></h1>
+<pre class='rust static'>pub static DEFAULT_ACTIVATIONS_CAPACITY: <a href='http://doc.rust-lang.org/nightly/std/primitive.usize.html'>usize</a><code> = </code><code>1 << 12</code></pre><div class='docblock'><p>The default capacity of activations.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 

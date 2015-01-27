@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod ' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../print/index.html'>print</a><a class='mod ' href='../read/index.html'>read</a><a class='mod current' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod ' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../read/index.html'>read</a><a class='mod current' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a><a class='fn ' href='../fn.repl.html'>repl</a></div>
     </section>
 
     <nav class="sub">
@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>value</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-8330' href='../../src/oxischeme/value.rs.html#15-455'>[src]</a></span></h1>
+        </span><a id='src-11164' href='../../src/oxischeme/value.rs.html#15-515'>[src]</a></span></h1>
 <div class='docblock'><p>Scheme value implementation.</p>
 </div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
 <table>
@@ -59,6 +59,15 @@ cells, daisy chained together via the <code>cdr</code>. A list is &quot;proper&q
                     </tr>
                 
                     <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.ConsIterator.html'
+                               title='oxischeme::value::ConsIterator'>ConsIterator</a></td>
+                        <td class='docblock short'><p>An iterator which yields <code>Ok</code> for each value in a cons-list and finishes
+with <code>None</code> when the end of the list is reached (the scheme empty list
+value) or <code>Err</code> when iterating over an improper list.</p>
+</td>
+                    </tr>
+                
+                    <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Primitive.html'
                                title='oxischeme::value::Primitive'>Primitive</a></td>
                         <td class='docblock short'><p>A primitive procedure, such as Scheme&#39;s <code>+</code> or <code>cons</code>.</p>
@@ -68,8 +77,8 @@ cells, daisy chained together via the <code>cdr</code>. A list is &quot;proper&q
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Procedure.html'
                                title='oxischeme::value::Procedure'>Procedure</a></td>
-                        <td class='docblock short'><p>Procedures are represented by their parameter list, body, and a pointer to
-their definition environment.</p>
+                        <td class='docblock short'><p>User defined procedures are represented by their body and a pointer to the
+activation that they were defined within.</p>
 </td>
                     </tr>
                 </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>

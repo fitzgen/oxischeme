@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `print` fn in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, print">
+    <meta name="description" content="API documentation for the Rust `ActivationPtr` type in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, ActivationPtr">
 
-    <title>oxischeme::print::print - Rust</title>
+    <title>oxischeme::environment::ActivationPtr - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>print</a></p><div class='block fn'><h2>Functions</h2><a class='fn current' href='fn.print.html'>print</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Activation.html'>Activation</a><a class='struct ' href='struct.Environment.html'>Environment</a></div>
     </section>
 
     <nav class="sub">
@@ -40,12 +40,12 @@
         </form>
     </nav>
 
-    <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>print</a>::<wbr><a class='fn' href=''>print</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+    <section id='main' class="content type">
+<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a>::<wbr><a class='type' href=''>ActivationPtr</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5767' href='../../src/oxischeme/print.rs.html#23-57'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn print&lt;W: <a class='trait' href='http://doc.rust-lang.org/nightly/std/io/trait.Writer.html' title='std::io::Writer'>Writer</a>&gt;(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, writer: &amp;mut W, val: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/std/io/type.IoResult.html' title='std::io::IoResult'>IoResult</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</pre><div class='docblock'><p>Print the given value&#39;s text representation to the given writer.</p>
+        </span><a id='src-652' href='../../src/oxischeme/environment.rs.html#178'>[src]</a></span></h1>
+<pre class='rust typedef'>type ActivationPtr = <a class='struct' href='../../oxischeme/heap/struct.ArenaPtr.html' title='oxischeme::heap::ArenaPtr'>ArenaPtr</a>&lt;<a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a>&gt;;</pre><div class='docblock'><p>A pointer to an <code>Activation</code> on the heap.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 

@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `DEFAULT_ENVIRONMENTS_CAPACITY` static in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, DEFAULT_ENVIRONMENTS_CAPACITY">
+    <meta name="description" content="API documentation for the Rust `MeaningResult` type in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, MeaningResult">
 
-    <title>oxischeme::heap::DEFAULT_ENVIRONMENTS_CAPACITY - Rust</title>
+    <title>oxischeme::eval::MeaningResult - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Arena.html'>Arena</a><a class='struct ' href='struct.ArenaPtr.html'>ArenaPtr</a><a class='struct ' href='struct.Heap.html'>Heap</a><a class='struct ' href='struct.Rooted.html'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html'>ToGcThing</a><a class='trait ' href='trait.Trace.html'>Trace</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.analyze.html'>analyze</a><a class='fn ' href='fn.evaluate.html'>evaluate</a><a class='fn ' href='fn.evaluate_file.html'>evaluate_file</a></div>
     </section>
 
     <nav class="sub">
@@ -40,12 +40,12 @@
         </form>
     </nav>
 
-    <section id='main' class="content static">
-<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='static' href=''>DEFAULT_ENVIRONMENTS_CAPACITY</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+    <section id='main' class="content type">
+<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='type' href=''>MeaningResult</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-3082' href='../../src/oxischeme/heap.rs.html#406'>[src]</a></span></h1>
-<pre class='rust static'>pub static DEFAULT_ENVIRONMENTS_CAPACITY: <a href='http://doc.rust-lang.org/nightly/std/primitive.uint.html'>uint</a><code> = </code><code>1 << 12</code></pre><div class='docblock'><p>The default capacity of environments.</p>
+        </span><a id='src-4253' href='../../src/oxischeme/eval.rs.html#465'>[src]</a></span></h1>
+<pre class='rust typedef'>type MeaningResult = <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='../../oxischeme/eval/struct.Meaning.html' title='oxischeme::eval::Meaning'>Meaning</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;;</pre><div class='docblock'><p>Either a <code>Meaning</code>, or a <code>String</code> explaining the error.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 

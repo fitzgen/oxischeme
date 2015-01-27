@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod current' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../print/index.html'>print</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod current' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a><a class='fn ' href='../fn.repl.html'>repl</a></div>
     </section>
 
     <nav class="sub">
@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>heap</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-2084' href='../../src/oxischeme/heap.rs.html#15-749'>[src]</a></span></h1>
+        </span><a id='src-5714' href='../../src/oxischeme/heap.rs.html#15-777'>[src]</a></span></h1>
 <div class='docblock'><p>The <code>heap</code> module provides memory management for our Scheme implementation.</p>
 
 <h2 id="allocation" class='section-header'><a
@@ -68,7 +68,7 @@ memory of no-longer used instances of that type can be reclaimed for
 reuse. This provides the illusion of infinite memory, and frees Scheme
 programmers from manually managing allocations and frees. We refer to
 GC-managed types as &quot;GC things&quot;. Note that a GC thing does not need to be a
-Scheme value type: environments are also managed by the GC, but are not a
+Scheme value type: activations are also managed by the GC, but are not a
 first class Scheme value.</p>
 
 <p>Any structure that has references to a garbage collected type must
@@ -80,7 +80,7 @@ participate in garbage collection: strings do not hold references to any
 other GC things.</p>
 
 <p>A &quot;GC root&quot; is a GC participant that is always reachable. For example, the
-global environment is a root because global variables must always be
+global activation is a root because global variables must always be
 accessible.</p>
 
 <p>We use a simple <em>mark and sweep</em> garbage collection algorithm. In the mark
@@ -108,7 +108,7 @@ it might still get the value it was pointing at, or it might be a segfault,
 or it might be a freshly allocated value used by something else! Not good!</p>
 
 <p>Here is what this scenario looks like in psuedo code:</p>
-<pre class='rust '>
+<pre id='rust-example-rendered' class='rust '>
 <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>pointer_to_some_gc_thing</span>;
 <span class='ident'>function_which_can_trigger_gc</span>();
 <span class='comment'>// Oops! A collection was triggered and dereferencing this pointer leads</span>
@@ -132,7 +132,7 @@ dropped.</p>
 
 <p>Using precise rooting and <code>Rooted</code>, we can solve the dangling pointer
 problem like this:</p>
-<pre class='rust '>
+<pre id='rust-example-rendered' class='rust '>
 {
     <span class='comment'>// The pointed to GC thing gets rooted when wrapped with `Rooted`.</span>
     <span class='kw'>let</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>Rooted</span>::<span class='ident'>new</span>(<span class='ident'>heap</span>, <span class='ident'>pointer_to_some_gc_thing</span>);
@@ -178,7 +178,7 @@ collection!</p></li>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Heap.html'
                                title='oxischeme::heap::Heap'>Heap</a></td>
                         <td class='docblock short'><p>The scheme heap and GC runtime, containing all allocated cons cells,
-environments, procedures, and strings (including strings for symbols).</p>
+activations, procedures, and strings (including strings for symbols).</p>
 </td>
                     </tr>
                 
@@ -202,6 +202,13 @@ the module level documentation about rooting.</p>
                 </table><h2 id='statics' class='section-header'><a href="#statics">Statics</a></h2>
 <table>
                     <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_ACTIVATIONS_CAPACITY.html'
+                               title='oxischeme::heap::DEFAULT_ACTIVATIONS_CAPACITY'>DEFAULT_ACTIVATIONS_CAPACITY</a></td>
+                        <td class='docblock short'><p>The default capacity of activations.</p>
+</td>
+                    </tr>
+                
+                    <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_CONS_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_CONS_CAPACITY'>DEFAULT_CONS_CAPACITY</a></td>
                         <td class='docblock short'><p>The default capacity of cons cells.</p>
@@ -209,16 +216,9 @@ the module level documentation about rooting.</p>
                     </tr>
                 
                     <tr>
-                        <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_ENVIRONMENTS_CAPACITY.html'
-                               title='oxischeme::heap::DEFAULT_ENVIRONMENTS_CAPACITY'>DEFAULT_ENVIRONMENTS_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of environments.</p>
-</td>
-                    </tr>
-                
-                    <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_PROCEDURES_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_PROCEDURES_CAPACITY'>DEFAULT_PROCEDURES_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of environments.</p>
+                        <td class='docblock short'><p>The default capacity of procedures.</p>
 </td>
                     </tr>
                 

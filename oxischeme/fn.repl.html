@@ -4,12 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `evaluate_in_global_env` fn in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, evaluate_in_global_env">
+    <meta name="description" content="API documentation for the Rust `repl` fn in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, repl">
 
-    <title>oxischeme::eval::evaluate_in_global_env - Rust</title>
+    <title>oxischeme::repl - Rust</title>
 
-    <link rel="stylesheet" type="text/css" href="../../main.css">
+    <link rel="stylesheet" type="text/css" href="../main.css">
 
     
     
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.evaluate.html'>evaluate</a><a class='fn ' href='fn.evaluate_file.html'>evaluate_file</a><a class='fn current' href='fn.evaluate_in_global_env.html'>evaluate_in_global_env</a></div>
+        <p class='location'><a href='index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='environment/index.html'>environment</a><a class='mod ' href='eval/index.html'>eval</a><a class='mod ' href='heap/index.html'>heap</a><a class='mod ' href='primitives/index.html'>primitives</a><a class='mod ' href='read/index.html'>read</a><a class='mod ' href='value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.main.html'>main</a><a class='fn current' href='fn.repl.html'>repl</a></div>
     </section>
 
     <nav class="sub">
@@ -41,11 +41,11 @@
     </nav>
 
     <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='fn' href=''>evaluate_in_global_env</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+<h1 class='fqn'><span class='in-band'>Function <a href='index.html'>oxischeme</a>::<wbr><a class='fn' href=''>repl</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-683' href='../../src/oxischeme/eval.rs.html#33-37'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn evaluate_in_global_env(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, form: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='type' href='../../oxischeme/value/type.SchemeResult.html' title='oxischeme::value::SchemeResult'>SchemeResult</a></pre><div class='docblock'><p>Evaluate the given form in the global environment.</p>
+        </span><a id='src-14591' href='../src/oxischeme/main.rs.html#31-56'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn repl(heap: &amp;mut <a class='struct' href='../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>)</pre><div class='docblock'><p>Start a Read -&gt; Evaluate -&gt; Print loop.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 
@@ -85,13 +85,13 @@
     
 
     <script>
-        window.rootPath = "../../";
+        window.rootPath = "../";
         window.currentCrate = "oxischeme";
         window.playgroundUrl = "";
     </script>
-    <script src="../../jquery.js"></script>
-    <script src="../../main.js"></script>
+    <script src="../jquery.js"></script>
+    <script src="../main.js"></script>
     
-    <script async src="../../search-index.js"></script>
+    <script async src="../search-index.js"></script>
 </body>
 </html>

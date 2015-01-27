@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `print` mod in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, print">
+    <meta name="description" content="API documentation for the Rust `analyze` fn in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, analyze">
 
-    <title>oxischeme::print - Rust</title>
+    <title>oxischeme::eval::analyze - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod ' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod ' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod current' href='../print/index.html'>print</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn current' href='fn.analyze.html'>analyze</a><a class='fn ' href='fn.evaluate.html'>evaluate</a><a class='fn ' href='fn.evaluate_file.html'>evaluate_file</a></div>
     </section>
 
     <nav class="sub">
@@ -40,21 +40,13 @@
         </form>
     </nav>
 
-    <section id='main' class="content mod">
-<h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>print</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+    <section id='main' class="content fn">
+<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='fn' href=''>analyze</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5756' href='../../src/oxischeme/print.rs.html#15-78'>[src]</a></span></h1>
-<div class='docblock'><p>Printing values&#39; text representations.</p>
-</div><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
-<table>
-                    <tr>
-                        <td><a class='stability Unmarked' title='No stability level'></a><a class='fn' href='fn.print.html'
-                               title='oxischeme::print::print'>print</a></td>
-                        <td class='docblock short'><p>Print the given value&#39;s text representation to the given writer.</p>
-</td>
-                    </tr>
-                </table></section>
+        </span><a id='src-4261' href='../../src/oxischeme/eval.rs.html#468-493'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn analyze(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, form: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='type' href='../../oxischeme/eval/type.MeaningResult.html' title='oxischeme::eval::MeaningResult'>MeaningResult</a></pre><div class='docblock'><p>The main entry point for syntactic analysis.</p>
+</div></section>
     <section id='search' class="content hidden"></section>
 
     <section class="footer"></section>

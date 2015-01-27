@@ -44,8 +44,8 @@
 <h1 class='fqn'><span class='in-band'>Trait <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='trait' href=''>ToGcThing</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-2651' href='../../src/oxischeme/heap.rs.html#276-279'>[src]</a></span></h1>
-<pre class='rust trait'>pub trait ToGcThing {
+        </span><a id='src-6280' href='../../src/oxischeme/heap.rs.html#268-271'>[src]</a></span></h1>
+<pre class='rust trait'>pub trait ToGcThing: <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.Show.html' title='core::fmt::Show'>Show</a> {
     fn <a href='#tymethod.to_gc_thing' class='fnname'>to_gc_thing</a>(&amp;self) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/option/enum.Option.html' title='core::option::Option'>Option</a>&lt;<a class='enum' href='../../oxischeme/heap/enum.GcThing.html' title='oxischeme::heap::GcThing'>GcThing</a>&gt;;
 }</pre><div class='docblock'><p>A trait for types that can be coerced to a <code>GcThing</code>.</p>
 </div>
@@ -55,7 +55,8 @@
 </div></div>
         <h2 id='implementors'>Implementors</h2>
         <ul class='item-list' id='implementors-list'>
-    <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='type' href='../../oxischeme/environment/type.EnvironmentPtr.html' title='oxischeme::environment::EnvironmentPtr'>EnvironmentPtr</a></code></li>
+    <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='type' href='../../oxischeme/environment/type.ActivationPtr.html' title='oxischeme::environment::ActivationPtr'>ActivationPtr</a></code></li>
+<li><a class='stability Unmarked' title='No stability level'></a><code>impl&lt;T: <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a>&gt; <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='struct' href='../../oxischeme/heap/struct.Rooted.html' title='oxischeme::heap::Rooted'>Rooted</a>&lt;T&gt;</code></li>
 <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='type' href='../../oxischeme/heap/type.StringPtr.html' title='oxischeme::heap::StringPtr'>StringPtr</a></code></li>
 <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='type' href='../../oxischeme/value/type.ConsPtr.html' title='oxischeme::value::ConsPtr'>ConsPtr</a></code></li>
 <li><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.ToGcThing.html' title='oxischeme::heap::ToGcThing'>ToGcThing</a> for <a class='type' href='../../oxischeme/value/type.ProcedurePtr.html' title='oxischeme::value::ProcedurePtr'>ProcedurePtr</a></code></li>

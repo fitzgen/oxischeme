@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="generator" content="rustdoc">
+    <meta name="description" content="API documentation for the Rust `Activation` struct in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, Activation">
+
+    <title>oxischeme::environment::Activation - Rust</title>
+
+    <link rel="stylesheet" type="text/css" href="../../main.css">
+
+    
+    
+</head>
+<body class="rustdoc">
+    <!--[if lte IE 8]>
+    <div class="warning">
+        This old browser is unsupported and will most likely display funky
+        things.
+    </div>
+    <![endif]-->
+
+    
+
+    <section class="sidebar">
+        
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a></p><div class='block struct'><h2>Structs</h2><a class='struct current' href='struct.Activation.html'>Activation</a><a class='struct ' href='struct.Environment.html'>Environment</a></div>
+    </section>
+
+    <nav class="sub">
+        <form class="search-form js-only">
+            <div class="search-container">
+                <input class="search-input" name="search"
+                       autocomplete="off"
+                       placeholder="Click or press 'S' to search, '?' for more options..."
+                       type="search">
+            </div>
+        </form>
+    </nav>
+
+    <section id='main' class="content struct">
+<h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a>::<wbr><a class='struct' href=''>Activation</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+            <a id="collapse-all" href="#">[-]
+            </a>&nbsp;<a id="expand-all" href="#">[+]</a>
+        </span><a id='src-25' href='../../src/oxischeme/environment.rs.html#39-47'>[src]</a></span></h1>
+<pre class='rust struct'>pub struct Activation {
+    // some fields omitted
+}</pre><div class='docblock'><p>An <code>Activation</code> represents a runtime instance of a lexical block (either a
+lambda or the global top-level).</p>
+</div><h2 id='methods'>Methods</h2><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h3><div class='impl-items'><h4 id='method.extend' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.extend' class='fnname'>extend</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, parent: &amp;<a class='type' href='../../oxischeme/environment/type.RootedActivationPtr.html' title='oxischeme::environment::RootedActivationPtr'>RootedActivationPtr</a>, values: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>&gt;) -&gt; <a class='type' href='../../oxischeme/environment/type.RootedActivationPtr.html' title='oxischeme::environment::RootedActivationPtr'>RootedActivationPtr</a></code></h4>
+<div class='docblock'><p>Extend the given <code>Activation</code> with the values supplied, resulting in a
+new <code>Activation</code> instance.</p>
+</div><h4 id='method.fetch' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.fetch' class='fnname'>fetch</a>(&amp;self, heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, i: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>, j: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Fetch the j&#39;th variable from the i&#39;th lexical activation.</p>
+
+<p>Returns an error when trying to fetch the value of a variable that has
+not yet been defined.</p>
+</div><h4 id='method.update' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.update' class='fnname'>update</a>(&amp;mut self, i: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>, j: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>, val: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>, <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>()</a>&gt;</code></h4>
+<div class='docblock'><p>Set the j&#39;th variable from the i&#39;th lexical activation to the given
+value.</p>
+
+<p>Returns an error when trying to set a variable that has not yet been
+defined.</p>
+</div><h4 id='method.define' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.define' class='fnname'>define</a>(&amp;mut self, j: <a href='http://doc.rust-lang.org/nightly/std/primitive.u32.html'>u32</a>, val: <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a>)</code></h4>
+<div class='docblock'><p>Define the j&#39;th variable of this activation to be the given value.</p>
+</div></div><h2 id='implementations'>Trait Implementations</h2><h3 class='impl'><a class='stability Unstable' title='Unstable: module was recently redesigned'></a><code>impl&lt;S: <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Writer.html' title='core::hash::Writer'>Writer</a> + <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hasher.html' title='core::hash::Hasher'>Hasher</a>&gt; <a class='trait' href='http://doc.rust-lang.org/nightly/core/hash/trait.Hash.html' title='core::hash::Hash'>Hash</a>&lt;S&gt; for <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h3><div class='impl-items'><h4 id='method.hash' class='method'><a class='stability Unstable' title='Unstable: module was recently redesigned'></a><code>fn <a href='#method.hash' class='fnname'>hash</a>(&amp;self, state: &amp;mut S)</code></h4>
+</div><h3 class='impl'><a class='stability Stable' title='Stable'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/default/trait.Default.html' title='core::default::Default'>Default</a> for <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h3><div class='impl-items'><h4 id='method.default' class='method'><a class='stability Stable' title='Stable'></a><code>fn <a href='#method.default' class='fnname'>default</a>() -&gt; <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h4>
+</div><h3 class='impl'><a class='stability Unmarked' title='No stability level'></a><code>impl <a class='trait' href='../../oxischeme/heap/trait.Trace.html' title='oxischeme::heap::Trace'>Trace</a> for <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h3><div class='impl-items'><h4 id='method.trace' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.trace' class='fnname'>trace</a>(&amp;self) -&gt; <a class='type' href='../../oxischeme/heap/type.IterGcThing.html' title='oxischeme::heap::IterGcThing'>IterGcThing</a></code></h4>
+</div><h3 class='impl'><a class='stability Unstable' title='Unstable: I/O and core have yet to be reconciled'></a><code>impl <a class='trait' href='http://doc.rust-lang.org/nightly/core/fmt/trait.String.html' title='core::fmt::String'>String</a> for <a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a></code></h3><div class='impl-items'><h4 id='method.fmt' class='method'><a class='stability Unstable' title='Unstable: I/O and core have yet to be reconciled'></a><code>fn <a href='#method.fmt' class='fnname'>fmt</a>(&amp;self, f: &amp;mut <a class='struct' href='http://doc.rust-lang.org/nightly/core/fmt/struct.Formatter.html' title='core::fmt::Formatter'>Formatter</a>) -&gt; <a class='type' href='http://doc.rust-lang.org/nightly/core/fmt/type.Result.html' title='core::fmt::Result'>Result</a></code></h4>
+</div></section>
+    <section id='search' class="content hidden"></section>
+
+    <section class="footer"></section>
+
+    <div id="help" class="hidden">
+        <div class="shortcuts">
+            <h1>Keyboard shortcuts</h1>
+            <dl>
+                <dt>?</dt>
+                <dd>Show this help dialog</dd>
+                <dt>S</dt>
+                <dd>Focus the search field</dd>
+                <dt>&larrb;</dt>
+                <dd>Move up in search results</dd>
+                <dt>&rarrb;</dt>
+                <dd>Move down in search results</dd>
+                <dt>&#9166;</dt>
+                <dd>Go to active search result</dd>
+            </dl>
+        </div>
+        <div class="infos">
+            <h1>Search tricks</h1>
+            <p>
+                Prefix searches with a type followed by a colon (e.g.
+                <code>fn:</code>) to restrict the search to a given type.
+            </p>
+            <p>
+                Accepted types are: <code>fn</code>, <code>mod</code>,
+                <code>struct</code>, <code>enum</code>,
+                <code>trait</code>, <code>typedef</code> (or
+                <code>tdef</code>).
+            </p>
+        </div>
+    </div>
+
+    
+
+    <script>
+        window.rootPath = "../../";
+        window.currentCrate = "oxischeme";
+        window.playgroundUrl = "";
+    </script>
+    <script src="../../jquery.js"></script>
+    <script src="../../main.js"></script>
+    
+    <script async src="../../search-index.js"></script>
+</body>
+</html>

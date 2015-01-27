@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod current' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod ' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../print/index.html'>print</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a></p><div class='block mod'><h2>Modules</h2><a class='mod current' href='../environment/index.html'>environment</a><a class='mod ' href='../eval/index.html'>eval</a><a class='mod ' href='../heap/index.html'>heap</a><a class='mod ' href='../primitives/index.html'>primitives</a><a class='mod ' href='../read/index.html'>read</a><a class='mod ' href='../value/index.html'>value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='../fn.main.html'>main</a><a class='fn ' href='../fn.repl.html'>repl</a></div>
     </section>
 
     <nav class="sub">
@@ -44,29 +44,51 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>environment</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5' href='../../src/oxischeme/environment.rs.html#15-174'>[src]</a></span></h1>
-<div class='docblock'><p>The implementation of the Scheme environment that binds symbols to values.</p>
+        </span><a id='src-6' href='../../src/oxischeme/environment.rs.html#15-255'>[src]</a></span></h1>
+<div class='docblock'><p>The implementation of the Scheme environment binding symbols to values.</p>
+
+<p>This is split into two pieces:</p>
+
+<ol>
+<li><p>The <code>Environment</code> associates symbol names with a concrete location where
+the symbol&#39;s value can be found at runime. This is static information used
+during the syntactic analysis.</p></li>
+<li><p><code>Activation</code>s are instances of lexical blocks (either a lambda invocation,
+or the global top level) at runtime. They only contain values and none of the
+metadata mapping names to these values. After syntactic analysis, we only
+deal with activations, and we no longer need the symbols nor the
+<code>Environment</code>.</p></li>
+</ol>
 </div><h2 id='structs' class='section-header'><a href="#structs">Structs</a></h2>
 <table>
                     <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Activation.html'
+                               title='oxischeme::environment::Activation'>Activation</a></td>
+                        <td class='docblock short'><p>An <code>Activation</code> represents a runtime instance of a lexical block (either a
+lambda or the global top-level).</p>
+</td>
+                    </tr>
+                
+                    <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Environment.html'
                                title='oxischeme::environment::Environment'>Environment</a></td>
-                        <td class='docblock short'><p>The <code>Environment</code> associates symbols with values.</p>
+                        <td class='docblock short'><p>The <code>Environment</code> represents what we know about bindings statically, during
+syntactic analysis.</p>
 </td>
                     </tr>
                 </table><h2 id='types' class='section-header'><a href="#types">Type Definitions</a></h2>
 <table>
                     <tr>
-                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.EnvironmentPtr.html'
-                               title='oxischeme::environment::EnvironmentPtr'>EnvironmentPtr</a></td>
-                        <td class='docblock short'><p>A pointer to an <code>Environment</code> on the heap.</p>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.ActivationPtr.html'
+                               title='oxischeme::environment::ActivationPtr'>ActivationPtr</a></td>
+                        <td class='docblock short'><p>A pointer to an <code>Activation</code> on the heap.</p>
 </td>
                     </tr>
                 
                     <tr>
-                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.RootedEnvironmentPtr.html'
-                               title='oxischeme::environment::RootedEnvironmentPtr'>RootedEnvironmentPtr</a></td>
-                        <td class='docblock short'><p>A rooted pointer to an <code>Environment</code> on the heap.</p>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='type' href='type.RootedActivationPtr.html'
+                               title='oxischeme::environment::RootedActivationPtr'>RootedActivationPtr</a></td>
+                        <td class='docblock short'><p>A rooted pointer to an <code>Activation</code> on the heap.</p>
 </td>
                     </tr>
                 </table></section>
