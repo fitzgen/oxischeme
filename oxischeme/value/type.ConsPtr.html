@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Cons.html'>Cons</a><a class='struct ' href='struct.ConsIterator.html'>ConsIterator</a><a class='struct ' href='struct.Primitive.html'>Primitive</a><a class='struct ' href='struct.Procedure.html'>Procedure</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Value.html'>Value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.list.html'>list</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Cons.html' title='A cons cell is a pair of `car` and `cdr` values. A list is one or more cons cells, daisy chained together via the `cdr`. A list is &quot;proper&quot; if the last `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is &quot;improper&quot;.'>Cons</a><a class='struct ' href='struct.ConsIterator.html' title='An iterator which yields `Ok` for each value in a cons-list and finishes with `None` when the end of the list is reached (the scheme empty list value) or `Err` when iterating over an improper list.'>ConsIterator</a><a class='struct ' href='struct.Primitive.html' title='A primitive procedure, such as Scheme&#39;s `+` or `cons`.'>Primitive</a><a class='struct ' href='struct.Procedure.html' title='User defined procedures are represented by their body and a pointer to the activation that they were defined within.'>Procedure</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Value.html' title='`Value` represents a scheme value of any type.'>Value</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.list.html' title='A helper utility to create a cons list from the given values.'>list</a></div>
     </section>
 
     <nav class="sub">
@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a>::<wbr><a class='type' href=''>ConsPtr</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-11519' href='../../src/oxischeme/value.rs.html#87'>[src]</a></span></h1>
+        </span><a id='src-11433' href='../../src/oxischeme/value.rs.html#87'>[src]</a></span></h1>
 <pre class='rust typedef'>type ConsPtr = <a class='struct' href='../../oxischeme/heap/struct.ArenaPtr.html' title='oxischeme::heap::ArenaPtr'>ArenaPtr</a>&lt;<a class='struct' href='../../oxischeme/value/struct.Cons.html' title='oxischeme::value::Cons'>Cons</a>&gt;;</pre><div class='docblock'><p>A pointer to a cons cell on the heap.</p>
 </div></section>
     <section id='search' class="content hidden"></section>

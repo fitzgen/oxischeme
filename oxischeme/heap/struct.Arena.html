@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct current' href='struct.Arena.html'>Arena</a><a class='struct ' href='struct.ArenaPtr.html'>ArenaPtr</a><a class='struct ' href='struct.Heap.html'>Heap</a><a class='struct ' href='struct.Rooted.html'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html'>ToGcThing</a><a class='trait ' href='trait.Trace.html'>Trace</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a></p><div class='block struct'><h2>Structs</h2><a class='struct current' href='struct.Arena.html' title='An arena from which to allocate `T` objects from.'>Arena</a><a class='struct ' href='struct.ArenaPtr.html' title='A pointer to a `T` instance in an arena.'>ArenaPtr</a><a class='struct ' href='struct.Heap.html' title='The scheme heap and GC runtime, containing all allocated cons cells, activations, procedures, and strings (including strings for symbols).'>Heap</a><a class='struct ' href='struct.Rooted.html' title='A smart pointer wrapping the pointer type `T`. It keeps its referent rooted while the smart pointer is in scope to prevent dangling pointers caused by a garbage collection within the pointers lifespan. For more information see the module level documentation about rooting.'>Rooted</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.GcThing.html' title='The union of the various types that are GC things.'>GcThing</a></div><div class='block trait'><h2>Traits</h2><a class='trait ' href='trait.ToGcThing.html' title='A trait for types that can be coerced to a `GcThing`.'>ToGcThing</a><a class='trait ' href='trait.Trace.html' title='The `Trace` trait allows GC participants to inform the collector of their references to other GC things.'>Trace</a></div>
     </section>
 
     <nav class="sub">
@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Struct <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>heap</a>::<wbr><a class='struct' href=''>Arena</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5750' href='../../src/oxischeme/heap.rs.html#145-148'>[src]</a></span></h1>
+        </span><a id='src-5719' href='../../src/oxischeme/heap.rs.html#145-148'>[src]</a></span></h1>
 <pre class='rust struct'>pub struct Arena&lt;T&gt; {
     // some fields omitted
 }</pre><div class='docblock'><p>An arena from which to allocate <code>T</code> objects from.</p>

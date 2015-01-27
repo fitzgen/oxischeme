@@ -738,7 +738,7 @@
     }
 }
 
-<span class='kw'>impl</span> <span class='ident'>fmt</span>::<span class='ident'>Show</span> <span class='kw'>for</span> <span class='ident'>Primitive</span> {
+<span class='kw'>impl</span> <span class='ident'>fmt</span>::<span class='ident'>Debug</span> <span class='kw'>for</span> <span class='ident'>Primitive</span> {
     <span class='kw'>fn</span> <span class='ident'>fmt</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>f</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>fmt</span>::<span class='ident'>Formatter</span>) <span class='op'>-&gt;</span> <span class='ident'>fmt</span>::<span class='prelude-ty'>Result</span> {
         <span class='macro'>write</span><span class='macro'>!</span>(<span class='ident'>f</span>, <span class='string'>&quot;{}&quot;</span>, <span class='self'>self</span>.<span class='ident'>name</span>)
     }
@@ -748,7 +748,7 @@
 <span class='doccomment'>///</span>
 <span class='doccomment'>/// Note that `Eq` and `PartialEq` are object identity, not structural</span>
 <span class='doccomment'>/// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).</span>
-<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Copy</span>, <span class='ident'>Eq</span>, <span class='ident'>Hash</span>, <span class='ident'>PartialEq</span>, <span class='ident'>Show</span>)]</span>
+<span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Copy</span>, <span class='ident'>Eq</span>, <span class='ident'>Hash</span>, <span class='ident'>PartialEq</span>, <span class='ident'>Debug</span>)]</span>
 <span class='kw'>pub</span> <span class='kw'>enum</span> <span class='ident'>Value</span> {
     <span class='doccomment'>/// The empty list: `()`.</span>
     <span class='ident'>EmptyList</span>,
@@ -957,7 +957,7 @@
     }
 }
 
-<span class='kw'>impl</span> <span class='ident'>fmt</span>::<span class='ident'>String</span> <span class='kw'>for</span> <span class='ident'>Value</span> {
+<span class='kw'>impl</span> <span class='ident'>fmt</span>::<span class='ident'>Display</span> <span class='kw'>for</span> <span class='ident'>Value</span> {
     <span class='doccomment'>/// Print the given value&#39;s text representation to the given writer. This is</span>
     <span class='doccomment'>/// the opposite of `Read`.</span>
     <span class='kw'>fn</span> <span class='ident'>fmt</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>f</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>fmt</span>::<span class='ident'>Formatter</span>) <span class='op'>-&gt;</span> <span class='ident'>fmt</span>::<span class='prelude-ty'>Result</span> {

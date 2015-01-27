@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.analyze.html'>analyze</a><a class='fn ' href='fn.evaluate.html'>evaluate</a><a class='fn ' href='fn.evaluate_file.html'>evaluate_file</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html' title='The `Meaning` type is our intermediate language produced by syntactic analysis. It is a pair containing a `MeaningData` variant and its corresponding `MeaningEvaluatorFn`.'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html' title='To optimize tail calls and eliminate the stack frames used by them, we trampoline thunks in a while loop and encode that process in this type.'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.analyze.html' title='The main entry point for syntactic analysis.'>analyze</a><a class='fn ' href='fn.evaluate.html' title='Evaluate the given form in the global environment.'>evaluate</a><a class='fn ' href='fn.evaluate_file.html' title='Evaluate the file at the given path and return the value of the last form.'>evaluate_file</a></div>
     </section>
 
     <nav class="sub">
@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='type' href=''>MeaningResult</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-4253' href='../../src/oxischeme/eval.rs.html#465'>[src]</a></span></h1>
+        </span><a id='src-4231' href='../../src/oxischeme/eval.rs.html#465'>[src]</a></span></h1>
 <pre class='rust typedef'>type MeaningResult = <a class='enum' href='http://doc.rust-lang.org/nightly/core/result/enum.Result.html' title='core::result::Result'>Result</a>&lt;<a class='struct' href='../../oxischeme/eval/struct.Meaning.html' title='oxischeme::eval::Meaning'>Meaning</a>, <a class='struct' href='http://doc.rust-lang.org/nightly/collections/string/struct.String.html' title='collections::string::String'>String</a>&gt;;</pre><div class='docblock'><p>Either a <code>Meaning</code>, or a <code>String</code> explaining the error.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
