@@ -35,7 +35,9 @@ impl<R: Reader> CharReader<R> {
     }
 }
 
-impl<R: Reader> Iterator<char> for CharReader<R> {
+impl<R: Reader> Iterator for CharReader<R> {
+    type Item = char;
+
     /// Returns `Some(c)` for each character `c` from the input reader. Upon
     /// reaching EOF, returns `None`.
     fn next(&mut self) -> Option<char> {
@@ -91,7 +93,7 @@ fn is_symbol_subsequent(c: &char) -> bool {
 }
 
 /// `Read` iteratively parses values from the input `Reader`.
-pub struct Read<R> {
+pub struct Read<R: Reader> {
     chars: RefCell<Peekable<char, CharReader<R>>>,
     result: Result<(), String>,
     heap_ptr: *mut Heap,
@@ -450,7 +452,9 @@ impl<'a, R: Reader> Read<R> {
     }
 }
 
-impl<R: Reader> Iterator<RootedValue> for Read<R> {
+impl<R: Reader> Iterator for Read<R> {
+    type Item = RootedValue;
+
     fn next(&mut self) -> Option<RootedValue> {
         if self.result.is_err() {
             return None;
@@ -504,6 +508,8 @@ pub fn read_from_file(path_name: &str, heap: *mut Heap) -> IoResult<Read<File>> 
     let file = try!(File::open(&path));
     Ok(Read::new(file, heap))
 }
+
+// TESTS -----------------------------------------------------------------------
 
 #[test]
 fn test_read_integers() {
@@ -670,17 +676,17 @@ fn test_read_string() {
     assert_eq!(results.len(), 3);
 
     match results[0] {
-        Value::String(str) => assert_eq!(str.deref().deref(), "".to_string()),
+        Value::String(str) => assert_eq!(*str, "".to_string()),
         _                  => assert!(false),
     }
 
     match results[1] {
-        Value::String(str) => assert_eq!(str.deref().deref(), "hello".to_string()),
+        Value::String(str) => assert_eq!(*str, "hello".to_string()),
         _                  => assert!(false),
     }
 
     match results[2] {
-        Value::String(str) => assert_eq!(str.deref().deref(), "\"".to_string()),
+        Value::String(str) => assert_eq!(*str, "\"".to_string()),
         _                  => assert!(false),
     }
 }
@@ -695,32 +701,32 @@ fn test_read_symbols() {
     assert_eq!(results.len(), 6);
 
     match results[0] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "foo".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "foo".to_string()),
         _                  => assert!(false),
     }
 
     match results[1] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "+".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "+".to_string()),
         _                  => assert!(false),
     }
 
     match results[2] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "-".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "-".to_string()),
         _                  => assert!(false),
     }
 
     match results[3] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "*".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "*".to_string()),
         _                  => assert!(false),
     }
 
     match results[4] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "?".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "?".to_string()),
         _                  => assert!(false),
     }
 
     match results[5] {
-        Value::Symbol(str) => assert_eq!(str.deref().deref(), "!".to_string()),
+        Value::Symbol(str) => assert_eq!(*str, "!".to_string()),
         _                  => assert!(false),
     }
 }
@@ -750,8 +756,7 @@ fn test_read_quoted() {
 
     let car = results[0].car(heap).map(|s| *s);
     match car {
-        Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
-                                               "quote".to_string()),
+        Some(Value::Symbol(str)) => assert_eq!(*str, "quote".to_string()),
         _                        => assert!(false),
     }
 
@@ -759,8 +764,7 @@ fn test_read_quoted() {
         .cdr(heap).expect("results[0].cdr")
         .car(heap).map(|s| *s);
     match cdar {
-        Some(Value::Symbol(str)) => assert_eq!(str.deref().deref(),
-                                               "foo".to_string()),
+        Some(Value::Symbol(str)) => assert_eq!(*str, "foo".to_string()),
         _                        => assert!(false),
     }
 }
@@ -775,9 +779,6 @@ fn test_read_from_file() {
         .map(|v| *v)
         .collect();
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].to_symbol(heap).expect("Should be a symbol")
-                         .deref()
-                         .deref()
-                         .deref(),
+    assert_eq!(**results[0].to_symbol(heap).expect("Should be a symbol"),
                "hello".to_string());
 }

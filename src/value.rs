@@ -18,7 +18,8 @@ use std::default::{Default};
 use std::fmt;
 use std::hash;
 
-use environment::{EnvironmentPtr, RootedEnvironmentPtr};
+use environment::{ActivationPtr, RootedActivationPtr};
+use eval::{Meaning};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
 use primitives::{PrimitiveFunction};
@@ -27,7 +28,7 @@ use primitives::{PrimitiveFunction};
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[deriving(Copy, Eq, Hash, PartialEq)]
+#[derive(Copy, Eq, Hash, PartialEq)]
 pub struct Cons {
     car: Value,
     cdr: Value,
@@ -94,75 +95,46 @@ impl ToGcThing for ConsPtr {
 /// A rooted pointer to a cons cell on the heap.
 pub type RootedConsPtr = Rooted<ConsPtr>;
 
-/// Procedures are represented by their parameter list, body, and a pointer to
-/// their definition environment.
-#[deriving(Copy, Hash)]
+/// User defined procedures are represented by their body and a pointer to the
+/// activation that they were defined within.
 pub struct Procedure {
-    params: Value,
-    body: Value,
-    env: EnvironmentPtr,
-}
-
-impl Procedure {
-    /// Get this procedure's parameters.
-    pub fn get_params(&self, heap: &mut Heap) -> RootedValue {
-        Rooted::new(heap, self.params)
-    }
-
-    /// Get this procedure's body.
-    pub fn get_body(&self, heap: &mut Heap) -> RootedValue {
-        Rooted::new(heap, self.body)
-    }
-
-    /// Get this procedure's environment.
-    pub fn get_env(&self, heap: &mut Heap) -> RootedEnvironmentPtr {
-        Rooted::new(heap, self.env)
-    }
-
-    /// Set this procedure's parameters.
-    pub fn set_params(&mut self, params: &RootedValue) {
-        self.params = **params;
-    }
-
-    /// Set this procedure's body.
-    pub fn set_body(&mut self, body: &RootedValue) {
-        self.body = **body;
-    }
-
-    /// Set this procedure's environment.
-    pub fn set_env(&mut self, env: &RootedEnvironmentPtr) {
-        self.env = **env;
-    }
+    pub arity: u32,
+    pub body: Option<Box<Meaning>>,
+    pub act: Option<ActivationPtr>,
 }
 
 impl Default for Procedure {
-    /// Do not use this method, instead allocate procedures on the heap with
-    /// `Heap::allocate_procedure` and get back a `ProcedurePtr`.
     fn default() -> Procedure {
         Procedure {
-            params: Value::EmptyList,
-            body: Value::EmptyList,
-            env: ArenaPtr::null(),
+            body: None,
+            act: None,
+            arity: 0,
         }
     }
 }
 
 impl Trace for Procedure {
     fn trace(&self) -> IterGcThing {
-        let mut results = vec!();
+        // We don't need to trace the body because a `Meaning` can only contain
+        // rooted GC things to ensure that quotations will always return the
+        // same object rather than generate new equivalent-but-not-`eq?`
+        // objects.
 
-        if let Some(params) = self.params.to_gc_thing() {
-            results.push(params);
-        }
-
-        if let Some(body) = self.body.to_gc_thing() {
-            results.push(body);
-        }
-
-        results.push(GcThing::from_environment_ptr(self.env));
-        results.into_iter()
+        vec!(GcThing::from_activation_ptr(self.act.expect(
+            "Should never trace an uninitialized Procedure"))).into_iter()
     }
 }
+
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Procedure {
+    fn hash(&self, state: &mut S) {
+        self.arity.hash(state);
+        self.act.hash(state);
+        self.body.as_ref()
+            .expect("Should never hash an uninitialized Procedure")
+            .hash(state);
+    }
+}
+
 
 /// A pointer to a `Procedure` on the heap.
 pub type ProcedurePtr = ArenaPtr<Procedure>;
@@ -176,7 +148,7 @@ impl ToGcThing for ProcedurePtr {
 pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 
 /// A primitive procedure, such as Scheme's `+` or `cons`.
-#[deriving(Copy)]
+#[derive(Copy)]
 pub struct Primitive {
     /// The function implementing the primitive.
     function: PrimitiveFunction,
@@ -186,22 +158,22 @@ pub struct Primitive {
 
 impl PartialEq for Primitive {
     fn eq(&self, rhs: &Self) -> bool {
-        self.function as uint == rhs.function as uint
+        self.function as usize == rhs.function as usize
     }
 }
 
 impl Eq for Primitive { }
 
-impl<S: hash::Writer> hash::Hash<S> for Primitive {
+impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Primitive {
     fn hash(&self, state: &mut S) {
-        let u = self.function as uint;
+        let u = self.function as usize;
         u.hash(state);
     }
 }
 
 impl Primitive {
     #[inline]
-    pub fn call(&self, heap: &mut Heap, args: &RootedValue) -> SchemeResult {
+    pub fn call(&self, heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
         let f = self.function;
         f(heap, args)
     }
@@ -209,7 +181,7 @@ impl Primitive {
 
 impl fmt::Show for Primitive {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Primitive({})", self.name)
+        write!(f, "{}", self.name)
     }
 }
 
@@ -217,7 +189,7 @@ impl fmt::Show for Primitive {
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
 /// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
-#[deriving(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Show)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
@@ -279,13 +251,13 @@ impl Value {
 
     /// Create a new procedure with the given parameter list and body.
     pub fn new_procedure(heap: &mut Heap,
-                         params: &RootedValue,
-                         body: &RootedValue,
-                         env: &RootedEnvironmentPtr) -> RootedValue {
+                         arity: u32,
+                         act: &RootedActivationPtr,
+                         body: Meaning) -> RootedValue {
         let mut procedure = heap.allocate_procedure();
-        procedure.set_params(params);
-        procedure.set_body(body);
-        procedure.set_env(env);
+        procedure.arity = arity;
+        procedure.act = Some(**act);
+        procedure.body = Some(Box::new(body));
         Rooted::new(heap, Value::Procedure(*procedure))
     }
 
@@ -389,6 +361,13 @@ impl Value {
             _                => Err(()),
         }
     }
+
+    /// Iterate over this list value.
+    pub fn iter(&self) -> ConsIterator {
+        ConsIterator {
+            val: *self
+        }
+    }
 }
 
 impl ToGcThing for Value {
@@ -403,18 +382,99 @@ impl ToGcThing for Value {
     }
 }
 
+/// Print the given cons pair, without the containing "(" and ")".
+fn print_pair(f: &mut fmt::Formatter, cons: &ConsPtr) -> fmt::Result {
+    try!(write!(f, "{}", &cons.car));
+    match cons.cdr {
+        Value::EmptyList => Ok(()),
+        Value::Pair(ref cdr) => {
+            try!(write!(f, " "));
+            print_pair(f, cdr)
+        },
+        ref val => {
+            try!(write!(f, " . "));
+            write!(f, "{}", val)
+        },
+    }
+}
+
+impl fmt::String for Value {
+    /// Print the given value's text representation to the given writer. This is
+    /// the opposite of `Read`.
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Value::EmptyList        => write!(f, "()"),
+            Value::Pair(ref cons)   => {
+                try!(write!(f, "("));
+                try!(print_pair(f, cons));
+                write!(f, ")")
+            },
+            Value::String(ref str)  => {
+                try!(write!(f, "\""));
+                try!(write!(f, "{}", **str));
+                write!(f, "\"")
+            },
+            Value::Symbol(ref s)    => write!(f, "{}", **s),
+            Value::Integer(ref i)   => write!(f, "{}", i),
+            Value::Boolean(ref b)   => {
+                write!(f, "{}", if *b {
+                    "#t"
+                } else {
+                    "#f"
+                })
+            },
+            Value::Character(ref c) => match *c {
+                '\n' => write!(f, "#\\newline"),
+                '\t' => write!(f, "#\\tab"),
+                ' '  => write!(f, "#\\space"),
+                _    => write!(f, "#\\{}", c),
+            },
+            Value::Procedure(ref p) => write!(f, "#<procedure {:?}>", p),
+            Value::Primitive(ref p) => write!(f, "#<procedure {:?}>", p),
+        }
+    }
+}
+
 pub type RootedValue = Rooted<Value>;
 
 /// Either a Scheme `RootedValue`, or a `String` containing an error message.
 pub type SchemeResult = Result<RootedValue, String>;
+
+/// An iterator which yields `Ok` for each value in a cons-list and finishes
+/// with `None` when the end of the list is reached (the scheme empty list
+/// value) or `Err` when iterating over an improper list.
+///
+/// For example: the list `(1 2 3)` would yield `Ok(1)`, `Ok(2)`, `Ok(3)`,
+/// `None`, while the improper list `(1 2 . 3)` would yield `Ok(1)`, `Ok(2)`,
+/// `Err`.
+#[derive(Copy)]
+pub struct ConsIterator {
+    val: Value
+}
+
+impl Iterator for ConsIterator {
+    type Item = Result<Value, ()>;
+
+    fn next(&mut self) -> Option<Result<Value, ()>> {
+        match self.val {
+            Value::EmptyList => None,
+            Value::Pair(cons) => {
+                let Cons { car, cdr } = *cons;
+                self.val = cdr;
+                Some(Ok(car))
+            },
+            _ => Some(Err(())),
+        }
+    }
+}
 
 /// A helper utility to create a cons list from the given values.
 pub fn list(heap: &mut Heap, values: &[RootedValue]) -> RootedValue {
     list_helper(heap, &mut values.iter())
 }
 
-fn list_helper<'a, T: Iterator<&'a RootedValue>>(heap: &mut Heap,
-                                                 values: &mut T) -> RootedValue {
+fn list_helper<'a, T: Iterator<Item=&'a RootedValue>>(heap: &mut Heap,
+                                                      values: &mut T) -> RootedValue {
     match values.next() {
         None      => Rooted::new(heap, Value::EmptyList),
         Some(car) => {

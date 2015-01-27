@@ -35,7 +35,7 @@
 //! reuse. This provides the illusion of infinite memory, and frees Scheme
 //! programmers from manually managing allocations and frees. We refer to
 //! GC-managed types as "GC things". Note that a GC thing does not need to be a
-//! Scheme value type: environments are also managed by the GC, but are not a
+//! Scheme value type: activations are also managed by the GC, but are not a
 //! first class Scheme value.
 //!
 //! Any structure that has references to a garbage collected type must
@@ -47,7 +47,7 @@
 //! other GC things.
 //!
 //! A "GC root" is a GC participant that is always reachable. For example, the
-//! global environment is a root because global variables must always be
+//! global activation is a root because global variables must always be
 //! accessible.
 //!
 //! We use a simple *mark and sweep* garbage collection algorithm. In the mark
@@ -129,17 +129,17 @@ use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::default::{Default};
 use std::fmt;
-use std::ptr;
+use std::ops::{Deref, DerefMut};
 use std::vec::{IntoIter};
 
-use environment::{Environment, EnvironmentPtr, RootedEnvironmentPtr};
+use environment::{Activation, ActivationPtr, RootedActivationPtr, Environment};
 use primitives::{define_primitives};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
             RootedProcedurePtr, RootedValue, Value};
 
 /// We use a vector for our implementation of a free list. `Vector::push` to add
 /// new entries, `Vector::pop` to remove the next entry when we allocate.
-type FreeList = Vec<uint>;
+type FreeList = Vec<usize>;
 
 /// An arena from which to allocate `T` objects from.
 pub struct Arena<T> {
@@ -150,18 +150,18 @@ pub struct Arena<T> {
 impl<T: Default> Arena<T> {
     /// Create a new `Arena` with the capacity to allocate the given number of
     /// `T` instances.
-    pub fn new(capacity: uint) -> Box<Arena<T>> {
+    pub fn new(capacity: usize) -> Box<Arena<T>> {
         assert!(capacity > 0);
-        box Arena {
+        Box::new(Arena {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
-        }
+        })
     }
 }
 
 impl<T> Arena<T> {
     /// Get this heap's capacity for simultaneously allocated cons cells.
-    pub fn capacity(&self) -> uint {
+    pub fn capacity(&self) -> usize {
         self.pool.len()
     }
 
@@ -187,7 +187,7 @@ impl<T> Arena<T> {
     }
 
     /// Sweep the arena and add any reclaimed objects back to the free list.
-    pub fn sweep(&mut self, live: HashSet<uint>) {
+    pub fn sweep(&mut self, live: HashSet<usize>) {
         self.free = range(0, self.capacity())
             .filter(|n| !live.contains(n))
             .collect();
@@ -195,24 +195,24 @@ impl<T> Arena<T> {
 }
 
 /// A pointer to a `T` instance in an arena.
-#[allow(raw_pointer_deriving)]
-#[deriving(Hash)]
+#[allow(raw_pointer_derive)]
+#[derive(Hash)]
 pub struct ArenaPtr<T> {
     arena: *mut Arena<T>,
-    index: uint,
+    index: usize,
 }
 
 // XXX: We have to manually declare that ArenaPtr<T> is copy-able because if we
-// use `#[deriving(Copy)]` it wants T to be copy-able as well, despite the fact
+// use `#[derive(Copy)]` it wants T to be copy-able as well, despite the fact
 // that we only need to copy our pointer to the Arena<T>, not any T or the Arena
 // itself.
-impl<T> ::std::kinds::Copy for ArenaPtr<T> { }
+impl<T> ::std::marker::Copy for ArenaPtr<T> { }
 
 impl<T> ArenaPtr<T> {
     /// Create a new `ArenaPtr` to the `T` instance at the given index in the
     /// provided arena. **Not** publicly exposed, and should only be called by
     /// `Arena::allocate`.
-    fn new(arena: *mut Arena<T>, index: uint) -> ArenaPtr<T> {
+    fn new(arena: *mut Arena<T>, index: usize) -> ArenaPtr<T> {
         unsafe {
             let arena_ref = arena.as_ref()
                 .expect("ArenaPtr<T>::new should be passed a valid Arena.");
@@ -223,18 +223,10 @@ impl<T> ArenaPtr<T> {
             index: index,
         }
     }
-
-    /// Get the null ArenaPtr<T>. Should never actually be used, but sometimes
-    /// it is needed for initializing a struct's default, uninitialized form.
-    pub fn null() -> ArenaPtr<T> {
-        ArenaPtr {
-            arena: ptr::null_mut(),
-            index: 0,
-        }
-    }
 }
 
-impl<T> Deref<T> for ArenaPtr<T> {
+impl<T> Deref for ArenaPtr<T> {
+    type Target = T;
     fn deref<'a>(&'a self) -> &'a T {
         unsafe {
             let arena = self.arena.as_ref()
@@ -244,7 +236,7 @@ impl<T> Deref<T> for ArenaPtr<T> {
     }
 }
 
-impl<T> DerefMut<T> for ArenaPtr<T> {
+impl<T> DerefMut for ArenaPtr<T> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         unsafe {
             let arena = self.arena.as_mut()
@@ -256,7 +248,7 @@ impl<T> DerefMut<T> for ArenaPtr<T> {
 
 impl<T> fmt::Show for ArenaPtr<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "ArenaPtr({}, {})", self.arena as uint, self.index)
+        write!(f, "ArenaPtr({:p}, {})", &self.arena, &self.index)
     }
 }
 
@@ -266,14 +258,14 @@ impl<T> cmp::PartialEq for ArenaPtr<T> {
     /// `eq?`, not the scheme function `equal?`.
     fn eq(&self, other: &ArenaPtr<T>) -> bool {
         self.index == other.index
-            && (self.arena as uint) == (other.arena as uint)
+            && (self.arena as usize) == (other.arena as usize)
     }
 }
 
 impl<T> cmp::Eq for ArenaPtr<T> { }
 
 /// A trait for types that can be coerced to a `GcThing`.
-pub trait ToGcThing {
+pub trait ToGcThing: fmt::Show {
     /// Coerce this value to a `GcThing`.
     fn to_gc_thing(&self) -> Option<GcThing>;
 }
@@ -282,6 +274,8 @@ pub trait ToGcThing {
 /// while the smart pointer is in scope to prevent dangling pointers caused by a
 /// garbage collection within the pointers lifespan. For more information see
 /// the module level documentation about rooting.
+#[allow(raw_pointer_derive)]
+#[derive(Hash, Show)]
 pub struct Rooted<T> {
     heap: *mut Heap,
     ptr: T,
@@ -319,23 +313,28 @@ impl<T: ToGcThing> Rooted<T> {
 
     /// Unroot the current referent.
     fn drop_root(&mut self) {
-        if let Some(r) = self.ptr.to_gc_thing() {
-            unsafe {
-                self.heap.as_mut()
-                    .expect("Rooted<T>::drop should always have a Heap")
-                    .drop_root(r);
-            }
+        unsafe {
+            let heap = self.heap.as_mut()
+                .expect("Rooted<T>::drop should always have a Heap");
+            heap.drop_root(self);
         }
     }
 }
 
-impl<T> Deref<T> for Rooted<T> {
+impl<T: ToGcThing> ToGcThing for Rooted<T> {
+    fn to_gc_thing(&self) -> Option<GcThing> {
+        self.ptr.to_gc_thing()
+    }
+}
+
+impl<T> Deref for Rooted<T> {
+    type Target = T;
     fn deref<'a>(&'a self) -> &'a T {
         &self.ptr
     }
 }
 
-impl<T> DerefMut<T> for Rooted<T> {
+impl<T> DerefMut for Rooted<T> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         &mut self.ptr
     }
@@ -365,12 +364,6 @@ impl<T: PartialEq> PartialEq for Rooted<T> {
 }
 impl<T: PartialEq + Eq> Eq for Rooted<T> { }
 
-impl<T: fmt::Show> fmt::Show for Rooted<T> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Rooted({})", self.ptr)
-    }
-}
-
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;
 
@@ -384,29 +377,33 @@ impl ToGcThing for StringPtr {
 pub type RootedStringPtr = Rooted<StringPtr>;
 
 /// The scheme heap and GC runtime, containing all allocated cons cells,
-/// environments, procedures, and strings (including strings for symbols).
+/// activations, procedures, and strings (including strings for symbols).
 pub struct Heap {
+    /// The static environment.
+    pub environment: Environment,
+
     cons_cells: Box<Arena<Cons>>,
     strings: Box<Arena<String>>,
-    environments: Box<Arena<Environment>>,
+    activations: Box<Arena<Activation>>,
     procedures: Box<Arena<Procedure>>,
-    roots: HashMap<GcThing, uint>,
+
+    roots: Vec<(GcThing, usize)>,
     symbol_table: HashMap<String, StringPtr>,
-    global_environment: EnvironmentPtr,
-    allocations: uint,
+    global_activation: ActivationPtr,
+    allocations: usize,
 }
 
 /// The default capacity of cons cells.
-pub static DEFAULT_CONS_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_CONS_CAPACITY : usize = 1 << 12;
 
 /// The default capacity of strings.
-pub static DEFAULT_STRINGS_CAPACITY : uint = 1 << 12;
+pub static DEFAULT_STRINGS_CAPACITY : usize = 1 << 12;
 
-/// The default capacity of environments.
-pub static DEFAULT_ENVIRONMENTS_CAPACITY : uint = 1 << 12;
+/// The default capacity of activations.
+pub static DEFAULT_ACTIVATIONS_CAPACITY : usize = 1 << 12;
 
-/// The default capacity of environments.
-pub static DEFAULT_PROCEDURES_CAPACITY : uint = 1 << 12;
+/// The default capacity of procedures.
+pub static DEFAULT_PROCEDURES_CAPACITY : usize = 1 << 12;
 
 /// ## `Heap` Constructors
 impl Heap {
@@ -414,7 +411,7 @@ impl Heap {
     pub fn new() -> Heap {
         Heap::with_arenas(Arena::new(DEFAULT_CONS_CAPACITY),
                           Arena::new(DEFAULT_STRINGS_CAPACITY),
-                          Arena::new(DEFAULT_ENVIRONMENTS_CAPACITY),
+                          Arena::new(DEFAULT_ACTIVATIONS_CAPACITY),
                           Arena::new(DEFAULT_PROCEDURES_CAPACITY))
     }
 
@@ -422,19 +419,24 @@ impl Heap {
     /// strings within.
     pub fn with_arenas(cons_cells: Box<Arena<Cons>>,
                        strings: Box<Arena<String>>,
-                       envs: Box<Arena<Environment>>,
+                       acts: Box<Arena<Activation>>,
                        procs: Box<Arena<Procedure>>) -> Heap {
-        let mut e = envs;
-        let mut global_env = e.allocate();
-        define_primitives(&mut global_env);
+        let mut a = acts;
+        let mut global_act = a.allocate();
+        let mut env = Environment::new();
+        define_primitives(&mut env, &mut global_act);
+
         Heap {
+            environment: env,
+
             cons_cells: cons_cells,
             strings: strings,
-            environments: e,
+            activations: a,
             procedures: procs,
-            roots: HashMap::new(),
+
+            global_activation: global_act,
+            roots: vec!(),
             symbol_table: HashMap::new(),
-            global_environment: global_env,
             allocations: 0,
         }
     }
@@ -464,22 +466,22 @@ impl Heap {
         Rooted::new(self, s)
     }
 
-    /// Allocate a new `Environment` and return a pointer to it.
+    /// Allocate a new `Activation` and return a pointer to it.
     ///
     /// ## Panics
     ///
-    /// Panics if the `Arena` for environments has already reached capacity.
-    pub fn allocate_environment(&mut self) -> RootedEnvironmentPtr {
+    /// Panics if the `Arena` for activations has already reached capacity.
+    pub fn allocate_activation(&mut self) -> RootedActivationPtr {
         self.on_allocation();
-        let e = self.environments.allocate();
-        Rooted::new(self, e)
+        let a = self.activations.allocate();
+        Rooted::new(self, a)
     }
 
     /// Allocate a new `Procedure` and return a pointer to it.
     ///
     /// ## Panics
     ///
-    /// Panics if the `Arena` for environments has already reached capacity.
+    /// Panics if the `Arena` for procedures has already reached capacity.
     pub fn allocate_procedure(&mut self) -> RootedProcedurePtr {
         self.on_allocation();
         let p = self.procedures.allocate();
@@ -489,7 +491,7 @@ impl Heap {
 
 /// The maximum number of things to allocate before triggering a garbage
 /// collection.
-const MAX_GC_PRESSURE : uint = 1 << 8;
+const MAX_GC_PRESSURE : usize = 1 << 8;
 
 /// ## `Heap` Methods for Garbage Collection
 impl Heap {
@@ -522,40 +524,54 @@ impl Heap {
         // Second, divide the marked set by arena, and sweep each arena.
 
         let mut live_strings = HashSet::new();
-        let mut live_envs = HashSet::new();
+        let mut live_acts = HashSet::new();
         let mut live_cons_cells = HashSet::new();
         let mut live_procs = HashSet::new();
 
         for thing in marked.into_iter() {
             match thing {
-                GcThing::String(p)      => live_strings.insert(p.index),
-                GcThing::Environment(p) => live_envs.insert(p.index),
-                GcThing::Cons(p)        => live_cons_cells.insert(p.index),
-                GcThing::Procedure(p)   => live_procs.insert(p.index),
+                GcThing::String(p)     => live_strings.insert(p.index),
+                GcThing::Activation(p) => live_acts.insert(p.index),
+                GcThing::Cons(p)       => live_cons_cells.insert(p.index),
+                GcThing::Procedure(p)  => live_procs.insert(p.index),
             };
         }
 
         self.strings.sweep(live_strings);
-        self.environments.sweep(live_envs);
+        self.activations.sweep(live_acts);
         self.cons_cells.sweep(live_cons_cells);
         self.procedures.sweep(live_procs);
     }
 
     /// Explicitly add the given GC thing as a root.
     pub fn add_root(&mut self, root: GcThing) {
-        let zero = 0u;
-        let current_count = *self.roots.get(&root).unwrap_or(&zero);
-        self.roots.insert(root, current_count + 1);
+        for pair in self.roots.iter_mut() {
+            let (ref r, ref mut count) = *pair;
+            if *r == root {
+                *count += 1;
+                return;
+            }
+        }
+        self.roots.push((root, 1));
     }
 
     /// Unroot a GC thing that was explicitly rooted with `add_root`.
-    pub fn drop_root(&mut self, root: GcThing) {
-        let current_count = *(self.roots.get(&root))
-            .expect("Should never drop_root a gc thing that isn't rooted");
-        if current_count == 1 {
-            self.roots.remove(&root);
-        } else {
-            self.roots.insert(root, current_count - 1);
+    pub fn drop_root<T: ToGcThing>(&mut self, root: &Rooted<T>) {
+        if let Some(r) = root.to_gc_thing() {
+            self.roots = self.roots.iter().fold(vec!(), |mut v, pair| {
+                let (ref rr, ref count) = *pair;
+                if r == *rr {
+                    if *count == 1 {
+                        return v;
+                    } else {
+                        v.push((*rr, *count - 1));
+                    }
+                } else {
+                    v.push((*rr, *count));
+                }
+
+                return v;
+            });
         }
     }
 
@@ -575,9 +591,10 @@ impl Heap {
             .map(|s| GcThing::from_string_ptr(*s))
             .collect();
 
-        roots.push(GcThing::from_environment_ptr(self.global_environment));
+        roots.push(GcThing::from_activation_ptr(self.global_activation));
 
-        for root in self.roots.keys() {
+        for pair in self.roots.iter() {
+            let (ref root, _) = *pair;
             roots.push(*root);
         }
 
@@ -589,7 +606,7 @@ impl Heap {
         self.cons_cells.is_full()
             || self.strings.is_full()
             || self.procedures.is_full()
-            || self.environments.is_full()
+            || self.activations.is_full()
     }
 
     /// A method that should be called on every allocation. If any arenas are
@@ -618,10 +635,21 @@ impl Heap {
 
 /// ## `Heap` Methods and Accessors.
 impl Heap {
-    /// Get the global environment.
-    pub fn global_env(&mut self) -> RootedEnvironmentPtr {
-        let env = self.global_environment;
-        Rooted::new(self, env)
+    /// Get the global activation.
+    pub fn global_activation(&mut self) -> RootedActivationPtr {
+        let act = self.global_activation;
+        Rooted::new(self, act)
+    }
+
+    /// Extend the environment with a new lexical block containing the given
+    /// variables and then perform some work before popping the new block.
+    pub fn with_extended_env<T>(&mut self,
+                                names: Vec<String>,
+                                block: &Fn(&mut Heap) -> T) -> T {
+        self.environment.extend(names);
+        let result = block(self);
+        self.environment.pop();
+        result
     }
 
     /// Ensure that there is an interned symbol extant for the given `String`
@@ -705,11 +733,11 @@ pub trait Trace {
 }
 
 /// The union of the various types that are GC things.
-#[deriving(Copy, Eq, Hash, PartialEq, Show)]
+#[derive(Copy, Eq, Hash, PartialEq, Show)]
 pub enum GcThing {
     Cons(ConsPtr),
     String(StringPtr),
-    Environment(EnvironmentPtr),
+    Activation(ActivationPtr),
     Procedure(ProcedurePtr),
 }
 
@@ -730,20 +758,20 @@ impl GcThing {
         GcThing::Procedure(procedure)
     }
 
-    /// Create a `GcThing` from a `EnvironmentPtr`.
-    pub fn from_environment_ptr(env: EnvironmentPtr) -> GcThing {
-        GcThing::Environment(env)
+    /// Create a `GcThing` from an `ActivationPtr`.
+    pub fn from_activation_ptr(act: ActivationPtr) -> GcThing {
+        GcThing::Activation(act)
     }
 }
 
 impl Trace for GcThing {
     fn trace(&self) -> IterGcThing {
         match *self {
-            GcThing::Cons(cons)       => cons.trace(),
-            GcThing::Environment(env) => env.trace(),
-            GcThing::Procedure(p)     => p.trace(),
+            GcThing::Cons(cons)      => cons.trace(),
+            GcThing::Activation(act) => act.trace(),
+            GcThing::Procedure(p)    => p.trace(),
             // Strings don't hold any strong references to other `GcThing`s.
-            GcThing::String(_)        => vec!().into_iter(),
+            GcThing::String(_)       => vec!().into_iter(),
         }
     }
 }

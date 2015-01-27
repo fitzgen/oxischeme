@@ -14,56 +14,68 @@
 
 //! A Scheme implementation, in Rust.
 
-#![feature(default_type_params, unsafe_destructor)]
+#![feature(unsafe_destructor)]
+#![allow(unstable)]
 
 use std::io;
+use std::os;
 
 pub mod environment;
 pub mod eval;
 pub mod heap;
 pub mod primitives;
-pub mod print;
 pub mod read;
 pub mod value;
 
-/// The main Read-Eval-Print-Loop.
-pub fn main() {
+/// Start a Read -> Evaluate -> Print loop.
+pub fn repl(heap: &mut heap::Heap) {
     println!("Welcome to oxischeme!");
     println!("C-c to exit.");
     println!("");
 
-    let heap = &mut heap::Heap::new();
-
     loop {
-        let mut stdout = io::stdio::stdout();
         let stdin = io::stdio::stdin();
         let mut reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
         for form in reader {
-            match eval::evaluate_in_global_env(heap, &form) {
-                Ok(val) => {
-                    print::print(heap, &mut stdout, &val).ok().expect("IO ERROR!");
-                },
-                Err(e) => {
-                    (write!(&mut stdout, "Error: {}", e)).ok().expect("IO ERROR!");
-                },
+            match eval::evaluate(heap, &form) {
+                Ok(val) => println!("{}", *val),
+                Err(e)  => println!("Error: {}", e),
             };
-            (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
 
             heap.collect_garbage();
-
-            (write!(&mut stdout, "oxischeme> ")).ok().expect("IO ERROR!");
-            stdout.flush().ok().expect("IO ERROR!");
+            print!("oxischeme> ");
         }
 
         match *reader.get_result() {
             Ok(_) => return,
-            Err(ref msg) => {
-                (write!(&mut stdout, "{}", msg)).ok().expect("IO ERROR!");
-                (write!(&mut stdout, "\n")).ok().expect("IO ERROR!");
-                stdout.flush().ok().expect("IO ERROR!");
+            Err(ref msg) => println!("{}", msg),
+        }
+    }
+}
+
+/// Given no arguments, start the REPL. Otherwise, treat each argument as a file
+/// path and read and evaluate each of them in turn.
+pub fn main() {
+    let heap = &mut heap::Heap::new();
+
+    let mut args_were_passed = false;
+
+    for file_path in os::args().iter().skip(1) {
+        args_were_passed = true;
+
+        match eval::evaluate_file(heap, file_path.as_slice()) {
+            Ok(_) => { },
+            Err(msg) => {
+                let mut stderr = io::stdio::stderr();
+                (write!(&mut stderr, "Error: {}", msg)).ok().expect("IO ERROR!");
+                return;
             }
         }
+    }
+
+    if !args_were_passed {
+        repl(heap);
     }
 }
