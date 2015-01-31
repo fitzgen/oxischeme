@@ -5,3 +5,10 @@ version = "0.0.2"
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 description = "A Scheme implementation, in rust."
 license = "Apache-2.0"
+
+repository="https://github.com/fitzgen/oxischeme"
+documentation="https://fitzgen.github.io/oxischeme/oxischeme/index.html"
+
+readme="README.md"
+
+keywords=["scheme", "language", "gc"]
