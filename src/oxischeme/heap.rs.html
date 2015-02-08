@@ -817,6 +817,80 @@
 <span id="775">775</span>
 <span id="776">776</span>
 <span id="777">777</span>
+<span id="778">778</span>
+<span id="779">779</span>
+<span id="780">780</span>
+<span id="781">781</span>
+<span id="782">782</span>
+<span id="783">783</span>
+<span id="784">784</span>
+<span id="785">785</span>
+<span id="786">786</span>
+<span id="787">787</span>
+<span id="788">788</span>
+<span id="789">789</span>
+<span id="790">790</span>
+<span id="791">791</span>
+<span id="792">792</span>
+<span id="793">793</span>
+<span id="794">794</span>
+<span id="795">795</span>
+<span id="796">796</span>
+<span id="797">797</span>
+<span id="798">798</span>
+<span id="799">799</span>
+<span id="800">800</span>
+<span id="801">801</span>
+<span id="802">802</span>
+<span id="803">803</span>
+<span id="804">804</span>
+<span id="805">805</span>
+<span id="806">806</span>
+<span id="807">807</span>
+<span id="808">808</span>
+<span id="809">809</span>
+<span id="810">810</span>
+<span id="811">811</span>
+<span id="812">812</span>
+<span id="813">813</span>
+<span id="814">814</span>
+<span id="815">815</span>
+<span id="816">816</span>
+<span id="817">817</span>
+<span id="818">818</span>
+<span id="819">819</span>
+<span id="820">820</span>
+<span id="821">821</span>
+<span id="822">822</span>
+<span id="823">823</span>
+<span id="824">824</span>
+<span id="825">825</span>
+<span id="826">826</span>
+<span id="827">827</span>
+<span id="828">828</span>
+<span id="829">829</span>
+<span id="830">830</span>
+<span id="831">831</span>
+<span id="832">832</span>
+<span id="833">833</span>
+<span id="834">834</span>
+<span id="835">835</span>
+<span id="836">836</span>
+<span id="837">837</span>
+<span id="838">838</span>
+<span id="839">839</span>
+<span id="840">840</span>
+<span id="841">841</span>
+<span id="842">842</span>
+<span id="843">843</span>
+<span id="844">844</span>
+<span id="845">845</span>
+<span id="846">846</span>
+<span id="847">847</span>
+<span id="848">848</span>
+<span id="849">849</span>
+<span id="850">850</span>
+<span id="851">851</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright 2014 Nick Fitzgerald</span>
 <span class='comment'>//</span>
@@ -837,16 +911,19 @@
 <span class='doccomment'>//! ## Allocation</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//! Scheme has a variety of types that must be allocated on the heap: cons cells,</span>
-<span class='doccomment'>//! strings, procedures, and vectors (currently unimplemented). Oxischeme&#39;s</span>
-<span class='doccomment'>//! current allocation strategy is deliberately as simple as possible. We</span>
-<span class='doccomment'>//! represent the heap as a set of &quot;arenas&quot;, one arena for each type that must be</span>
-<span class='doccomment'>//! allocated on the heap. An &quot;arena&quot; is a pre-allocated vector of objects. We</span>
-<span class='doccomment'>//! keep track of an arena&#39;s un-used objects with a &quot;free list&quot; of indices into</span>
-<span class='doccomment'>//! its vector. When we allocate a new object, we remove an entry from the free</span>
-<span class='doccomment'>//! list and return a pointer to the object at that entry&#39;s index. Garbage</span>
+<span class='doccomment'>//! strings, procedures, and vectors (currently unimplemented).</span>
+<span class='doccomment'>//!</span>
+<span class='doccomment'>//! Oxischeme does not allocate each object directly from the OS. Instead, we</span>
+<span class='doccomment'>//! allocate objects from an &quot;arena&quot; which contains a pre-allocated object pool</span>
+<span class='doccomment'>//! reserved for allocating future objects from. We keep track of an arena&#39;s</span>
+<span class='doccomment'>//! un-used objects with a &quot;free list&quot; of indices into this pool. When we</span>
+<span class='doccomment'>//! allocate a new object, we remove the first entry from this list and return a</span>
+<span class='doccomment'>//! pointer to the object at that entry&#39;s index in the object pool. Garbage</span>
 <span class='doccomment'>//! collection adds new entries to the free list when reclaiming dead</span>
-<span class='doccomment'>//! objects. When allocating, if the arena&#39;s vector is already at capacity (ie,</span>
-<span class='doccomment'>//! the free list is empty), we panic.</span>
+<span class='doccomment'>//! objects. When allocating, if the arena&#39;s pool is already at capacity (ie, the</span>
+<span class='doccomment'>//! free list is empty), then we allocate another arena from the OS and allocate</span>
+<span class='doccomment'>//! from its object pool. In this way, the arenas form a linked list of object</span>
+<span class='doccomment'>//! pools to allocate from.</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//! ## Garbage Collection</span>
 <span class='doccomment'>//!</span>
@@ -946,7 +1023,7 @@
 <span class='doccomment'>//! * When in doubt, Just Root It!</span>
 
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>cmp</span>;
-<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>collections</span>::{<span class='ident'>HashMap</span>, <span class='ident'>HashSet</span>};
+<span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>collections</span>::{<span class='ident'>Bitv</span>, <span class='ident'>HashMap</span>};
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>default</span>::{<span class='ident'>Default</span>};
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>fmt</span>;
 <span class='kw'>use</span> <span class='ident'>std</span>::<span class='ident'>ops</span>::{<span class='ident'>Deref</span>, <span class='ident'>DerefMut</span>};
@@ -964,7 +1041,18 @@
 <span class='doccomment'>/// An arena from which to allocate `T` objects from.</span>
 <span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
     <span class='ident'>pool</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span>,
+
+    <span class='doccomment'>/// The set of free indices into `pool` that are available for allocating an</span>
+    <span class='doccomment'>/// object from.</span>
     <span class='ident'>free</span>: <span class='ident'>FreeList</span>,
+
+    <span class='doccomment'>/// During a GC, if the nth bit of `marked` is set, that means that the nth</span>
+    <span class='doccomment'>/// object in `pool` has been marked as reachable.</span>
+    <span class='ident'>marked</span>: <span class='ident'>Bitv</span>,
+
+    <span class='doccomment'>/// If present, the next `Arena` with additional space for allocating</span>
+    <span class='doccomment'>/// objects of type T from when this `Arena` is full.</span>
+    <span class='ident'>next</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;&gt;</span><span class='op'>&gt;</span>,
 }
 
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Default</span><span class='op'>&gt;</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
@@ -975,11 +1063,11 @@
         <span class='ident'>Box</span>::<span class='ident'>new</span>(<span class='ident'>Arena</span> {
             <span class='ident'>pool</span>: <span class='ident'>range</span>(<span class='number'>0</span>, <span class='ident'>capacity</span>).<span class='ident'>map</span>(<span class='op'>|</span>_<span class='op'>|</span> <span class='ident'>Default</span>::<span class='ident'>default</span>()).<span class='ident'>collect</span>(),
             <span class='ident'>free</span>: <span class='ident'>range</span>(<span class='number'>0</span>, <span class='ident'>capacity</span>).<span class='ident'>collect</span>(),
+            <span class='ident'>marked</span>: <span class='ident'>Bitv</span>::<span class='ident'>from_elem</span>(<span class='ident'>capacity</span>, <span class='boolval'>false</span>),
+            <span class='ident'>next</span>: <span class='prelude-val'>None</span>
         })
     }
-}
 
-<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
     <span class='doccomment'>/// Get this heap&#39;s capacity for simultaneously allocated cons cells.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>capacity</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>usize</span> {
         <span class='self'>self</span>.<span class='ident'>pool</span>.<span class='ident'>len</span>()
@@ -991,26 +1079,46 @@
     }
 
     <span class='doccomment'>/// Allocate a new `T` instance and return a pointer to it.</span>
-    <span class='doccomment'>///</span>
-    <span class='doccomment'>/// ## Panics</span>
-    <span class='doccomment'>///</span>
-    <span class='doccomment'>/// Panics if the number of `T` instances allocated is already equal to this</span>
-    <span class='doccomment'>/// `Arena`&#39;s capacity and no more `T` instances can be allocated.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>allocate</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
         <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>free</span>.<span class='ident'>pop</span>() {
-            <span class='prelude-val'>None</span>      <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Arena::allocate: out of memory!&quot;</span>),
+            <span class='comment'>// We have free space in this arena, use it for this requested</span>
+            <span class='comment'>// allocation.</span>
             <span class='prelude-val'>Some</span>(<span class='ident'>idx</span>) <span class='op'>=&gt;</span> {
                 <span class='kw'>let</span> <span class='ident'>self_ptr</span> : <span class='op'>*</span><span class='kw-2'>mut</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='self'>self</span>;
                 <span class='ident'>ArenaPtr</span>::<span class='ident'>new</span>(<span class='ident'>self_ptr</span>, <span class='ident'>idx</span>)
+            },
+
+            <span class='comment'>// There was no more free space in this `Arena`. If we&#39;ve already</span>
+            <span class='comment'>// allocated the next `Arena` from the OS, use its space for this</span>
+            <span class='comment'>// requested allocation. If we haven&#39;t allocated the next `Arena`</span>
+            <span class='comment'>// from the OS yet, do that and then use its free space for this</span>
+            <span class='comment'>// requested allocation.</span>
+            <span class='prelude-val'>None</span> <span class='op'>=&gt;</span> {
+                <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>None</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>next</span> {
+                    <span class='self'>self</span>.<span class='ident'>next</span> <span class='op'>=</span> <span class='prelude-val'>Some</span>(<span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='self'>self</span>.<span class='ident'>capacity</span>()));
+                }
+
+                <span class='self'>self</span>.<span class='ident'>next</span>.<span class='ident'>as_mut</span>().<span class='ident'>unwrap</span>().<span class='ident'>allocate</span>()
             },
         }
     }
 
     <span class='doccomment'>/// Sweep the arena and add any reclaimed objects back to the free list.</span>
-    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>sweep</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>live</span>: <span class='ident'>HashSet</span><span class='op'>&lt;</span><span class='ident'>usize</span><span class='op'>&gt;</span>) {
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>sweep</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
         <span class='self'>self</span>.<span class='ident'>free</span> <span class='op'>=</span> <span class='ident'>range</span>(<span class='number'>0</span>, <span class='self'>self</span>.<span class='ident'>capacity</span>())
-            .<span class='ident'>filter</span>(<span class='op'>|</span><span class='ident'>n</span><span class='op'>|</span> <span class='op'>!</span><span class='ident'>live</span>.<span class='ident'>contains</span>(<span class='ident'>n</span>))
+            .<span class='ident'>filter</span>(<span class='op'>|</span><span class='kw-2'>&amp;</span><span class='ident'>n</span><span class='op'>|</span> {
+                <span class='op'>!</span><span class='self'>self</span>.<span class='ident'>marked</span>.<span class='ident'>get</span>(<span class='ident'>n</span>)
+                    .<span class='ident'>expect</span>(<span class='string'>&quot;`marked` should always have length == self.capacity()&quot;</span>)
+            })
             .<span class='ident'>collect</span>();
+
+        <span class='comment'>// Reset `marked` to all zero.</span>
+        <span class='self'>self</span>.<span class='ident'>marked</span>.<span class='ident'>set_all</span>();
+        <span class='self'>self</span>.<span class='ident'>marked</span>.<span class='ident'>negate</span>();
+
+        <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='ident'>arena</span>) <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>next</span>.<span class='ident'>as_mut</span>() {
+            <span class='ident'>arena</span>.<span class='ident'>sweep</span>();
+        }
     }
 }
 
@@ -1028,7 +1136,7 @@
 <span class='comment'>// itself.</span>
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> ::<span class='ident'>std</span>::<span class='ident'>marker</span>::<span class='ident'>Copy</span> <span class='kw'>for</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> { }
 
-<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Default</span><span class='op'>&gt;</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
     <span class='doccomment'>/// Create a new `ArenaPtr` to the `T` instance at the given index in the</span>
     <span class='doccomment'>/// provided arena. **Not** publicly exposed, and should only be called by</span>
     <span class='doccomment'>/// `Arena::allocate`.</span>
@@ -1041,6 +1149,25 @@
         <span class='ident'>ArenaPtr</span> {
             <span class='ident'>arena</span>: <span class='ident'>arena</span>,
             <span class='ident'>index</span>: <span class='ident'>index</span>,
+        }
+    }
+
+    <span class='doccomment'>/// During a GC, mark this `ArenaPtr` as reachable.</span>
+    <span class='kw'>fn</span> <span class='ident'>mark</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) {
+        <span class='kw'>unsafe</span> {
+            <span class='kw'>let</span> <span class='ident'>arena</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>arena</span>.<span class='ident'>as_mut</span>()
+                .<span class='ident'>expect</span>(<span class='string'>&quot;An ArenaPtr&lt;T&gt; should always have a valid Arena.&quot;</span>);
+            <span class='ident'>arena</span>.<span class='ident'>marked</span>.<span class='ident'>set</span>(<span class='self'>self</span>.<span class='ident'>index</span>, <span class='boolval'>true</span>);
+        }
+    }
+
+    <span class='doccomment'>/// During a GC, determine if this `ArenaPtr` has been marked as reachable.</span>
+    <span class='kw'>fn</span> <span class='ident'>is_marked</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+        <span class='kw'>unsafe</span> {
+            <span class='kw'>let</span> <span class='ident'>arena</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>arena</span>.<span class='ident'>as_mut</span>()
+                .<span class='ident'>expect</span>(<span class='string'>&quot;An ArenaPtr&lt;T&gt; should always have a valid Arena.&quot;</span>);
+            <span class='kw'>return</span> <span class='ident'>arena</span>.<span class='ident'>marked</span>.<span class='ident'>get</span>(<span class='self'>self</span>.<span class='ident'>index</span>)
+                .<span class='ident'>expect</span>(<span class='string'>&quot;self.index should always be within the marked bitv&#39;s length.&quot;</span>);
         }
     }
 }
@@ -1213,17 +1340,17 @@
     <span class='ident'>allocations</span>: <span class='ident'>usize</span>,
 }
 
-<span class='doccomment'>/// The default capacity of cons cells.</span>
-<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_CONS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>12</span>;
+<span class='doccomment'>/// The default capacity of cons cells per arena.</span>
+<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_CONS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>10</span>;
 
-<span class='doccomment'>/// The default capacity of strings.</span>
-<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_STRINGS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>12</span>;
+<span class='doccomment'>/// The default capacity of strings per arena.</span>
+<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_STRINGS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>10</span>;
 
-<span class='doccomment'>/// The default capacity of activations.</span>
-<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_ACTIVATIONS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>12</span>;
+<span class='doccomment'>/// The default capacity of activations per arena.</span>
+<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_ACTIVATIONS_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>10</span>;
 
-<span class='doccomment'>/// The default capacity of procedures.</span>
-<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_PROCEDURES_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>12</span>;
+<span class='doccomment'>/// The default capacity of procedures per arena.</span>
+<span class='kw'>pub</span> <span class='kw'>static</span> <span class='ident'>DEFAULT_PROCEDURES_CAPACITY</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>10</span>;
 
 <span class='doccomment'>/// ## `Heap` Constructors</span>
 <span class='kw'>impl</span> <span class='ident'>Heap</span> {
@@ -1311,7 +1438,7 @@
 
 <span class='doccomment'>/// The maximum number of things to allocate before triggering a garbage</span>
 <span class='doccomment'>/// collection.</span>
-<span class='kw'>const</span> <span class='ident'>MAX_GC_PRESSURE</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>8</span>;
+<span class='kw'>const</span> <span class='ident'>MAX_GC_PRESSURE</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>9</span>;
 
 <span class='doccomment'>/// ## `Heap` Methods for Garbage Collection</span>
 <span class='kw'>impl</span> <span class='ident'>Heap</span> {
@@ -1321,15 +1448,15 @@
 
         <span class='comment'>// First, trace the heap graph and mark everything that is reachable.</span>
 
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>marked</span> <span class='op'>=</span> <span class='ident'>HashSet</span>::<span class='ident'>new</span>();
         <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>pending_trace</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>get_roots</span>();
 
         <span class='kw'>while</span> <span class='op'>!</span><span class='ident'>pending_trace</span>.<span class='ident'>is_empty</span>() {
             <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>newly_pending_trace</span> <span class='op'>=</span> <span class='macro'>vec</span><span class='macro'>!</span>();
 
             <span class='kw'>for</span> <span class='ident'>thing</span> <span class='kw'>in</span> <span class='ident'>pending_trace</span>.<span class='ident'>drain</span>() {
-                <span class='kw'>if</span> <span class='op'>!</span><span class='ident'>marked</span>.<span class='ident'>contains</span>(<span class='kw-2'>&amp;</span><span class='ident'>thing</span>) {
-                    <span class='ident'>marked</span>.<span class='ident'>insert</span>(<span class='ident'>thing</span>);
+                <span class='kw'>if</span> <span class='op'>!</span><span class='ident'>thing</span>.<span class='ident'>is_marked</span>() {
+                    <span class='ident'>thing</span>.<span class='ident'>mark</span>();
+
                     <span class='kw'>for</span> <span class='ident'>referent</span> <span class='kw'>in</span> <span class='ident'>thing</span>.<span class='ident'>trace</span>() {
                         <span class='ident'>newly_pending_trace</span>.<span class='ident'>push</span>(<span class='ident'>referent</span>);
                     }
@@ -1341,26 +1468,12 @@
             }
         }
 
-        <span class='comment'>// Second, divide the marked set by arena, and sweep each arena.</span>
+        <span class='comment'>// Second, sweep each arena.</span>
 
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>live_strings</span> <span class='op'>=</span> <span class='ident'>HashSet</span>::<span class='ident'>new</span>();
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>live_acts</span> <span class='op'>=</span> <span class='ident'>HashSet</span>::<span class='ident'>new</span>();
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>live_cons_cells</span> <span class='op'>=</span> <span class='ident'>HashSet</span>::<span class='ident'>new</span>();
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>live_procs</span> <span class='op'>=</span> <span class='ident'>HashSet</span>::<span class='ident'>new</span>();
-
-        <span class='kw'>for</span> <span class='ident'>thing</span> <span class='kw'>in</span> <span class='ident'>marked</span>.<span class='ident'>into_iter</span>() {
-            <span class='kw'>match</span> <span class='ident'>thing</span> {
-                <span class='ident'>GcThing</span>::<span class='ident'>String</span>(<span class='ident'>p</span>)     <span class='op'>=&gt;</span> <span class='ident'>live_strings</span>.<span class='ident'>insert</span>(<span class='ident'>p</span>.<span class='ident'>index</span>),
-                <span class='ident'>GcThing</span>::<span class='ident'>Activation</span>(<span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>live_acts</span>.<span class='ident'>insert</span>(<span class='ident'>p</span>.<span class='ident'>index</span>),
-                <span class='ident'>GcThing</span>::<span class='ident'>Cons</span>(<span class='ident'>p</span>)       <span class='op'>=&gt;</span> <span class='ident'>live_cons_cells</span>.<span class='ident'>insert</span>(<span class='ident'>p</span>.<span class='ident'>index</span>),
-                <span class='ident'>GcThing</span>::<span class='ident'>Procedure</span>(<span class='ident'>p</span>)  <span class='op'>=&gt;</span> <span class='ident'>live_procs</span>.<span class='ident'>insert</span>(<span class='ident'>p</span>.<span class='ident'>index</span>),
-            };
-        }
-
-        <span class='self'>self</span>.<span class='ident'>strings</span>.<span class='ident'>sweep</span>(<span class='ident'>live_strings</span>);
-        <span class='self'>self</span>.<span class='ident'>activations</span>.<span class='ident'>sweep</span>(<span class='ident'>live_acts</span>);
-        <span class='self'>self</span>.<span class='ident'>cons_cells</span>.<span class='ident'>sweep</span>(<span class='ident'>live_cons_cells</span>);
-        <span class='self'>self</span>.<span class='ident'>procedures</span>.<span class='ident'>sweep</span>(<span class='ident'>live_procs</span>);
+        <span class='self'>self</span>.<span class='ident'>strings</span>.<span class='ident'>sweep</span>();
+        <span class='self'>self</span>.<span class='ident'>activations</span>.<span class='ident'>sweep</span>();
+        <span class='self'>self</span>.<span class='ident'>cons_cells</span>.<span class='ident'>sweep</span>();
+        <span class='self'>self</span>.<span class='ident'>procedures</span>.<span class='ident'>sweep</span>();
     }
 
     <span class='doccomment'>/// Explicitly add the given GC thing as a root.</span>
@@ -1584,6 +1697,30 @@
     }
 }
 
+<span class='kw'>impl</span> <span class='ident'>GcThing</span> {
+    <span class='doccomment'>/// During a GC, mark this `GcThing` as reachable.</span>
+    <span class='attribute'>#[<span class='ident'>inline</span>]</span>
+    <span class='kw'>fn</span> <span class='ident'>mark</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) {
+        <span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
+            <span class='ident'>GcThing</span>::<span class='ident'>Cons</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>mark</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>String</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>mark</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>Activation</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>mark</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>Procedure</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>mark</span>(),
+        }
+    }
+
+    <span class='doccomment'>/// During a GC, determine if this `GcThing` has been marked as reachable.</span>
+    <span class='attribute'>#[<span class='ident'>inline</span>]</span>
+    <span class='kw'>fn</span> <span class='ident'>is_marked</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+        <span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
+            <span class='ident'>GcThing</span>::<span class='ident'>Cons</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>is_marked</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>String</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>is_marked</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>Activation</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>is_marked</span>(),
+            <span class='ident'>GcThing</span>::<span class='ident'>Procedure</span>(<span class='kw-2'>ref</span> <span class='ident'>p</span>) <span class='op'>=&gt;</span> <span class='ident'>p</span>.<span class='ident'>is_marked</span>(),
+        }
+    }
+}
+
 <span class='kw'>impl</span> <span class='ident'>Trace</span> <span class='kw'>for</span> <span class='ident'>GcThing</span> {
     <span class='kw'>fn</span> <span class='ident'>trace</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>IterGcThing</span> {
         <span class='kw'>match</span> <span class='op'>*</span><span class='self'>self</span> {
@@ -1594,6 +1731,17 @@
             <span class='ident'>GcThing</span>::<span class='ident'>String</span>(_)       <span class='op'>=&gt;</span> <span class='macro'>vec</span><span class='macro'>!</span>().<span class='ident'>into_iter</span>(),
         }
     }
+}
+
+<span class='attribute'>#[<span class='ident'>test</span>]</span>
+<span class='kw'>fn</span> <span class='ident'>test_heap_allocate_tons</span>() {
+    <span class='kw'>use</span> <span class='ident'>eval</span>::<span class='ident'>evaluate_file</span>;
+
+    <span class='kw'>let</span> <span class='ident'>heap</span> <span class='op'>=</span> <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Heap</span>::<span class='ident'>new</span>();
+    <span class='ident'>evaluate_file</span>(<span class='ident'>heap</span>, <span class='string'>&quot;./tests/test_heap_allocate_tons.scm&quot;</span>)
+        .<span class='ident'>ok</span>()
+        .<span class='ident'>expect</span>(<span class='string'>&quot;Should be able to eval a file.&quot;</span>);
+    <span class='macro'>assert</span><span class='macro'>!</span>(<span class='boolval'>true</span>, <span class='string'>&quot;Should have successfully run the program and allocated many cons cells&quot;</span>);
 }
 </pre>
 </section>

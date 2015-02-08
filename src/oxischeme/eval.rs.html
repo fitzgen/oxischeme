@@ -878,9 +878,6 @@
 <span id="836">836</span>
 <span id="837">837</span>
 <span id="838">838</span>
-<span id="839">839</span>
-<span id="840">840</span>
-<span id="841">841</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright 2015 Nick Fitzgerald</span>
 <span class='comment'>//</span>
@@ -964,16 +961,13 @@
 <span class='doccomment'>/// Evaluate the file at the given path and return the value of the last form.</span>
 <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>evaluate_file</span>(<span class='ident'>heap</span>: <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>Heap</span>, <span class='ident'>file_path</span>: <span class='kw-2'>&amp;</span><span class='ident'>str</span>) <span class='op'>-&gt;</span> <span class='ident'>SchemeResult</span> {
     <span class='kw'>use</span> <span class='ident'>read</span>::<span class='ident'>read_from_file</span>;
-    <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>reader</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_from_file</span>(<span class='ident'>file_path</span>, <span class='ident'>heap</span>).<span class='ident'>ok</span>().<span class='ident'>ok_or</span>(
+    <span class='kw'>let</span> <span class='ident'>reader</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_from_file</span>(<span class='ident'>file_path</span>, <span class='ident'>heap</span>).<span class='ident'>ok</span>().<span class='ident'>ok_or</span>(
         <span class='string'>&quot;Failed to read from file&quot;</span>.<span class='ident'>to_string</span>()));
 
     <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>result</span> <span class='op'>=</span> <span class='ident'>Rooted</span>::<span class='ident'>new</span>(<span class='ident'>heap</span>, <span class='ident'>Value</span>::<span class='ident'>EmptyList</span>);
-    <span class='kw'>for</span> <span class='ident'>form</span> <span class='kw'>in</span> <span class='ident'>reader</span> {
+    <span class='kw'>for</span> <span class='ident'>read_result</span> <span class='kw'>in</span> <span class='ident'>reader</span> {
+        <span class='kw'>let</span> <span class='ident'>form</span> <span class='op'>=</span> <span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>read_result</span>);
         <span class='ident'>result</span>.<span class='ident'>emplace</span>(<span class='op'>*</span><span class='macro'>try</span><span class='macro'>!</span>(<span class='ident'>evaluate</span>(<span class='ident'>heap</span>, <span class='kw-2'>&amp;</span><span class='ident'>form</span>)));
-    }
-
-    <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Err</span>(<span class='kw-2'>ref</span> <span class='ident'>msg</span>) <span class='op'>=</span> <span class='op'>*</span><span class='ident'>reader</span>.<span class='ident'>get_result</span>() {
-        <span class='kw'>return</span> <span class='prelude-val'>Err</span>(<span class='ident'>msg</span>.<span class='ident'>clone</span>());
     }
 
     <span class='kw'>return</span> <span class='prelude-val'>Ok</span>(<span class='ident'>result</span>);

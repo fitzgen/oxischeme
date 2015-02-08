@@ -44,22 +44,25 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>heap</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5683' href='../../src/oxischeme/heap.rs.html#15-777'>[src]</a></span></h1>
+        </span><a id='src-5768' href='../../src/oxischeme/heap.rs.html#15-851'>[src]</a></span></h1>
 <div class='docblock'><p>The <code>heap</code> module provides memory management for our Scheme implementation.</p>
 
 <h2 id="allocation" class='section-header'><a
                            href="#allocation">Allocation</a></h2>
 <p>Scheme has a variety of types that must be allocated on the heap: cons cells,
-strings, procedures, and vectors (currently unimplemented). Oxischeme&#39;s
-current allocation strategy is deliberately as simple as possible. We
-represent the heap as a set of &quot;arenas&quot;, one arena for each type that must be
-allocated on the heap. An &quot;arena&quot; is a pre-allocated vector of objects. We
-keep track of an arena&#39;s un-used objects with a &quot;free list&quot; of indices into
-its vector. When we allocate a new object, we remove an entry from the free
-list and return a pointer to the object at that entry&#39;s index. Garbage
+strings, procedures, and vectors (currently unimplemented).</p>
+
+<p>Oxischeme does not allocate each object directly from the OS. Instead, we
+allocate objects from an &quot;arena&quot; which contains a pre-allocated object pool
+reserved for allocating future objects from. We keep track of an arena&#39;s
+un-used objects with a &quot;free list&quot; of indices into this pool. When we
+allocate a new object, we remove the first entry from this list and return a
+pointer to the object at that entry&#39;s index in the object pool. Garbage
 collection adds new entries to the free list when reclaiming dead
-objects. When allocating, if the arena&#39;s vector is already at capacity (ie,
-the free list is empty), we panic.</p>
+objects. When allocating, if the arena&#39;s pool is already at capacity (ie, the
+free list is empty), then we allocate another arena from the OS and allocate
+from its object pool. In this way, the arenas form a linked list of object
+pools to allocate from.</p>
 
 <h2 id="garbage-collection" class='section-header'><a
                            href="#garbage-collection">Garbage Collection</a></h2>
@@ -204,28 +207,28 @@ the module level documentation about rooting.</p>
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_ACTIVATIONS_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_ACTIVATIONS_CAPACITY'>DEFAULT_ACTIVATIONS_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of activations.</p>
+                        <td class='docblock short'><p>The default capacity of activations per arena.</p>
 </td>
                     </tr>
                 
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_CONS_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_CONS_CAPACITY'>DEFAULT_CONS_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of cons cells.</p>
+                        <td class='docblock short'><p>The default capacity of cons cells per arena.</p>
 </td>
                     </tr>
                 
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_PROCEDURES_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_PROCEDURES_CAPACITY'>DEFAULT_PROCEDURES_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of procedures.</p>
+                        <td class='docblock short'><p>The default capacity of procedures per arena.</p>
 </td>
                     </tr>
                 
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='static' href='static.DEFAULT_STRINGS_CAPACITY.html'
                                title='oxischeme::heap::DEFAULT_STRINGS_CAPACITY'>DEFAULT_STRINGS_CAPACITY</a></td>
-                        <td class='docblock short'><p>The default capacity of strings.</p>
+                        <td class='docblock short'><p>The default capacity of strings per arena.</p>
 </td>
                     </tr>
                 </table><h2 id='traits' class='section-header'><a href="#traits">Traits</a></h2>
