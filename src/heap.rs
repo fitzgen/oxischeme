@@ -126,7 +126,7 @@
 //! * When in doubt, Just Root It!
 
 use std::cmp;
-use std::collections::{HashMap, HashSet};
+use std::collections::{Bitv, HashMap, HashSet};
 use std::default::{Default};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -145,6 +145,9 @@ type FreeList = Vec<usize>;
 pub struct Arena<T> {
     pool: Vec<T>,
     free: FreeList,
+    /// During a GC, if the nth bit of `marked` is set, that means that the nth
+    /// object in the pool has been marked as reachable.
+    marked: Bitv,
 }
 
 impl<T: Default> Arena<T> {
@@ -155,6 +158,7 @@ impl<T: Default> Arena<T> {
         Box::new(Arena {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
+            marked: Bitv::from_elem(capacity, false)
         })
     }
 }
@@ -187,10 +191,17 @@ impl<T> Arena<T> {
     }
 
     /// Sweep the arena and add any reclaimed objects back to the free list.
-    pub fn sweep(&mut self, live: HashSet<usize>) {
+    pub fn sweep(&mut self) {
         self.free = range(0, self.capacity())
-            .filter(|n| !live.contains(n))
+            .filter(|&n| {
+                !self.marked.get(n)
+                    .expect("`marked` should always have length == self.capacity()")
+            })
             .collect();
+
+        // Reset `marked` to all zero.
+        self.marked.set_all();
+        self.marked.negate();
     }
 }
 
@@ -221,6 +232,25 @@ impl<T> ArenaPtr<T> {
         ArenaPtr {
             arena: arena,
             index: index,
+        }
+    }
+
+    /// During a GC, mark this `ArenaPtr` as reachable.
+    fn mark(&self) {
+        unsafe {
+            let arena = self.arena.as_mut()
+                .expect("An ArenaPtr<T> should always have a valid Arena.");
+            arena.marked.set(self.index, true);
+        }
+    }
+
+    /// TODO FITZGEN
+    fn is_marked(&self) -> bool {
+        unsafe {
+            let arena = self.arena.as_mut()
+                .expect("An ArenaPtr<T> should always have a valid Arena.");
+            return arena.marked.get(self.index)
+                .expect("self.index should always be within the marked bitv's length.");
         }
     }
 }
@@ -501,15 +531,15 @@ impl Heap {
 
         // First, trace the heap graph and mark everything that is reachable.
 
-        let mut marked = HashSet::new();
         let mut pending_trace = self.get_roots();
 
         while !pending_trace.is_empty() {
             let mut newly_pending_trace = vec!();
 
             for thing in pending_trace.drain() {
-                if !marked.contains(&thing) {
-                    marked.insert(thing);
+                if !thing.is_marked() {
+                    thing.mark();
+
                     for referent in thing.trace() {
                         newly_pending_trace.push(referent);
                     }
@@ -521,26 +551,12 @@ impl Heap {
             }
         }
 
-        // Second, divide the marked set by arena, and sweep each arena.
+        // Second, sweep each arena.
 
-        let mut live_strings = HashSet::new();
-        let mut live_acts = HashSet::new();
-        let mut live_cons_cells = HashSet::new();
-        let mut live_procs = HashSet::new();
-
-        for thing in marked.into_iter() {
-            match thing {
-                GcThing::String(p)     => live_strings.insert(p.index),
-                GcThing::Activation(p) => live_acts.insert(p.index),
-                GcThing::Cons(p)       => live_cons_cells.insert(p.index),
-                GcThing::Procedure(p)  => live_procs.insert(p.index),
-            };
-        }
-
-        self.strings.sweep(live_strings);
-        self.activations.sweep(live_acts);
-        self.cons_cells.sweep(live_cons_cells);
-        self.procedures.sweep(live_procs);
+        self.strings.sweep();
+        self.activations.sweep();
+        self.cons_cells.sweep();
+        self.procedures.sweep();
     }
 
     /// Explicitly add the given GC thing as a root.
@@ -761,6 +777,30 @@ impl GcThing {
     /// Create a `GcThing` from an `ActivationPtr`.
     pub fn from_activation_ptr(act: ActivationPtr) -> GcThing {
         GcThing::Activation(act)
+    }
+}
+
+impl GcThing {
+    /// During a GC, mark this `GcThing` as reachable.
+    #[inline]
+    fn mark(&self) {
+        match *self {
+            GcThing::Cons(ref p) => p.mark(),
+            GcThing::String(ref p) => p.mark(),
+            GcThing::Activation(ref p) => p.mark(),
+            GcThing::Procedure(ref p) => p.mark(),
+        }
+    }
+
+    /// During a GC, determine if this `GcThing` has been marked as reachable.
+    #[inline]
+    fn is_marked(&self) -> bool {
+        match *self {
+            GcThing::Cons(ref p) => p.is_marked(),
+            GcThing::String(ref p) => p.is_marked(),
+            GcThing::Activation(ref p) => p.is_marked(),
+            GcThing::Procedure(ref p) => p.is_marked(),
+        }
     }
 }
 

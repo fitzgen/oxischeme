@@ -1,3 +1,4 @@
 /target
 main
 /main.dSYM
+*.racertmp
