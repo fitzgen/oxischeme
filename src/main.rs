@@ -14,11 +14,18 @@
 
 //! A Scheme implementation, in Rust.
 
+#![feature(collections)]
+#![feature(core)]
+#![feature(env)]
+#![feature(hash)]
+#![feature(io)]
+#![feature(os)]
+#![feature(path)]
+#![feature(unicode)]
 #![feature(unsafe_destructor)]
-#![allow(unstable)]
 
 use std::old_io;
-use std::os;
+use std::env;
 
 pub mod environment;
 pub mod eval;
@@ -35,7 +42,7 @@ pub fn repl(heap: &mut heap::Heap) {
 
     loop {
         let stdin = old_io::stdio::stdin();
-        let mut reader = read::Read::new(stdin, heap);
+        let reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
         for read_result in reader {
@@ -66,10 +73,13 @@ pub fn main() {
 
     let mut args_were_passed = false;
 
-    for file_path in os::args().iter().skip(1) {
+    for file_path in env::args().skip(1) {
         args_were_passed = true;
 
-        match eval::evaluate_file(heap, file_path.as_slice()) {
+        let file_path_str = file_path.into_string().ok()
+            .expect("Expect command line arguments to be valid strings");
+
+        match eval::evaluate_file(heap, file_path_str.as_slice()) {
             Ok(_) => { },
             Err(msg) => {
                 let mut stderr = old_io::stdio::stderr();

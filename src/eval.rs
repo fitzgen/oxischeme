@@ -80,7 +80,7 @@ pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
 /// Evaluate the file at the given path and return the value of the last form.
 pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
     use read::read_from_file;
-    let mut reader = try!(read_from_file(file_path, heap).ok().ok_or(
+    let reader = try!(read_from_file(file_path, heap).ok().ok_or(
         "Failed to read from file".to_string()));
 
     let mut result = Rooted::new(heap, Value::EmptyList);

@@ -19,7 +19,7 @@ use std::old_io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReade
 use std::iter::{Peekable};
 
 use heap::{Heap, Rooted};
-use value::{list, RootedValue, SchemeResult, Value};
+use value::{list, SchemeResult, Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {

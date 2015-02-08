@@ -126,7 +126,7 @@
 //! * When in doubt, Just Root It!
 
 use std::cmp;
-use std::collections::{Bitv, HashMap, HashSet};
+use std::collections::{Bitv, HashMap};
 use std::default::{Default};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
