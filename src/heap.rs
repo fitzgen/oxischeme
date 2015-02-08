@@ -17,16 +17,19 @@
 //! ## Allocation
 //!
 //! Scheme has a variety of types that must be allocated on the heap: cons cells,
-//! strings, procedures, and vectors (currently unimplemented). Oxischeme's
-//! current allocation strategy is deliberately as simple as possible. We
-//! represent the heap as a set of "arenas", one arena for each type that must be
-//! allocated on the heap. An "arena" is a pre-allocated vector of objects. We
-//! keep track of an arena's un-used objects with a "free list" of indices into
-//! its vector. When we allocate a new object, we remove an entry from the free
-//! list and return a pointer to the object at that entry's index. Garbage
+//! strings, procedures, and vectors (currently unimplemented).
+//!
+//! Oxischeme does not allocate each object directly from the OS. Instead, we
+//! allocate objects from an "arena" which contains a pre-allocated object pool
+//! reserved for allocating future objects from. We keep track of an arena's
+//! un-used objects with a "free list" of indices into this pool. When we
+//! allocate a new object, we remove the first entry from this list and return a
+//! pointer to the object at that entry's index in the object pool. Garbage
 //! collection adds new entries to the free list when reclaiming dead
-//! objects. When allocating, if the arena's vector is already at capacity (ie,
-//! the free list is empty), we panic.
+//! objects. When allocating, if the arena's pool is already at capacity (ie, the
+//! free list is empty), then we allocate another arena from the OS and allocate
+//! from its object pool. In this way, the arenas form a linked list of object
+//! pools to allocate from.
 //!
 //! ## Garbage Collection
 //!
@@ -144,10 +147,18 @@ type FreeList = Vec<usize>;
 /// An arena from which to allocate `T` objects from.
 pub struct Arena<T> {
     pool: Vec<T>,
+
+    /// The set of free indices into `pool` that are available for allocating an
+    /// object from.
     free: FreeList,
+
     /// During a GC, if the nth bit of `marked` is set, that means that the nth
-    /// object in the pool has been marked as reachable.
+    /// object in `pool` has been marked as reachable.
     marked: Bitv,
+
+    /// If present, the next `Arena` with additional space for allocating
+    /// objects of type T from when this `Arena` is full.
+    next: Option<Box<Arena<T>>>,
 }
 
 impl<T: Default> Arena<T> {
@@ -158,12 +169,11 @@ impl<T: Default> Arena<T> {
         Box::new(Arena {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
-            marked: Bitv::from_elem(capacity, false)
+            marked: Bitv::from_elem(capacity, false),
+            next: None
         })
     }
-}
 
-impl<T> Arena<T> {
     /// Get this heap's capacity for simultaneously allocated cons cells.
     pub fn capacity(&self) -> usize {
         self.pool.len()
@@ -175,17 +185,26 @@ impl<T> Arena<T> {
     }
 
     /// Allocate a new `T` instance and return a pointer to it.
-    ///
-    /// ## Panics
-    ///
-    /// Panics if the number of `T` instances allocated is already equal to this
-    /// `Arena`'s capacity and no more `T` instances can be allocated.
     pub fn allocate(&mut self) -> ArenaPtr<T> {
         match self.free.pop() {
-            None      => panic!("Arena::allocate: out of memory!"),
+            // We have free space in this arena, use it for this requested
+            // allocation.
             Some(idx) => {
                 let self_ptr : *mut Arena<T> = self;
                 ArenaPtr::new(self_ptr, idx)
+            },
+
+            // There was no more free space in this `Arena`. If we've already
+            // allocated the next `Arena` from the OS, use its space for this
+            // requested allocation. If we haven't allocated the next `Arena`
+            // from the OS yet, do that and then use its free space for this
+            // requested allocation.
+            None => {
+                if let None = self.next {
+                    self.next = Some(Arena::new(self.capacity()));
+                }
+
+                self.next.as_mut().unwrap().allocate()
             },
         }
     }
@@ -202,6 +221,10 @@ impl<T> Arena<T> {
         // Reset `marked` to all zero.
         self.marked.set_all();
         self.marked.negate();
+
+        if let Some(arena) = self.next.as_mut() {
+            arena.sweep();
+        }
     }
 }
 
@@ -219,7 +242,7 @@ pub struct ArenaPtr<T> {
 // itself.
 impl<T> ::std::marker::Copy for ArenaPtr<T> { }
 
-impl<T> ArenaPtr<T> {
+impl<T: Default> ArenaPtr<T> {
     /// Create a new `ArenaPtr` to the `T` instance at the given index in the
     /// provided arena. **Not** publicly exposed, and should only be called by
     /// `Arena::allocate`.
@@ -244,7 +267,7 @@ impl<T> ArenaPtr<T> {
         }
     }
 
-    /// TODO FITZGEN
+    /// During a GC, determine if this `ArenaPtr` has been marked as reachable.
     fn is_marked(&self) -> bool {
         unsafe {
             let arena = self.arena.as_mut()
@@ -423,17 +446,17 @@ pub struct Heap {
     allocations: usize,
 }
 
-/// The default capacity of cons cells.
-pub static DEFAULT_CONS_CAPACITY : usize = 1 << 12;
+/// The default capacity of cons cells per arena.
+pub static DEFAULT_CONS_CAPACITY : usize = 1 << 10;
 
-/// The default capacity of strings.
-pub static DEFAULT_STRINGS_CAPACITY : usize = 1 << 12;
+/// The default capacity of strings per arena.
+pub static DEFAULT_STRINGS_CAPACITY : usize = 1 << 10;
 
-/// The default capacity of activations.
-pub static DEFAULT_ACTIVATIONS_CAPACITY : usize = 1 << 12;
+/// The default capacity of activations per arena.
+pub static DEFAULT_ACTIVATIONS_CAPACITY : usize = 1 << 10;
 
-/// The default capacity of procedures.
-pub static DEFAULT_PROCEDURES_CAPACITY : usize = 1 << 12;
+/// The default capacity of procedures per arena.
+pub static DEFAULT_PROCEDURES_CAPACITY : usize = 1 << 10;
 
 /// ## `Heap` Constructors
 impl Heap {
@@ -521,7 +544,7 @@ impl Heap {
 
 /// The maximum number of things to allocate before triggering a garbage
 /// collection.
-const MAX_GC_PRESSURE : usize = 1 << 8;
+const MAX_GC_PRESSURE : usize = 1 << 9;
 
 /// ## `Heap` Methods for Garbage Collection
 impl Heap {
@@ -814,4 +837,15 @@ impl Trace for GcThing {
             GcThing::String(_)       => vec!().into_iter(),
         }
     }
+}
+
+#[test]
+fn test_heap_allocate_tons() {
+    use eval::evaluate_file;
+
+    let heap = &mut Heap::new();
+    evaluate_file(heap, "./tests/test_heap_allocate_tons.scm")
+        .ok()
+        .expect("Should be able to eval a file.");
+    assert!(true, "Should have successfully run the program and allocated many cons cells");
 }
