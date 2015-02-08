@@ -17,7 +17,7 @@
 #![feature(unsafe_destructor)]
 #![allow(unstable)]
 
-use std::io;
+use std::old_io;
 use std::os;
 
 pub mod environment;
@@ -34,23 +34,27 @@ pub fn repl(heap: &mut heap::Heap) {
     println!("");
 
     loop {
-        let stdin = io::stdio::stdin();
+        let stdin = old_io::stdio::stdin();
         let mut reader = read::Read::new(stdin, heap);
 
         print!("oxischeme> ");
-        for form in reader {
-            match eval::evaluate(heap, &form) {
-                Ok(val) => println!("{}", *val),
-                Err(e)  => println!("Error: {}", e),
-            };
+        for read_result in reader {
+            match read_result {
+                Err(msg) => {
+                    println!("{}", msg);
+                    break;
+                },
+                Ok(form) => {
+                    match eval::evaluate(heap, &form) {
+                        Ok(val) => println!("{}", *val),
+                        Err(e)  => println!("Error: {}", e),
+                    };
+
+                }
+            }
 
             heap.collect_garbage();
             print!("oxischeme> ");
-        }
-
-        match *reader.get_result() {
-            Ok(_) => return,
-            Err(ref msg) => println!("{}", msg),
         }
     }
 }
@@ -68,7 +72,7 @@ pub fn main() {
         match eval::evaluate_file(heap, file_path.as_slice()) {
             Ok(_) => { },
             Err(msg) => {
-                let mut stderr = io::stdio::stderr();
+                let mut stderr = old_io::stdio::stderr();
                 (write!(&mut stderr, "Error: {}", msg)).ok().expect("IO ERROR!");
                 return;
             }

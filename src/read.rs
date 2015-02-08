@@ -15,11 +15,11 @@
 //! Parsing values.
 
 use std::cell::{RefCell};
-use std::io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
+use std::old_io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
 use std::iter::{Peekable};
 
 use heap::{Heap, Rooted};
-use value::{list, RootedValue, Value};
+use value::{list, RootedValue, SchemeResult, Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -94,9 +94,10 @@ fn is_symbol_subsequent(c: &char) -> bool {
 
 /// `Read` iteratively parses values from the input `Reader`.
 pub struct Read<R: Reader> {
-    chars: RefCell<Peekable<char, CharReader<R>>>,
+    chars: RefCell<Peekable<CharReader<R>>>,
     result: Result<(), String>,
     heap_ptr: *mut Heap,
+    had_error: bool
 }
 
 impl<'a, R: Reader> Read<R> {
@@ -105,7 +106,8 @@ impl<'a, R: Reader> Read<R> {
         Read {
             chars: RefCell::new(CharReader::new(reader).peekable()),
             result: Ok(()),
-            heap_ptr: heap
+            heap_ptr: heap,
+            had_error: false,
         }
     }
 
@@ -166,63 +168,57 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Report a failure reading values.
-    fn report_failure(&mut self, msg: String) -> Option<RootedValue> {
-        // Don't overwrite existing failures.
-        match self.result {
-            Ok(_) => self.result = Err(msg),
-            _     => { },
-        };
-
-        None
+    fn report_failure(&mut self, msg: String) -> Option<SchemeResult> {
+        self.had_error = true;
+        Some(Err(msg))
     }
 
     /// Report an unexpected character.
-    fn unexpected_character(&mut self, c: &char) -> Option<RootedValue> {
+    fn unexpected_character(&mut self, c: &char) -> Option<SchemeResult> {
         self.report_failure(format!("Unexpected character: {}", c))
     }
 
-    /// Expect that the next character is `c` and report a failure if it is not.
-    fn expect_character(&mut self, c: char) -> Result<(), ()>{
+    /// Expect that the next character is `c` and report a failure if it is
+    /// not. If this ever returns `Some`, then it will always be `Some(Err)`.
+    fn expect_character(&mut self, c: char) -> Option<SchemeResult> {
         match self.next_char() {
-            None                => {
-                self.report_failure(format!("Expected '{}', but found EOF.", c));
-                Err(())
+            None => {
+                self.report_failure(format!("Expected '{}', but found EOF.", c))
             },
             Some(d) if d != c => {
-                self.report_failure(format!("Expected '{}', found: '{}'", c, d));
-                Err(())
+                self.report_failure(format!("Expected '{}', found: '{}'", c, d))
             },
-            _                   => Ok(()),
+            _ => None
         }
     }
 
     /// Report an unexpected EOF.
-    fn unexpected_eof(&mut self) -> Option<RootedValue> {
+    fn unexpected_eof(&mut self) -> Option<SchemeResult> {
         self.report_failure("Unexpected EOF".to_string())
     }
 
     /// Report a bad character literal, e.g. `#\bad`.
-    fn bad_character_literal(&mut self) -> Option<RootedValue> {
+    fn bad_character_literal(&mut self) -> Option<SchemeResult> {
         self.report_failure("Bad character value".to_string())
     }
 
     /// Report an unterminated string literal.
-    fn unterminated_string(&mut self) -> Option<RootedValue> {
+    fn unterminated_string(&mut self) -> Option<SchemeResult> {
         self.report_failure("Unterminated string literal".to_string())
     }
 
-    /// Given a value, root the value and wrap it in `Option::Some`.
-    fn some_rooted(&self, val: Value) -> Option<RootedValue> {
-        Some(Rooted::new(self.heap(), val))
+    /// Given a value, root it and wrap it for returning.
+    fn root(&self, val: Value) -> Option<SchemeResult> {
+        Some(Ok(Rooted::new(self.heap(), val)))
     }
 
     /// Read a character value, after the starting '#' and '\' characters have
     /// already been eaten.
-    fn read_character(&mut self) -> Option<RootedValue> {
+    fn read_character(&mut self) -> Option<SchemeResult> {
         match [self.next_char(), self.peek_char()] {
             // Normal character, e.g. `#\f`.
             [Some(c), d] if is_eof_or_delimiter(&d) => {
-                self.some_rooted(Value::new_character(c))
+                self.root(Value::new_character(c))
             },
 
             // Newline character: `#\newline`.
@@ -240,7 +236,7 @@ impl<'a, R: Reader> Read<R> {
                  Some('n'),
                  Some('e'),
                  d] if is_eof_or_delimiter(&d) => {
-                    self.some_rooted(Value::new_character('\n'))
+                    self.root(Value::new_character('\n'))
                 },
                 _                              => self.bad_character_literal(),
             },
@@ -256,7 +252,7 @@ impl<'a, R: Reader> Read<R> {
                  Some('c'),
                  Some('e'),
                  d] if is_eof_or_delimiter(&d) => {
-                    self.some_rooted(Value::new_character(' '))
+                    self.root(Value::new_character(' '))
                 },
                 _                              => self.bad_character_literal(),
             },
@@ -268,7 +264,7 @@ impl<'a, R: Reader> Read<R> {
                 [Some('a'),
                  Some('b'),
                  d] if is_eof_or_delimiter(&d) => {
-                    self.some_rooted(Value::new_character('\t'))
+                    self.root(Value::new_character('\t'))
                 },
                 _                              => self.bad_character_literal(),
             },
@@ -279,15 +275,15 @@ impl<'a, R: Reader> Read<R> {
 
     /// Given that we have already read a '#' character, read in either a
     /// boolean or a character.
-    fn read_bool_or_char(&mut self) -> Option<RootedValue> {
+    fn read_bool_or_char(&mut self) -> Option<SchemeResult> {
         self.next_char();
         // Deterimine if this is a boolean or a character.
         match [self.next_char(), self.peek_char()] {
             [Some('t'), d] if is_eof_or_delimiter(&d)  => {
-                self.some_rooted(Value::new_boolean(true))
+                self.root(Value::new_boolean(true))
             },
             [Some('f'), d] if is_eof_or_delimiter(&d)  => {
-                self.some_rooted(Value::new_boolean(false))
+                self.root(Value::new_boolean(false))
             },
             [Some('\\'), _]                            => {
                 self.read_character()
@@ -300,7 +296,7 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read an integer.
-    fn read_integer(&mut self, is_negative: bool) -> Option<RootedValue> {
+    fn read_integer(&mut self, is_negative: bool) -> Option<SchemeResult> {
         let sign : i64 = if is_negative { -1 } else { 1 };
 
         let mut abs_value : i64 = match self.next_char() {
@@ -323,54 +319,54 @@ impl<'a, R: Reader> Read<R> {
             self.next_char();
         }
 
-        self.some_rooted(Value::new_integer(abs_value * sign))
+        self.root(Value::new_integer(abs_value * sign))
     }
 
     /// Read a pair, with the leading '(' already taken from the input.
-    fn read_pair(&mut self) -> Option<RootedValue> {
+    fn read_pair(&mut self) -> Option<SchemeResult> {
         self.trim();
         match self.peek_char() {
             None      => return self.unexpected_eof(),
 
             Some(')') => {
                 self.next_char();
-                return self.some_rooted(Value::EmptyList);
+                return self.root(Value::EmptyList);
             },
 
             _         => {
                 let car = match self.next() {
-                    None    => return self.unexpected_eof(),
-                    Some(v) => v,
+                    Some(Ok(v)) => v,
+                    err => return err,
                 };
 
                 self.trim();
                 match self.peek_char() {
-                    None      => return self.unexpected_eof(),
+                    None => return self.unexpected_eof(),
 
                     // Improper list.
                     Some('.') => {
                         self.next_char();
                         let cdr = match self.next() {
-                            None    => return self.unexpected_eof(),
-                            Some(v) => v,
+                            Some(Ok(v)) => v,
+                            err => return err,
                         };
 
                         self.trim();
-                        if self.expect_character(')').is_err() {
-                            return None;
+                        if let Some(err) = self.expect_character(')') {
+                            return Some(err);
                         }
 
-                        return Some(Value::new_pair(self.heap(), &car, &cdr));
+                        return Some(Ok(Value::new_pair(self.heap(), &car, &cdr)));
                     },
 
                     // Proper list.
                     _         => {
                         let cdr = match self.read_pair() {
-                            None    => return self.unexpected_eof(),
-                            Some(v) => v,
+                            Some(Ok(v)) => v,
+                            err => return err,
                         };
 
-                        return Some(Value::new_pair(self.heap(), &car, &cdr));
+                        return Some(Ok(Value::new_pair(self.heap(), &car, &cdr)));
                     },
                 };
             },
@@ -378,9 +374,9 @@ impl<'a, R: Reader> Read<R> {
     }
 
     /// Read a string in from the input.
-    fn read_string(&mut self) -> Option<RootedValue> {
-        if self.expect_character('"').is_err() {
-            return None;
+    fn read_string(&mut self) -> Option<SchemeResult> {
+        if let Some(err) = self.expect_character('"') {
+            return Some(err);
         }
 
         let mut str = String::new();
@@ -388,7 +384,7 @@ impl<'a, R: Reader> Read<R> {
         loop {
             match self.next_char() {
                 None       => return self.unterminated_string(),
-                Some('"')  => return Some(Value::new_string(self.heap(), str)),
+                Some('"')  => return Some(Ok(Value::new_string(self.heap(), str))),
                 Some('\\') => {
                     match self.next_char() {
                         Some('n')  => str.push('\n'),
@@ -406,7 +402,7 @@ impl<'a, R: Reader> Read<R> {
 
     /// Read a symbol in from the input. Optionally supply a prefix character
     /// that was already read from the symbol.
-    fn read_symbol(&mut self, prefix: Option<char>) -> Option<RootedValue> {
+    fn read_symbol(&mut self, prefix: Option<char>) -> Option<SchemeResult> {
         let mut str = String::new();
 
         if prefix.is_some() {
@@ -433,30 +429,29 @@ impl<'a, R: Reader> Read<R> {
             };
         }
 
-        return Some(self.heap().get_or_create_symbol(str));
+        return Some(Ok(self.heap().get_or_create_symbol(str)));
     }
 
     /// Read a quoted form from input, e.g. `'(1 2 3)`.
-    fn read_quoted(&mut self) -> Option<RootedValue> {
-        if self.expect_character('\'').is_err() {
-            return None;
+    fn read_quoted(&mut self) -> Option<SchemeResult> {
+        if let Some(err) = self.expect_character('\'') {
+            return Some(err);
         }
-
         return match self.next() {
-            None      => self.unexpected_eof(),
-            Some(val) => Some(list(self.heap(), &mut [
+            Some(Ok(val)) => Some(Ok(list(self.heap(), &mut [
                 self.heap().get_or_create_symbol("quote".to_string()),
                 val
-            ])),
+            ]))),
+            err => err
         };
     }
 }
 
 impl<R: Reader> Iterator for Read<R> {
-    type Item = RootedValue;
+    type Item = SchemeResult;
 
-    fn next(&mut self) -> Option<RootedValue> {
-        if self.result.is_err() {
+    fn next(&mut self) -> Option<SchemeResult> {
+        if self.had_error {
             return None;
         }
 
@@ -516,7 +511,7 @@ fn test_read_integers() {
     let input = "5 -5 789 -987";
     let mut heap = Heap::new();
     let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results, vec!(Value::new_integer(5),
                              Value::new_integer(-5),
@@ -529,7 +524,7 @@ fn test_read_booleans() {
     let input = "#t #f";
     let mut heap = Heap::new();
     let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results, vec!(Value::new_boolean(true),
                              Value::new_boolean(false)))
@@ -540,7 +535,7 @@ fn test_read_characters() {
     let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
     let mut heap = Heap::new();
     let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results, vec!(Value::new_character('a'),
                              Value::new_character('0'),
@@ -556,7 +551,7 @@ fn test_read_comments() {
     let input = "1 ;; this is a comment\n2";
     let mut heap = Heap::new();
     let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
 
     assert_eq!(results.len(), 2);
@@ -569,7 +564,7 @@ fn test_read_pairs() {
     let input = "() (1 2 3) (1 (2) ((3)))";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 3);
 
@@ -629,7 +624,7 @@ fn test_read_improper_lists() {
     let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 4);
 
@@ -671,7 +666,7 @@ fn test_read_string() {
     let input = "\"\" \"hello\" \"\\\"\"";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 3);
 
@@ -696,7 +691,7 @@ fn test_read_symbols() {
     let input = "foo + - * ? !";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 6);
 
@@ -736,7 +731,7 @@ fn test_read_same_symbol() {
     let input = "foo foo";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 2);
 
@@ -750,7 +745,7 @@ fn test_read_quoted() {
     let input = "'foo";
     let heap = &mut Heap::new();
     let results : Vec<Value> = read_from_str(input, heap)
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 1);
 
@@ -776,7 +771,7 @@ fn test_read_from_file() {
         .ok()
         .expect("Should be able to read from a file");
     let results : Vec<Value> = reader
-        .map(|v| *v)
+        .map(|r| *r.ok().expect("Should not get a read error"))
         .collect();
     assert_eq!(results.len(), 1);
     assert_eq!(**results[0].to_symbol(heap).expect("Should be a symbol"),
