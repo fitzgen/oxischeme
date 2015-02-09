@@ -891,6 +891,25 @@
 <span id="849">849</span>
 <span id="850">850</span>
 <span id="851">851</span>
+<span id="852">852</span>
+<span id="853">853</span>
+<span id="854">854</span>
+<span id="855">855</span>
+<span id="856">856</span>
+<span id="857">857</span>
+<span id="858">858</span>
+<span id="859">859</span>
+<span id="860">860</span>
+<span id="861">861</span>
+<span id="862">862</span>
+<span id="863">863</span>
+<span id="864">864</span>
+<span id="865">865</span>
+<span id="866">866</span>
+<span id="867">867</span>
+<span id="868">868</span>
+<span id="869">869</span>
+<span id="870">870</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright 2014 Nick Fitzgerald</span>
 <span class='comment'>//</span>
@@ -913,17 +932,18 @@
 <span class='doccomment'>//! Scheme has a variety of types that must be allocated on the heap: cons cells,</span>
 <span class='doccomment'>//! strings, procedures, and vectors (currently unimplemented).</span>
 <span class='doccomment'>//!</span>
-<span class='doccomment'>//! Oxischeme does not allocate each object directly from the OS. Instead, we</span>
-<span class='doccomment'>//! allocate objects from an &quot;arena&quot; which contains a pre-allocated object pool</span>
-<span class='doccomment'>//! reserved for allocating future objects from. We keep track of an arena&#39;s</span>
-<span class='doccomment'>//! un-used objects with a &quot;free list&quot; of indices into this pool. When we</span>
-<span class='doccomment'>//! allocate a new object, we remove the first entry from this list and return a</span>
-<span class='doccomment'>//! pointer to the object at that entry&#39;s index in the object pool. Garbage</span>
-<span class='doccomment'>//! collection adds new entries to the free list when reclaiming dead</span>
-<span class='doccomment'>//! objects. When allocating, if the arena&#39;s pool is already at capacity (ie, the</span>
-<span class='doccomment'>//! free list is empty), then we allocate another arena from the OS and allocate</span>
-<span class='doccomment'>//! from its object pool. In this way, the arenas form a linked list of object</span>
-<span class='doccomment'>//! pools to allocate from.</span>
+<span class='doccomment'>//! Oxischeme does not allocate each individual object directly from the OS,</span>
+<span class='doccomment'>//! which would have unnecessary bookkeeping overhead. Instead, we allocate</span>
+<span class='doccomment'>//! objects from an &quot;arena&quot; which contains a pre-allocated object pool reserved</span>
+<span class='doccomment'>//! for allocating future objects from. We keep track of an arena&#39;s un-used</span>
+<span class='doccomment'>//! objects with a &quot;free list&quot; of indices into this pool. When we allocate a new</span>
+<span class='doccomment'>//! object, we remove the first entry from this list and return a pointer to the</span>
+<span class='doccomment'>//! object at that entry&#39;s index in the object pool. Garbage collection adds new</span>
+<span class='doccomment'>//! entries to the free list when reclaiming dead objects. When allocating, if</span>
+<span class='doccomment'>//! our existing arenas&#39; pools are already at capacity (ie, all of their free</span>
+<span class='doccomment'>//! lists are empty), then we allocate another arena from the OS, add it to our</span>
+<span class='doccomment'>//! set of arenas, and allocate from its object pool. During garbage collection,</span>
+<span class='doccomment'>//! if an arena is empty, its memory is returned to the OS.</span>
 <span class='doccomment'>//!</span>
 <span class='doccomment'>//! ## Garbage Collection</span>
 <span class='doccomment'>//!</span>
@@ -1049,10 +1069,6 @@
     <span class='doccomment'>/// During a GC, if the nth bit of `marked` is set, that means that the nth</span>
     <span class='doccomment'>/// object in `pool` has been marked as reachable.</span>
     <span class='ident'>marked</span>: <span class='ident'>Bitv</span>,
-
-    <span class='doccomment'>/// If present, the next `Arena` with additional space for allocating</span>
-    <span class='doccomment'>/// objects of type T from when this `Arena` is full.</span>
-    <span class='ident'>next</span>: <span class='prelude-ty'>Option</span><span class='op'>&lt;</span><span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;&gt;</span><span class='op'>&gt;</span>,
 }
 
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Default</span><span class='op'>&gt;</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
@@ -1064,7 +1080,6 @@
             <span class='ident'>pool</span>: <span class='ident'>range</span>(<span class='number'>0</span>, <span class='ident'>capacity</span>).<span class='ident'>map</span>(<span class='op'>|</span>_<span class='op'>|</span> <span class='ident'>Default</span>::<span class='ident'>default</span>()).<span class='ident'>collect</span>(),
             <span class='ident'>free</span>: <span class='ident'>range</span>(<span class='number'>0</span>, <span class='ident'>capacity</span>).<span class='ident'>collect</span>(),
             <span class='ident'>marked</span>: <span class='ident'>Bitv</span>::<span class='ident'>from_elem</span>(<span class='ident'>capacity</span>, <span class='boolval'>false</span>),
-            <span class='ident'>next</span>: <span class='prelude-val'>None</span>
         })
     }
 
@@ -1078,28 +1093,24 @@
         <span class='self'>self</span>.<span class='ident'>free</span>.<span class='ident'>is_empty</span>()
     }
 
+    <span class='doccomment'>/// Return true if this arena does not contain any reachable objects (ie,</span>
+    <span class='doccomment'>/// the free list is full), and false otherwise.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>is_empty</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+        <span class='self'>self</span>.<span class='ident'>free</span>.<span class='ident'>len</span>() <span class='op'>==</span> <span class='self'>self</span>.<span class='ident'>capacity</span>()
+    }
+
     <span class='doccomment'>/// Allocate a new `T` instance and return a pointer to it.</span>
+    <span class='doccomment'>///</span>
+    <span class='doccomment'>/// ## Panics</span>
+    <span class='doccomment'>///</span>
+    <span class='doccomment'>/// Panics when this arena&#39;s pool is already at capacity.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>allocate</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
         <span class='kw'>match</span> <span class='self'>self</span>.<span class='ident'>free</span>.<span class='ident'>pop</span>() {
-            <span class='comment'>// We have free space in this arena, use it for this requested</span>
-            <span class='comment'>// allocation.</span>
             <span class='prelude-val'>Some</span>(<span class='ident'>idx</span>) <span class='op'>=&gt;</span> {
                 <span class='kw'>let</span> <span class='ident'>self_ptr</span> : <span class='op'>*</span><span class='kw-2'>mut</span> <span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> <span class='op'>=</span> <span class='self'>self</span>;
                 <span class='ident'>ArenaPtr</span>::<span class='ident'>new</span>(<span class='ident'>self_ptr</span>, <span class='ident'>idx</span>)
             },
-
-            <span class='comment'>// There was no more free space in this `Arena`. If we&#39;ve already</span>
-            <span class='comment'>// allocated the next `Arena` from the OS, use its space for this</span>
-            <span class='comment'>// requested allocation. If we haven&#39;t allocated the next `Arena`</span>
-            <span class='comment'>// from the OS yet, do that and then use its free space for this</span>
-            <span class='comment'>// requested allocation.</span>
-            <span class='prelude-val'>None</span> <span class='op'>=&gt;</span> {
-                <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>None</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>next</span> {
-                    <span class='self'>self</span>.<span class='ident'>next</span> <span class='op'>=</span> <span class='prelude-val'>Some</span>(<span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='self'>self</span>.<span class='ident'>capacity</span>()));
-                }
-
-                <span class='self'>self</span>.<span class='ident'>next</span>.<span class='ident'>as_mut</span>().<span class='ident'>unwrap</span>().<span class='ident'>allocate</span>()
-            },
+            <span class='prelude-val'>None</span> <span class='op'>=&gt;</span> <span class='macro'>panic</span><span class='macro'>!</span>(<span class='string'>&quot;Arena is at capacity!&quot;</span>),
         }
     }
 
@@ -1115,10 +1126,52 @@
         <span class='comment'>// Reset `marked` to all zero.</span>
         <span class='self'>self</span>.<span class='ident'>marked</span>.<span class='ident'>set_all</span>();
         <span class='self'>self</span>.<span class='ident'>marked</span>.<span class='ident'>negate</span>();
+    }
+}
 
-        <span class='kw'>if</span> <span class='kw'>let</span> <span class='prelude-val'>Some</span>(<span class='ident'>arena</span>) <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>next</span>.<span class='ident'>as_mut</span>() {
+<span class='doccomment'>/// A set of `Arena`s. Manages allocating and deallocating additional `Arena`s</span>
+<span class='doccomment'>/// from the OS, depending on the number of objects requested and kept alive by</span>
+<span class='doccomment'>/// the mutator.</span>
+<span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+    <span class='ident'>capacity</span>: <span class='ident'>usize</span>,
+    <span class='ident'>arenas</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span><span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;&gt;</span><span class='op'>&gt;</span>,
+}
+
+<span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Default</span><span class='op'>&gt;</span> <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+    <span class='doccomment'>/// Create a new `ArenaSet`.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>new</span>(<span class='ident'>capacity</span>: <span class='ident'>usize</span>) <span class='op'>-&gt;</span> <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+        <span class='ident'>ArenaSet</span> {
+            <span class='ident'>capacity</span>: <span class='ident'>capacity</span>,
+            <span class='ident'>arenas</span>: <span class='macro'>vec</span><span class='macro'>!</span>()
+        }
+    }
+
+    <span class='doccomment'>/// Sweep all of the arenas in this set.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>sweep</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) {
+        <span class='kw'>for</span> <span class='ident'>arena</span> <span class='kw'>in</span> <span class='self'>self</span>.<span class='ident'>arenas</span>.<span class='ident'>iter_mut</span>() {
             <span class='ident'>arena</span>.<span class='ident'>sweep</span>();
         }
+
+        <span class='comment'>// Deallocate any arenas that do not contain any reachable objects.</span>
+        <span class='self'>self</span>.<span class='ident'>arenas</span>.<span class='ident'>retain</span>(<span class='op'>|</span><span class='ident'>a</span><span class='op'>|</span> <span class='op'>!</span><span class='ident'>a</span>.<span class='ident'>is_empty</span>());
+    }
+
+    <span class='doccomment'>/// Allocate a `T` object from one of the arenas in this set and return a</span>
+    <span class='doccomment'>/// pointer to it.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>allocate</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>ArenaPtr</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
+        <span class='kw'>for</span> <span class='ident'>arena</span> <span class='kw'>in</span> <span class='self'>self</span>.<span class='ident'>arenas</span>.<span class='ident'>iter_mut</span>() {
+            <span class='kw'>if</span> <span class='op'>!</span><span class='ident'>arena</span>.<span class='ident'>is_full</span>() {
+                <span class='kw'>return</span> <span class='ident'>arena</span>.<span class='ident'>allocate</span>();
+            }
+        }
+
+        <span class='comment'>// All existing arenas are at capacity, allocate a new one for this</span>
+        <span class='comment'>// requested object allocation, get the requested object from it, and add it to our</span>
+        <span class='comment'>// set.</span>
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>new_arena</span> <span class='op'>=</span> <span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='self'>self</span>.<span class='ident'>capacity</span>);
+        <span class='kw'>let</span> <span class='ident'>result</span> <span class='op'>=</span> <span class='ident'>new_arena</span>.<span class='ident'>allocate</span>();
+        <span class='self'>self</span>.<span class='ident'>arenas</span>.<span class='ident'>push</span>(<span class='ident'>new_arena</span>);
+        <span class='ident'>result</span>
     }
 }
 
@@ -1329,10 +1382,10 @@
     <span class='doccomment'>/// The static environment.</span>
     <span class='kw'>pub</span> <span class='ident'>environment</span>: <span class='ident'>Environment</span>,
 
-    <span class='ident'>cons_cells</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Cons</span><span class='op'>&gt;&gt;</span>,
-    <span class='ident'>strings</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;&gt;</span>,
-    <span class='ident'>activations</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Activation</span><span class='op'>&gt;&gt;</span>,
-    <span class='ident'>procedures</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Procedure</span><span class='op'>&gt;&gt;</span>,
+    <span class='ident'>cons_cells</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Cons</span><span class='op'>&gt;</span>,
+    <span class='ident'>strings</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>,
+    <span class='ident'>activations</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Activation</span><span class='op'>&gt;</span>,
+    <span class='ident'>procedures</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Procedure</span><span class='op'>&gt;</span>,
 
     <span class='ident'>roots</span>: <span class='ident'>Vec</span><span class='op'>&lt;</span>(<span class='ident'>GcThing</span>, <span class='ident'>usize</span>)<span class='op'>&gt;</span>,
     <span class='ident'>symbol_table</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>String</span>, <span class='ident'>StringPtr</span><span class='op'>&gt;</span>,
@@ -1356,20 +1409,19 @@
 <span class='kw'>impl</span> <span class='ident'>Heap</span> {
     <span class='doccomment'>/// Create a new `Heap` with the default capacity.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>new</span>() <span class='op'>-&gt;</span> <span class='ident'>Heap</span> {
-        <span class='ident'>Heap</span>::<span class='ident'>with_arenas</span>(<span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_CONS_CAPACITY</span>),
-                          <span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_STRINGS_CAPACITY</span>),
-                          <span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_ACTIVATIONS_CAPACITY</span>),
-                          <span class='ident'>Arena</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_PROCEDURES_CAPACITY</span>))
+        <span class='ident'>Heap</span>::<span class='ident'>with_arenas</span>(<span class='ident'>ArenaSet</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_CONS_CAPACITY</span>),
+                          <span class='ident'>ArenaSet</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_STRINGS_CAPACITY</span>),
+                          <span class='ident'>ArenaSet</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_ACTIVATIONS_CAPACITY</span>),
+                          <span class='ident'>ArenaSet</span>::<span class='ident'>new</span>(<span class='ident'>DEFAULT_PROCEDURES_CAPACITY</span>))
     }
 
     <span class='doccomment'>/// Create a new `Heap` using the given arenas for allocating cons cells and</span>
     <span class='doccomment'>/// strings within.</span>
-    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>with_arenas</span>(<span class='ident'>cons_cells</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Cons</span><span class='op'>&gt;&gt;</span>,
-                       <span class='ident'>strings</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;&gt;</span>,
-                       <span class='ident'>acts</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Activation</span><span class='op'>&gt;&gt;</span>,
-                       <span class='ident'>procs</span>: <span class='ident'>Box</span><span class='op'>&lt;</span><span class='ident'>Arena</span><span class='op'>&lt;</span><span class='ident'>Procedure</span><span class='op'>&gt;&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>Heap</span> {
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>a</span> <span class='op'>=</span> <span class='ident'>acts</span>;
-        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>global_act</span> <span class='op'>=</span> <span class='ident'>a</span>.<span class='ident'>allocate</span>();
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>with_arenas</span>(<span class='ident'>cons_cells</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Cons</span><span class='op'>&gt;</span>,
+                       <span class='ident'>strings</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>String</span><span class='op'>&gt;</span>,
+                       <span class='kw-2'>mut</span> <span class='ident'>acts</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Activation</span><span class='op'>&gt;</span>,
+                       <span class='ident'>procs</span>: <span class='ident'>ArenaSet</span><span class='op'>&lt;</span><span class='ident'>Procedure</span><span class='op'>&gt;</span>) <span class='op'>-&gt;</span> <span class='ident'>Heap</span> {
+        <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>global_act</span> <span class='op'>=</span> <span class='ident'>acts</span>.<span class='ident'>allocate</span>();
         <span class='kw'>let</span> <span class='kw-2'>mut</span> <span class='ident'>env</span> <span class='op'>=</span> <span class='ident'>Environment</span>::<span class='ident'>new</span>();
         <span class='ident'>define_primitives</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>env</span>, <span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>global_act</span>);
 
@@ -1378,7 +1430,7 @@
 
             <span class='ident'>cons_cells</span>: <span class='ident'>cons_cells</span>,
             <span class='ident'>strings</span>: <span class='ident'>strings</span>,
-            <span class='ident'>activations</span>: <span class='ident'>a</span>,
+            <span class='ident'>activations</span>: <span class='ident'>acts</span>,
             <span class='ident'>procedures</span>: <span class='ident'>procs</span>,
 
             <span class='ident'>global_activation</span>: <span class='ident'>global_act</span>,
@@ -1534,23 +1586,9 @@
         <span class='ident'>roots</span>
     }
 
-    <span class='doccomment'>/// Returns true if any of the heap&#39;s arenas are full, and false otherwise.</span>
-    <span class='kw'>fn</span> <span class='ident'>any_arena_is_full</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
-        <span class='self'>self</span>.<span class='ident'>cons_cells</span>.<span class='ident'>is_full</span>()
-            <span class='op'>||</span> <span class='self'>self</span>.<span class='ident'>strings</span>.<span class='ident'>is_full</span>()
-            <span class='op'>||</span> <span class='self'>self</span>.<span class='ident'>procedures</span>.<span class='ident'>is_full</span>()
-            <span class='op'>||</span> <span class='self'>self</span>.<span class='ident'>activations</span>.<span class='ident'>is_full</span>()
-    }
-
-    <span class='doccomment'>/// A method that should be called on every allocation. If any arenas are</span>
-    <span class='doccomment'>/// already full, it triggers a GC immediately, otherwise it builds GC</span>
-    <span class='doccomment'>/// pressure.</span>
+    <span class='doccomment'>/// A method that should be called on every allocation.</span>
     <span class='kw'>fn</span> <span class='ident'>on_allocation</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>)  {
-        <span class='kw'>if</span> <span class='self'>self</span>.<span class='ident'>any_arena_is_full</span>() {
-            <span class='self'>self</span>.<span class='ident'>collect_garbage</span>();
-        } <span class='kw'>else</span> {
-            <span class='self'>self</span>.<span class='ident'>increase_gc_pressure</span>();
-        }
+        <span class='self'>self</span>.<span class='ident'>increase_gc_pressure</span>();
     }
 
     <span class='doccomment'>/// Returns true when we have built up too much GC pressure, and it is time</span>

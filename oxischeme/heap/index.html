@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>heap</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-5768' href='../../src/oxischeme/heap.rs.html#15-851'>[src]</a></span></h1>
+        </span><a id='src-5768' href='../../src/oxischeme/heap.rs.html#15-870'>[src]</a></span></h1>
 <div class='docblock'><p>The <code>heap</code> module provides memory management for our Scheme implementation.</p>
 
 <h2 id="allocation" class='section-header'><a
@@ -52,17 +52,18 @@
 <p>Scheme has a variety of types that must be allocated on the heap: cons cells,
 strings, procedures, and vectors (currently unimplemented).</p>
 
-<p>Oxischeme does not allocate each object directly from the OS. Instead, we
-allocate objects from an &quot;arena&quot; which contains a pre-allocated object pool
-reserved for allocating future objects from. We keep track of an arena&#39;s
-un-used objects with a &quot;free list&quot; of indices into this pool. When we
-allocate a new object, we remove the first entry from this list and return a
-pointer to the object at that entry&#39;s index in the object pool. Garbage
-collection adds new entries to the free list when reclaiming dead
-objects. When allocating, if the arena&#39;s pool is already at capacity (ie, the
-free list is empty), then we allocate another arena from the OS and allocate
-from its object pool. In this way, the arenas form a linked list of object
-pools to allocate from.</p>
+<p>Oxischeme does not allocate each individual object directly from the OS,
+which would have unnecessary bookkeeping overhead. Instead, we allocate
+objects from an &quot;arena&quot; which contains a pre-allocated object pool reserved
+for allocating future objects from. We keep track of an arena&#39;s un-used
+objects with a &quot;free list&quot; of indices into this pool. When we allocate a new
+object, we remove the first entry from this list and return a pointer to the
+object at that entry&#39;s index in the object pool. Garbage collection adds new
+entries to the free list when reclaiming dead objects. When allocating, if
+our existing arenas&#39; pools are already at capacity (ie, all of their free
+lists are empty), then we allocate another arena from the OS, add it to our
+set of arenas, and allocate from its object pool. During garbage collection,
+if an arena is empty, its memory is returned to the OS.</p>
 
 <h2 id="garbage-collection" class='section-header'><a
                            href="#garbage-collection">Garbage Collection</a></h2>
@@ -174,6 +175,15 @@ collection!</p></li>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.ArenaPtr.html'
                                title='oxischeme::heap::ArenaPtr'>ArenaPtr</a></td>
                         <td class='docblock short'><p>A pointer to a <code>T</code> instance in an arena.</p>
+</td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.ArenaSet.html'
+                               title='oxischeme::heap::ArenaSet'>ArenaSet</a></td>
+                        <td class='docblock short'><p>A set of <code>Arena</code>s. Manages allocating and deallocating additional <code>Arena</code>s
+from the OS, depending on the number of objects requested and kept alive by
+the mutator.</p>
 </td>
                     </tr>
                 
