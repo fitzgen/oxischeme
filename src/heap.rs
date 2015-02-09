@@ -19,17 +19,18 @@
 //! Scheme has a variety of types that must be allocated on the heap: cons cells,
 //! strings, procedures, and vectors (currently unimplemented).
 //!
-//! Oxischeme does not allocate each object directly from the OS. Instead, we
-//! allocate objects from an "arena" which contains a pre-allocated object pool
-//! reserved for allocating future objects from. We keep track of an arena's
-//! un-used objects with a "free list" of indices into this pool. When we
-//! allocate a new object, we remove the first entry from this list and return a
-//! pointer to the object at that entry's index in the object pool. Garbage
-//! collection adds new entries to the free list when reclaiming dead
-//! objects. When allocating, if the arena's pool is already at capacity (ie, the
-//! free list is empty), then we allocate another arena from the OS and allocate
-//! from its object pool. In this way, the arenas form a linked list of object
-//! pools to allocate from.
+//! Oxischeme does not allocate each individual object directly from the OS,
+//! which would have unnecessary bookkeeping overhead. Instead, we allocate
+//! objects from an "arena" which contains a pre-allocated object pool reserved
+//! for allocating future objects from. We keep track of an arena's un-used
+//! objects with a "free list" of indices into this pool. When we allocate a new
+//! object, we remove the first entry from this list and return a pointer to the
+//! object at that entry's index in the object pool. Garbage collection adds new
+//! entries to the free list when reclaiming dead objects. When allocating, if
+//! our existing arenas' pools are already at capacity (ie, all of their free
+//! lists are empty), then we allocate another arena from the OS, add it to our
+//! set of arenas, and allocate from its object pool. During garbage collection,
+//! if an arena is empty, its memory is returned to the OS.
 //!
 //! ## Garbage Collection
 //!
@@ -155,10 +156,6 @@ pub struct Arena<T> {
     /// During a GC, if the nth bit of `marked` is set, that means that the nth
     /// object in `pool` has been marked as reachable.
     marked: Bitv,
-
-    /// If present, the next `Arena` with additional space for allocating
-    /// objects of type T from when this `Arena` is full.
-    next: Option<Box<Arena<T>>>,
 }
 
 impl<T: Default> Arena<T> {
@@ -170,7 +167,6 @@ impl<T: Default> Arena<T> {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
             marked: Bitv::from_elem(capacity, false),
-            next: None
         })
     }
 
@@ -184,28 +180,24 @@ impl<T: Default> Arena<T> {
         self.free.is_empty()
     }
 
+    /// Return true if this arena does not contain any reachable objects (ie,
+    /// the free list is full), and false otherwise.
+    pub fn is_empty(&self) -> bool {
+        self.free.len() == self.capacity()
+    }
+
     /// Allocate a new `T` instance and return a pointer to it.
+    ///
+    /// ## Panics
+    ///
+    /// Panics when this arena's pool is already at capacity.
     pub fn allocate(&mut self) -> ArenaPtr<T> {
         match self.free.pop() {
-            // We have free space in this arena, use it for this requested
-            // allocation.
             Some(idx) => {
                 let self_ptr : *mut Arena<T> = self;
                 ArenaPtr::new(self_ptr, idx)
             },
-
-            // There was no more free space in this `Arena`. If we've already
-            // allocated the next `Arena` from the OS, use its space for this
-            // requested allocation. If we haven't allocated the next `Arena`
-            // from the OS yet, do that and then use its free space for this
-            // requested allocation.
-            None => {
-                if let None = self.next {
-                    self.next = Some(Arena::new(self.capacity()));
-                }
-
-                self.next.as_mut().unwrap().allocate()
-            },
+            None => panic!("Arena is at capacity!"),
         }
     }
 
@@ -221,10 +213,52 @@ impl<T: Default> Arena<T> {
         // Reset `marked` to all zero.
         self.marked.set_all();
         self.marked.negate();
+    }
+}
 
-        if let Some(arena) = self.next.as_mut() {
+/// A set of `Arena`s. Manages allocating and deallocating additional `Arena`s
+/// from the OS, depending on the number of objects requested and kept alive by
+/// the mutator.
+pub struct ArenaSet<T> {
+    capacity: usize,
+    arenas: Vec<Box<Arena<T>>>,
+}
+
+impl<T: Default> ArenaSet<T> {
+    /// Create a new `ArenaSet`.
+    pub fn new(capacity: usize) -> ArenaSet<T> {
+        ArenaSet {
+            capacity: capacity,
+            arenas: vec!()
+        }
+    }
+
+    /// Sweep all of the arenas in this set.
+    pub fn sweep(&mut self) {
+        for arena in self.arenas.iter_mut() {
             arena.sweep();
         }
+
+        // Deallocate any arenas that do not contain any reachable objects.
+        self.arenas.retain(|a| !a.is_empty());
+    }
+
+    /// Allocate a `T` object from one of the arenas in this set and return a
+    /// pointer to it.
+    pub fn allocate(&mut self) -> ArenaPtr<T> {
+        for arena in self.arenas.iter_mut() {
+            if !arena.is_full() {
+                return arena.allocate();
+            }
+        }
+
+        // All existing arenas are at capacity, allocate a new one for this
+        // requested object allocation, get the requested object from it, and add it to our
+        // set.
+        let mut new_arena = Arena::new(self.capacity);
+        let result = new_arena.allocate();
+        self.arenas.push(new_arena);
+        result
     }
 }
 
@@ -435,10 +469,10 @@ pub struct Heap {
     /// The static environment.
     pub environment: Environment,
 
-    cons_cells: Box<Arena<Cons>>,
-    strings: Box<Arena<String>>,
-    activations: Box<Arena<Activation>>,
-    procedures: Box<Arena<Procedure>>,
+    cons_cells: ArenaSet<Cons>,
+    strings: ArenaSet<String>,
+    activations: ArenaSet<Activation>,
+    procedures: ArenaSet<Procedure>,
 
     roots: Vec<(GcThing, usize)>,
     symbol_table: HashMap<String, StringPtr>,
@@ -462,20 +496,19 @@ pub static DEFAULT_PROCEDURES_CAPACITY : usize = 1 << 10;
 impl Heap {
     /// Create a new `Heap` with the default capacity.
     pub fn new() -> Heap {
-        Heap::with_arenas(Arena::new(DEFAULT_CONS_CAPACITY),
-                          Arena::new(DEFAULT_STRINGS_CAPACITY),
-                          Arena::new(DEFAULT_ACTIVATIONS_CAPACITY),
-                          Arena::new(DEFAULT_PROCEDURES_CAPACITY))
+        Heap::with_arenas(ArenaSet::new(DEFAULT_CONS_CAPACITY),
+                          ArenaSet::new(DEFAULT_STRINGS_CAPACITY),
+                          ArenaSet::new(DEFAULT_ACTIVATIONS_CAPACITY),
+                          ArenaSet::new(DEFAULT_PROCEDURES_CAPACITY))
     }
 
     /// Create a new `Heap` using the given arenas for allocating cons cells and
     /// strings within.
-    pub fn with_arenas(cons_cells: Box<Arena<Cons>>,
-                       strings: Box<Arena<String>>,
-                       acts: Box<Arena<Activation>>,
-                       procs: Box<Arena<Procedure>>) -> Heap {
-        let mut a = acts;
-        let mut global_act = a.allocate();
+    pub fn with_arenas(cons_cells: ArenaSet<Cons>,
+                       strings: ArenaSet<String>,
+                       mut acts: ArenaSet<Activation>,
+                       procs: ArenaSet<Procedure>) -> Heap {
+        let mut global_act = acts.allocate();
         let mut env = Environment::new();
         define_primitives(&mut env, &mut global_act);
 
@@ -484,7 +517,7 @@ impl Heap {
 
             cons_cells: cons_cells,
             strings: strings,
-            activations: a,
+            activations: acts,
             procedures: procs,
 
             global_activation: global_act,
@@ -640,23 +673,9 @@ impl Heap {
         roots
     }
 
-    /// Returns true if any of the heap's arenas are full, and false otherwise.
-    fn any_arena_is_full(&self) -> bool {
-        self.cons_cells.is_full()
-            || self.strings.is_full()
-            || self.procedures.is_full()
-            || self.activations.is_full()
-    }
-
-    /// A method that should be called on every allocation. If any arenas are
-    /// already full, it triggers a GC immediately, otherwise it builds GC
-    /// pressure.
+    /// A method that should be called on every allocation.
     fn on_allocation(&mut self)  {
-        if self.any_arena_is_full() {
-            self.collect_garbage();
-        } else {
-            self.increase_gc_pressure();
-        }
+        self.increase_gc_pressure();
     }
 
     /// Returns true when we have built up too much GC pressure, and it is time

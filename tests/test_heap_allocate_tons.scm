@@ -4,4 +4,11 @@
                             (allocate-tons (- n 1) (cons n xs)))))
 
 ;; This should always be larger than `heap::DEFAULT_CONS_CAPACITY`.
-(allocate-tons 3000 '())
+(define n 10000)
+
+;; Cause a bunch of arena allocations.
+(define xs (allocate-tons n '()))
+
+;; And then it should all get collected, and then allocated again.
+(set! xs '())
+(set! xs (allocate-tons n '()))
