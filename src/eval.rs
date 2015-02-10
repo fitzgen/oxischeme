@@ -62,6 +62,8 @@
 //! * "Fast Interpretation", chapter 6 in *Lisp In Small Pieces* by Christian
 //! Queinnec
 
+extern crate test;
+
 use std::cmp::{Ordering};
 use std::fmt;
 use std::hash;
@@ -698,7 +700,7 @@ fn analyze_invocation(heap: &mut Heap,
 // TESTS -----------------------------------------------------------------------
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
     use heap::{Heap, Rooted};
     use value::{list, Value};
@@ -817,7 +819,7 @@ mod test {
     #[test]
     fn test_ref_defined_later() {
         let mut heap = Heap::new();
-        let result = evaluate_file( &mut heap, "./tests/test_ref_defined_later.scm")
+        let result = evaluate_file(&mut heap, "./tests/test_ref_defined_later.scm")
             .ok()
             .expect("Should be able to eval a file.");
         assert_eq!(*result, Value::new_integer(1));
@@ -826,7 +828,7 @@ mod test {
     #[test]
     fn test_set_defined_later() {
         let mut heap = Heap::new();
-        let result = evaluate_file( &mut heap, "./tests/test_set_defined_later.scm")
+        let result = evaluate_file(&mut heap, "./tests/test_set_defined_later.scm")
             .ok()
             .expect("Should be able to eval a file.");
         assert_eq!(*result, Value::new_integer(5));
@@ -835,9 +837,60 @@ mod test {
     #[test]
     fn test_rooting_bug() {
         let mut heap = Heap::new();
-        evaluate_file( &mut heap, "./tests/rooting-bug.scm")
+        evaluate_file(&mut heap, "./tests/rooting-bug.scm")
             .ok()
             .expect("Should be able to eval a file.");
         assert!(true, "Should be able to evaluate that file without panicking.");
+    }
+}
+
+#[cfg(test)]
+mod bench {
+    use super::*;
+    use super::test::{Bencher};
+    use heap::{Heap, Rooted};
+    use value::{list, Value};
+
+    #[bench]
+    fn bench_iterate_empty_loops(b: &mut Bencher) {
+        let mut heap = Heap::new();
+        let iter_fn = evaluate_file(&mut heap, "./tests/bench_iterate_empty_loops.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+
+        b.iter(|| {
+            let mut call_items = [
+                iter_fn.clone(),
+                Rooted::new(&mut heap, Value::new_integer(10000))
+            ];
+            let call = list(&mut heap, &mut call_items);
+            evaluate(&mut heap, &call).ok()
+                .expect("Should be able to call our function");
+        });
+    }
+
+    #[bench]
+    fn bench_allocate_cons_cells(b: &mut Bencher) {
+        let mut heap = Heap::new();
+        let alloc_fn = match evaluate_file(&mut heap, "./tests/bench_allocate_cons_cells.scm") {
+            Ok(v) => v,
+            Err(msg) => panic!(msg)
+        };
+
+        let quote = heap.quote_symbol();
+        let empty_list = Rooted::new(&mut heap, Value::EmptyList);
+
+        b.iter(|| {
+            let mut call_items = [
+                alloc_fn.clone(),
+                Rooted::new(&mut heap, Value::new_integer(10000)),
+                list(&mut heap, &mut [quote.clone(), empty_list.clone()])
+            ];
+            let call = list(&mut heap, &mut call_items);
+            match evaluate(&mut heap, &call) {
+                Err(msg) => panic!(msg),
+                _ => { }
+            };
+        });
     }
 }

@@ -21,6 +21,7 @@
 #![feature(io)]
 #![feature(os)]
 #![feature(path)]
+#![feature(test)]
 #![feature(unicode)]
 #![feature(unsafe_destructor)]
 
