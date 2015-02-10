@@ -506,274 +506,281 @@ pub fn read_from_file(path_name: &str, heap: *mut Heap) -> IoResult<Read<File>> 
 
 // TESTS -----------------------------------------------------------------------
 
-#[test]
-fn test_read_integers() {
-    let input = "5 -5 789 -987";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results, vec!(Value::new_integer(5),
-                             Value::new_integer(-5),
-                             Value::new_integer(789),
-                             Value::new_integer(-987)))
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use heap::{Heap, Rooted};
+    use value::{Value};
 
-#[test]
-fn test_read_booleans() {
-    let input = "#t #f";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results, vec!(Value::new_boolean(true),
-                             Value::new_boolean(false)))
-}
-
-#[test]
-fn test_read_characters() {
-    let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results, vec!(Value::new_character('a'),
-                             Value::new_character('0'),
-                             Value::new_character('-'),
-                             Value::new_character(' '),
-                             Value::new_character('\t'),
-                             Value::new_character('\n'),
-                             Value::new_character('\n')));
-}
-
-#[test]
-fn test_read_comments() {
-    let input = "1 ;; this is a comment\n2";
-    let mut heap = Heap::new();
-    let results : Vec<Value> = read_from_str(input, &mut heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-
-    assert_eq!(results.len(), 2);
-    assert_eq!(results, vec!(Value::new_integer(1),
-                             Value::new_integer(2)));
-}
-
-#[test]
-fn test_read_pairs() {
-    let input = "() (1 2 3) (1 (2) ((3)))";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 3);
-
-    assert_eq!(results[0], Value::EmptyList);
-
-    let v1 = &results[1];
-    assert_eq!(v1.car(heap).expect("v1.car"),
-               Rooted::new(heap, Value::new_integer(1)));
-    assert_eq!(v1.cdr(heap).expect("v1.cdr")
-                 .car(heap).expect("v1.cdr.car"),
-               Rooted::new(heap, Value::new_integer(2)));
-    assert_eq!(v1.cdr(heap).expect("v1.cdr")
-                 .cdr(heap).expect("v1.cdr.cdr")
-                 .car(heap).expect("v1.cdr.cdr.car"),
-               Rooted::new(heap, Value::new_integer(3)));
-    assert_eq!(v1.cdr(heap).expect("v1.cdr")
-                 .cdr(heap).expect("v1.cdr.cdr")
-                 .cdr(heap).expect("v1.cdr.cdr.cdr"),
-               Rooted::new(heap, Value::EmptyList));
-
-    let v2 = &results[2];
-    assert_eq!(v2.car(heap).expect("v2.car"),
-               Rooted::new(heap, Value::new_integer(1)));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .car(heap).expect("v2.cdr.car")
-                 .car(heap).expect("v2.cdr.car.car"),
-               Rooted::new(heap, Value::new_integer(2)));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .car(heap).expect("v2.cdr.car")
-                 .cdr(heap).expect("v2.cdr.car.cdr"),
-               Rooted::new(heap, Value::EmptyList));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .cdr(heap).expect("v2.cdr.cdr")
-                 .car(heap).expect("v2.cdr.cdr.car")
-                 .car(heap).expect("v2.cdr.cdr.car.car")
-                 .car(heap).expect("v2.cdr.cdr.car.car.car"),
-               Rooted::new(heap, Value::new_integer(3)));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .cdr(heap).expect("v2.cdr.cdr")
-                 .car(heap).expect("v2.cdr.cdr.car")
-                 .car(heap).expect("v2.cdr.cdr.car.car")
-                 .cdr(heap).expect("v2.cdr.cdr.car.car.cdr"),
-               Rooted::new(heap, Value::EmptyList));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .cdr(heap).expect("v2.cdr.cdr")
-                 .car(heap).expect("v2.cdr.cdr.car")
-                 .cdr(heap).expect("v2.cdr.cdr.car.cdr"),
-               Rooted::new(heap, Value::EmptyList));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .cdr(heap).expect("v2.cdr.cdr")
-                 .cdr(heap).expect("v2.cdr.cdr.cdr"),
-               Rooted::new(heap, Value::EmptyList));
-}
-
-#[test]
-fn test_read_improper_lists() {
-    let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 4);
-
-    let v0 = &results[0];
-    assert_eq!(v0.car(heap),
-               Some(Rooted::new(heap, Value::new_integer(1))));
-    assert_eq!(v0.cdr(heap),
-               Some(Rooted::new(heap, Value::new_integer(2))));
-
-    let v1 = &results[1];
-    assert_eq!(v1.car(heap),
-               Some(Rooted::new(heap, Value::new_integer(3))));
-    assert_eq!(v1.cdr(heap),
-               Some(Rooted::new(heap, Value::EmptyList)));
-
-    let v2 = &results[2];
-    assert_eq!(v2.car(heap),
-               Some(Rooted::new(heap, Value::new_integer(4))));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .car(heap),
-               Some(Rooted::new(heap, Value::new_integer(5))));
-    assert_eq!(v2.cdr(heap).expect("v2.cdr")
-                 .cdr(heap),
-               Some(Rooted::new(heap, Value::new_integer(6))));
-
-    let v3 = &results[3];
-    assert_eq!(v3.car(heap),
-               Some(Rooted::new(heap, Value::new_integer(1))));
-    assert_eq!(v3.cdr(heap).expect("v3.cdr")
-                 .car(heap),
-              Some(Rooted::new(heap, Value::new_integer(2))));
-    assert_eq!(v3.cdr(heap).expect("v3.cdr")
-                 .cdr(heap),
-              Some(Rooted::new(heap, Value::new_integer(3))));
-}
-
-#[test]
-fn test_read_string() {
-    let input = "\"\" \"hello\" \"\\\"\"";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 3);
-
-    match results[0] {
-        Value::String(str) => assert_eq!(*str, "".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_integers() {
+        let input = "5 -5 789 -987";
+        let mut heap = Heap::new();
+        let results : Vec<Value> = read_from_str(input, &mut heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results, vec!(Value::new_integer(5),
+                                 Value::new_integer(-5),
+                                 Value::new_integer(789),
+                                 Value::new_integer(-987)))
     }
 
-    match results[1] {
-        Value::String(str) => assert_eq!(*str, "hello".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_booleans() {
+        let input = "#t #f";
+        let mut heap = Heap::new();
+        let results : Vec<Value> = read_from_str(input, &mut heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results, vec!(Value::new_boolean(true),
+                                 Value::new_boolean(false)))
     }
 
-    match results[2] {
-        Value::String(str) => assert_eq!(*str, "\"".to_string()),
-        _                  => assert!(false),
-    }
-}
-
-#[test]
-fn test_read_symbols() {
-    let input = "foo + - * ? !";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 6);
-
-    match results[0] {
-        Value::Symbol(str) => assert_eq!(*str, "foo".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_characters() {
+        let input = "#\\a #\\0 #\\- #\\space #\\tab #\\newline #\\\n";
+        let mut heap = Heap::new();
+        let results : Vec<Value> = read_from_str(input, &mut heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results, vec!(Value::new_character('a'),
+                                 Value::new_character('0'),
+                                 Value::new_character('-'),
+                                 Value::new_character(' '),
+                                 Value::new_character('\t'),
+                                 Value::new_character('\n'),
+                                 Value::new_character('\n')));
     }
 
-    match results[1] {
-        Value::Symbol(str) => assert_eq!(*str, "+".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_comments() {
+        let input = "1 ;; this is a comment\n2";
+        let mut heap = Heap::new();
+        let results : Vec<Value> = read_from_str(input, &mut heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results, vec!(Value::new_integer(1),
+                                 Value::new_integer(2)));
     }
 
-    match results[2] {
-        Value::Symbol(str) => assert_eq!(*str, "-".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_pairs() {
+        let input = "() (1 2 3) (1 (2) ((3)))";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 3);
+
+        assert_eq!(results[0], Value::EmptyList);
+
+        let v1 = &results[1];
+        assert_eq!(v1.car(heap).expect("v1.car"),
+                   Rooted::new(heap, Value::new_integer(1)));
+        assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                     .car(heap).expect("v1.cdr.car"),
+                   Rooted::new(heap, Value::new_integer(2)));
+        assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                     .cdr(heap).expect("v1.cdr.cdr")
+                     .car(heap).expect("v1.cdr.cdr.car"),
+                   Rooted::new(heap, Value::new_integer(3)));
+        assert_eq!(v1.cdr(heap).expect("v1.cdr")
+                     .cdr(heap).expect("v1.cdr.cdr")
+                     .cdr(heap).expect("v1.cdr.cdr.cdr"),
+                   Rooted::new(heap, Value::EmptyList));
+
+        let v2 = &results[2];
+        assert_eq!(v2.car(heap).expect("v2.car"),
+                   Rooted::new(heap, Value::new_integer(1)));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .car(heap).expect("v2.cdr.car")
+                     .car(heap).expect("v2.cdr.car.car"),
+                   Rooted::new(heap, Value::new_integer(2)));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .car(heap).expect("v2.cdr.car")
+                     .cdr(heap).expect("v2.cdr.car.cdr"),
+                   Rooted::new(heap, Value::EmptyList));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .cdr(heap).expect("v2.cdr.cdr")
+                     .car(heap).expect("v2.cdr.cdr.car")
+                     .car(heap).expect("v2.cdr.cdr.car.car")
+                     .car(heap).expect("v2.cdr.cdr.car.car.car"),
+                   Rooted::new(heap, Value::new_integer(3)));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .cdr(heap).expect("v2.cdr.cdr")
+                     .car(heap).expect("v2.cdr.cdr.car")
+                     .car(heap).expect("v2.cdr.cdr.car.car")
+                     .cdr(heap).expect("v2.cdr.cdr.car.car.cdr"),
+                   Rooted::new(heap, Value::EmptyList));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .cdr(heap).expect("v2.cdr.cdr")
+                     .car(heap).expect("v2.cdr.cdr.car")
+                     .cdr(heap).expect("v2.cdr.cdr.car.cdr"),
+                   Rooted::new(heap, Value::EmptyList));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .cdr(heap).expect("v2.cdr.cdr")
+                     .cdr(heap).expect("v2.cdr.cdr.cdr"),
+                   Rooted::new(heap, Value::EmptyList));
     }
 
-    match results[3] {
-        Value::Symbol(str) => assert_eq!(*str, "*".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_improper_lists() {
+        let input = "(1 . 2) (3 . ()) (4 . (5 . 6)) (1 2 . 3)";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 4);
+
+        let v0 = &results[0];
+        assert_eq!(v0.car(heap),
+                   Some(Rooted::new(heap, Value::new_integer(1))));
+        assert_eq!(v0.cdr(heap),
+                   Some(Rooted::new(heap, Value::new_integer(2))));
+
+        let v1 = &results[1];
+        assert_eq!(v1.car(heap),
+                   Some(Rooted::new(heap, Value::new_integer(3))));
+        assert_eq!(v1.cdr(heap),
+                   Some(Rooted::new(heap, Value::EmptyList)));
+
+        let v2 = &results[2];
+        assert_eq!(v2.car(heap),
+                   Some(Rooted::new(heap, Value::new_integer(4))));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .car(heap),
+                   Some(Rooted::new(heap, Value::new_integer(5))));
+        assert_eq!(v2.cdr(heap).expect("v2.cdr")
+                     .cdr(heap),
+                   Some(Rooted::new(heap, Value::new_integer(6))));
+
+        let v3 = &results[3];
+        assert_eq!(v3.car(heap),
+                   Some(Rooted::new(heap, Value::new_integer(1))));
+        assert_eq!(v3.cdr(heap).expect("v3.cdr")
+                     .car(heap),
+                  Some(Rooted::new(heap, Value::new_integer(2))));
+        assert_eq!(v3.cdr(heap).expect("v3.cdr")
+                     .cdr(heap),
+                  Some(Rooted::new(heap, Value::new_integer(3))));
     }
 
-    match results[4] {
-        Value::Symbol(str) => assert_eq!(*str, "?".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_string() {
+        let input = "\"\" \"hello\" \"\\\"\"";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 3);
+
+        match results[0] {
+            Value::String(str) => assert_eq!(*str, "".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[1] {
+            Value::String(str) => assert_eq!(*str, "hello".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[2] {
+            Value::String(str) => assert_eq!(*str, "\"".to_string()),
+            _                  => assert!(false),
+        }
     }
 
-    match results[5] {
-        Value::Symbol(str) => assert_eq!(*str, "!".to_string()),
-        _                  => assert!(false),
+    #[test]
+    fn test_read_symbols() {
+        let input = "foo + - * ? !";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 6);
+
+        match results[0] {
+            Value::Symbol(str) => assert_eq!(*str, "foo".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[1] {
+            Value::Symbol(str) => assert_eq!(*str, "+".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[2] {
+            Value::Symbol(str) => assert_eq!(*str, "-".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[3] {
+            Value::Symbol(str) => assert_eq!(*str, "*".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[4] {
+            Value::Symbol(str) => assert_eq!(*str, "?".to_string()),
+            _                  => assert!(false),
+        }
+
+        match results[5] {
+            Value::Symbol(str) => assert_eq!(*str, "!".to_string()),
+            _                  => assert!(false),
+        }
     }
-}
 
-#[test]
-fn test_read_same_symbol() {
-    let input = "foo foo";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 2);
+    #[test]
+    fn test_read_same_symbol() {
+        let input = "foo foo";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 2);
 
-    // We should only allocate one StringPtr and share it between both parses of
-    // the same symbol.
-    assert_eq!(results[0], results[1]);
-}
-
-#[test]
-fn test_read_quoted() {
-    let input = "'foo";
-    let heap = &mut Heap::new();
-    let results : Vec<Value> = read_from_str(input, heap)
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 1);
-
-    let car = results[0].car(heap).map(|s| *s);
-    match car {
-        Some(Value::Symbol(str)) => assert_eq!(*str, "quote".to_string()),
-        _                        => assert!(false),
+        // We should only allocate one StringPtr and share it between both parses of
+        // the same symbol.
+        assert_eq!(results[0], results[1]);
     }
 
-    let cdar = results[0]
-        .cdr(heap).expect("results[0].cdr")
-        .car(heap).map(|s| *s);
-    match cdar {
-        Some(Value::Symbol(str)) => assert_eq!(*str, "foo".to_string()),
-        _                        => assert!(false),
-    }
-}
+    #[test]
+    fn test_read_quoted() {
+        let input = "'foo";
+        let heap = &mut Heap::new();
+        let results : Vec<Value> = read_from_str(input, heap)
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 1);
 
-#[test]
-fn test_read_from_file() {
-    let heap = &mut Heap::new();
-    let reader = read_from_file("./tests/test_read_from_file.scm", heap)
-        .ok()
-        .expect("Should be able to read from a file");
-    let results : Vec<Value> = reader
-        .map(|r| *r.ok().expect("Should not get a read error"))
-        .collect();
-    assert_eq!(results.len(), 1);
-    assert_eq!(**results[0].to_symbol(heap).expect("Should be a symbol"),
-               "hello".to_string());
+        let car = results[0].car(heap).map(|s| *s);
+        match car {
+            Some(Value::Symbol(str)) => assert_eq!(*str, "quote".to_string()),
+            _                        => assert!(false),
+        }
+
+        let cdar = results[0]
+            .cdr(heap).expect("results[0].cdr")
+            .car(heap).map(|s| *s);
+        match cdar {
+            Some(Value::Symbol(str)) => assert_eq!(*str, "foo".to_string()),
+            _                        => assert!(false),
+        }
+    }
+
+    #[test]
+    fn test_read_from_file() {
+        let heap = &mut Heap::new();
+        let reader = read_from_file("./tests/test_read_from_file.scm", heap)
+            .ok()
+            .expect("Should be able to read from a file");
+        let results : Vec<Value> = reader
+            .map(|r| *r.ok().expect("Should not get a read error"))
+            .collect();
+        assert_eq!(results.len(), 1);
+        assert_eq!(**results[0].to_symbol(heap).expect("Should be a symbol"),
+                   "hello".to_string());
+    }
 }
