@@ -178,125 +178,131 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
 
 // TESTS -----------------------------------------------------------------------
 
-#[test]
-fn test_primitives_cons() {
-    use eval::evaluate_file;
+#[cfg(test)]
+mod tests {
+    use heap::{Heap};
+    use value::{Value};
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_cons.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap), Value::new_integer(1));
-    assert_eq!(*pair.cdr(heap), Value::new_integer(2));
-}
+    #[test]
+    fn test_primitives_cons() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_car() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_cons.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_integer(1));
+        assert_eq!(*pair.cdr(heap), Value::new_integer(2));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_car.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(1));
-}
+    #[test]
+    fn test_primitives_car() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_cdr() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_car.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        assert_eq!(*result, Value::new_integer(1));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_cdr.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(2));
-}
+    #[test]
+    fn test_primitives_cdr() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_list() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_cdr.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        assert_eq!(*result, Value::new_integer(2));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_list.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap),
-               Value::new_integer(1));
-    assert_eq!(*pair.cadr(heap).ok().expect("pair.cadr"),
-               Value::new_integer(2));
-    assert_eq!(*pair.caddr(heap).ok().expect("pair.caddr"),
-               Value::new_integer(3));
-    assert_eq!(*pair.cdddr(heap).ok().expect("pair.cdddr"),
-               Value::EmptyList);
-}
+    #[test]
+    fn test_primitives_list() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_null() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_list.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap),
+                   Value::new_integer(1));
+        assert_eq!(*pair.cadr(heap).ok().expect("pair.cadr"),
+                   Value::new_integer(2));
+        assert_eq!(*pair.caddr(heap).ok().expect("pair.caddr"),
+                   Value::new_integer(3));
+        assert_eq!(*pair.cdddr(heap).ok().expect("pair.cdddr"),
+                   Value::EmptyList);
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_null.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap), Value::new_boolean(true));
-    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-}
+    #[test]
+    fn test_primitives_null() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_arithmetic() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_null.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_boolean(true));
+        assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_arithmetic.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    assert_eq!(*result, Value::new_integer(42));
-}
+    #[test]
+    fn test_primitives_arithmetic() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_pair() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_arithmetic.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        assert_eq!(*result, Value::new_integer(42));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_pair.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap), Value::new_boolean(true));
-    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-}
+    #[test]
+    fn test_primitives_pair() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_atom() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_pair.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_boolean(true));
+        assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_atom.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap), Value::new_boolean(true));
-    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
-}
+    #[test]
+    fn test_primitives_atom() {
+        use eval::evaluate_file;
 
-#[test]
-fn test_primitives_eq() {
-    use eval::evaluate_file;
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_atom.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_boolean(true));
+        assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    }
 
-    let heap = &mut Heap::new();
-    let result = evaluate_file(heap, "./tests/test_primitives_eq.scm")
-        .ok()
-        .expect("Should be able to eval a file.");
-    let pair = result.to_pair(heap)
-        .expect("Result should be a pair");
-    assert_eq!(*pair.car(heap), Value::new_boolean(true));
-    assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    #[test]
+    fn test_primitives_eq() {
+        use eval::evaluate_file;
+
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_eq.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_boolean(true));
+        assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    }
 }
