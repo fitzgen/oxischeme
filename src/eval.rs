@@ -94,12 +94,39 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
     return Ok(result);
 }
 
-/// To optimize tail calls and eliminate the stack frames used by them, we
-/// trampoline thunks in a while loop and encode that process in this type.
+/// To optimize tail calls and eliminate the stack frames that would otherwise
+/// be used by them, we trampoline thunks in a loop and encode that process in
+/// this type.
 #[derive(Debug)]
 pub enum Trampoline {
     Value(RootedValue),
     Thunk(RootedActivationPtr, Meaning),
+}
+
+impl Trampoline {
+    /// Keep evaluating thunks until it yields a value.
+    pub fn run(self, heap: &mut Heap) -> SchemeResult {
+        match self {
+            Trampoline::Value(v) => {
+                return Ok(v);
+            },
+            Trampoline::Thunk(act, meaning) => {
+                let mut a = act;
+                let mut m = meaning;
+                loop {
+                    match try!(m.evaluate_to_thunk(heap, &mut a)) {
+                        Trampoline::Value(v) => {
+                            return Ok(v);
+                        },
+                        Trampoline::Thunk(aa, mm) => {
+                            a = aa;
+                            m = mm;
+                        },
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Either a `Trampoline`, or a `String` describing the error.
@@ -281,47 +308,52 @@ fn evaluate_lambda(heap: &mut Heap,
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
 }
 
+pub fn apply_invocation(heap: &mut Heap,
+                        proc_val: &RootedValue,
+                        args: Vec<RootedValue>) -> TrampolineResult {
+    match **proc_val {
+        Value::Primitive(primitive) => {
+            let result = try!(primitive.call(heap, args));
+            return Ok(Trampoline::Value(result));
+        },
+
+        Value::Procedure(proc_ptr) => {
+            match proc_ptr.arity.cmp(&(args.len() as u32)) {
+                Ordering::Less => {
+                    return Err("Too many arguments passed".to_string());
+                },
+                Ordering::Greater => {
+                    return Err("Too few arguments passed".to_string());
+                },
+                _ => {
+                    let proc_act = proc_ptr.act.as_ref()
+                        .expect("Should never see an uninitialized procedure!");
+                    let rooted_proc_act = Rooted::new(heap, *proc_act);
+                    let body = proc_ptr.body.as_ref()
+                        .expect("Should never see an uninitialized procedure!");
+
+                    let new_act = Activation::extend(heap,
+                                                     &rooted_proc_act,
+                                                     args);
+                    return Ok(Trampoline::Thunk(new_act, (**body).clone()));
+                },
+            }
+        },
+
+        _ => {
+            return Err(format!("Expected a procedure, found {}",
+                               **proc_val));
+        }
+    }
+}
+
 fn evaluate_invocation(heap: &mut Heap,
                        data: &MeaningData,
                        act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Invocation(ref procedure, ref params) = *data {
         let proc_val = try!(procedure.evaluate(heap, act));
         let args = try!(params.iter().map(|p| p.evaluate(heap, act)).collect());
-
-        match *proc_val {
-            Value::Primitive(primitive) => {
-                let result = try!(primitive.call(heap, args));
-                return Ok(Trampoline::Value(result));
-            },
-
-            Value::Procedure(proc_ptr) => {
-                match proc_ptr.arity.cmp(&(args.len() as u32)) {
-                    Ordering::Less => {
-                        return Err("Too many arguments passed".to_string());
-                    },
-                    Ordering::Greater => {
-                        return Err("Too few arguments passed".to_string());
-                    },
-                    _ => {
-                        let proc_act = proc_ptr.act.as_ref()
-                            .expect("Should never see an uninitialized procedure!");
-                        let rooted_proc_act = Rooted::new(heap, *proc_act);
-                        let body = proc_ptr.body.as_ref()
-                            .expect("Should never see an uninitialized procedure!");
-
-                        let new_act = Activation::extend(heap,
-                                                         &rooted_proc_act,
-                                                         args);
-                        return Ok(Trampoline::Thunk(new_act, (**body).clone()));
-                    },
-                }
-            },
-
-            _ => {
-                return Err(format!("Expected a procedure, found {}",
-                                   *proc_val));
-            }
-        }
+        return apply_invocation(heap, &proc_val, args);
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -414,26 +446,8 @@ impl Meaning {
     fn evaluate(&self,
                 heap: &mut Heap,
                 act: &mut RootedActivationPtr) -> SchemeResult {
-        match try!(self.evaluate_to_thunk(heap, act)) {
-            Trampoline::Value(v) => {
-                return Ok(v);
-            },
-            Trampoline::Thunk(act, meaning) => {
-                let mut a = act;
-                let mut m = meaning;
-                loop {
-                    match try!(m.evaluate_to_thunk(heap, &mut a)) {
-                        Trampoline::Value(v) => {
-                            return Ok(v);
-                        },
-                        Trampoline::Thunk(aa, mm) => {
-                            a = aa;
-                            m = mm;
-                        },
-                    }
-                }
-            }
-        }
+        let thunk = try!(self.evaluate_to_thunk(heap, act));
+        thunk.run(heap)
     }
 }
 

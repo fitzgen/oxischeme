@@ -575,7 +575,7 @@ impl Heap {
     }
 }
 
-/// The maximum number of things to allocate before triggering a garbage
+/// The maximum number of GC things to allocate before triggering a garbage
 /// collection.
 const MAX_GC_PRESSURE : usize = 1 << 9;
 
@@ -602,12 +602,10 @@ impl Heap {
                 }
             }
 
-            for thing in newly_pending_trace.drain() {
-                pending_trace.push(thing);
-            }
+            pending_trace.append(&mut newly_pending_trace);
         }
 
-        // Second, sweep each arena.
+        // Second, sweep each `ArenaSet`.
 
         self.strings.sweep();
         self.activations.sweep();
