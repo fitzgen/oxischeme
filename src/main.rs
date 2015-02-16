@@ -43,10 +43,10 @@ pub fn repl(heap: &mut heap::Heap) {
 
     loop {
         let stdin = old_io::stdio::stdin();
-        let reader = read::Read::new(stdin, heap);
+        let reader = read::Read::new(stdin, heap, "stdin".to_string());
 
         print!("oxischeme> ");
-        for read_result in reader {
+        for (_, read_result) in reader {
             match read_result {
                 Err(msg) => {
                     println!("{}", msg);

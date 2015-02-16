@@ -86,7 +86,7 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
         "Failed to read from file".to_string()));
 
     let mut result = Rooted::new(heap, Value::EmptyList);
-    for read_result in reader {
+    for (_, read_result) in reader {
         let form = try!(read_result);
         result.emplace(*try!(evaluate(heap, &form)));
     }
