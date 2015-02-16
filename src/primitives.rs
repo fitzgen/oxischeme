@@ -17,6 +17,7 @@
 use environment::{ActivationPtr, Environment};
 use eval::{apply_invocation};
 use heap::{Heap, Rooted};
+use read::{Read};
 use value::{RootedValue, SchemeResult, Value};
 
 /// The function signature for primitives.
@@ -121,6 +122,25 @@ fn print(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
         println!("{}", **val);
     }
     Ok(heap.unspecified_symbol())
+}
+
+fn read(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    // Only supports reading from stdin right now.
+
+    use std::old_io;
+
+    if args.len() != 0 {
+        return Err("`read` called with too many parameters".to_string());
+    }
+
+    let stdin = old_io::stdio::stdin();
+    let reader = Read::new(stdin, heap, "stdin".to_string());
+    for (_, read_result) in reader {
+        let form = try!(read_result);
+        return Ok(form);
+    }
+
+    Ok(heap.eof_symbol())
 }
 
 fn not(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
@@ -293,6 +313,7 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
 
     define_primitive(env, act, "error", error);
     define_primitive(env, act, "print", print);
+    define_primitive(env, act, "read", read);
 
     define_primitive(env, act, "not", not);
     define_primitive(env, act, "null?", null_question);

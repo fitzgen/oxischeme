@@ -779,6 +779,12 @@ impl Heap {
     pub fn lambda_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("lambda".to_string())
     }
+
+    pub fn eof_symbol(&mut self) -> RootedValue {
+        // Per R4RS, the EOF object must be something that is impossible to
+        // read. We fulfill that contract by having spaces in a symbol.
+        self.get_or_create_symbol("< END OF FILE >".to_string())
+    }
 }
 
 /// An iterable of `GcThing`s.
