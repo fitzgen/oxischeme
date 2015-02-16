@@ -682,7 +682,7 @@ fn analyze_lambda(heap: &mut Heap,
                                               *params_form))));
     }
 
-    let param_names = try!(params.into_iter().map(|p| {
+    let mut param_names : Vec<String> = try!(params.into_iter().map(|p| {
         let sym = try!(p.to_symbol(heap)
                        .ok_or(format!("{}: Can only define symbol parameters, found {}",
                                       location,
@@ -690,7 +690,30 @@ fn analyze_lambda(heap: &mut Heap,
         Ok((**sym).clone())
     }).collect());
 
-    let body_meaning = try!(heap.with_extended_env(param_names, &|heap| {
+    // Find any definitions in the body, so we can add them to the extended
+    // environment.
+    let define = heap.define_symbol();
+    let mut local_definitions : Vec<String> = body.iter()
+        .filter_map(|form_result| {
+            if let Ok(form) = form_result {
+                if let Some(pair) = form.to_pair(heap) {
+                    if pair.car(heap) == define {
+                        if let Ok(name) = pair.cadr(heap) {
+                            return name.to_symbol(heap).map(|s| (**s).clone())
+                        }
+                    }
+                }
+            }
+
+            None
+        })
+        .collect();
+
+    let mut new_bindings = Vec::with_capacity(param_names.len() + local_definitions.len());
+    new_bindings.append(&mut param_names);
+    new_bindings.append(&mut local_definitions);
+
+    let body_meaning = try!(heap.with_extended_env(new_bindings, &|heap| {
         make_meaning_sequence(heap, &body)
     }));
 
@@ -944,6 +967,15 @@ mod tests {
             .ok()
             .expect("Should be able to eval a file.");
         assert!(true, "Should be able to evaluate that file without panicking.");
+    }
+
+    #[test]
+    fn test_eval_local_definitions() {
+        let mut heap = Heap::new();
+        match evaluate_file(&mut heap, "./tests/test_eval_local_definitions.scm") {
+            Err(msg) => panic!(msg),
+            Ok(result) => assert_eq!(*result, Value::new_integer(120)),
+        }
     }
 }
 
