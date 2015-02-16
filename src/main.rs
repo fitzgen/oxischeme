@@ -19,7 +19,6 @@
 #![feature(env)]
 #![feature(hash)]
 #![feature(io)]
-#![feature(os)]
 #![feature(path)]
 #![feature(test)]
 #![feature(unicode)]
@@ -77,10 +76,7 @@ pub fn main() {
     for file_path in env::args().skip(1) {
         args_were_passed = true;
 
-        let file_path_str = file_path.into_string().ok()
-            .expect("Expect command line arguments to be valid strings");
-
-        match eval::evaluate_file(heap, file_path_str.as_slice()) {
+        match eval::evaluate_file(heap, file_path.as_slice()) {
             Ok(_) => { },
             Err(msg) => {
                 let mut stderr = old_io::stdio::stderr();
