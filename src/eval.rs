@@ -142,8 +142,8 @@ enum MeaningData {
     /// The quoted value.
     Quotation(RootedValue),
 
-    /// A reference to (i'th activation, j'th binding).
-    Reference(u32, u32),
+    /// A reference to (i'th activation, j'th binding, original name).
+    Reference(u32, u32, String),
 
     /// Push a new binding to the current activation with the value of the given
     /// meaning.
@@ -173,8 +173,8 @@ impl fmt::Display for MeaningData {
             MeaningData::Quotation(ref val) => {
                 write!(f, "(quotation {})", **val)
             },
-            MeaningData::Reference(i, j) => {
-                write!(f, "(reference {} {})", i, j)
+            MeaningData::Reference(i, j, ref name) => {
+                write!(f, "(reference {} {} {})", i, j, name)
             },
             MeaningData::Definition(i, j, ref val) => {
                 write!(f, "(definition {} {} {})", i, j, val)
@@ -235,9 +235,9 @@ fn evaluate_quotation(heap: &mut Heap,
 fn evaluate_reference(heap: &mut Heap,
                       data: &MeaningData,
                       act: &mut RootedActivationPtr) -> TrampolineResult {
-    if let MeaningData::Reference(i, j) = *data {
+    if let MeaningData::Reference(i, j, ref name) = *data {
         let val = try!(act.fetch(heap, i, j).ok().ok_or(
-            "Reference to variable that hasn't been defined".to_string()));
+            format!("Reference to variable that hasn't been defined: {}", name)));
         return Ok(Trampoline::Value(val));
     }
 
@@ -384,9 +384,9 @@ impl Meaning {
         }
     }
 
-    fn new_reference(i: u32, j: u32, location: Location) -> Meaning {
+    fn new_reference(i: u32, j: u32, name: String, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Reference(i, j)),
+            data: Box::new(MeaningData::Reference(i, j, name)),
             evaluator: evaluate_reference,
             location: location
         }
@@ -542,13 +542,13 @@ fn analyze_atom(heap: &mut Heap,
 
     if let Some(sym) = form.to_symbol(heap) {
         if let Some((i, j)) = heap.environment.lookup(&**sym) {
-            return Ok(Meaning::new_reference(i, j, location));
+            return Ok(Meaning::new_reference(i, j, (**sym).clone(), location));
         }
 
         // This is a reference to a global variable that hasn't been defined
         // yet.
         let (i, j) = heap.environment.define_global((**sym).clone());
-        return Ok(Meaning::new_reference(i, j, location));
+        return Ok(Meaning::new_reference(i, j, (**sym).clone(), location));
     }
 
     return Err(format!("Static error: Cannot evaluate: {}", **form));
