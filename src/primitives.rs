@@ -203,6 +203,17 @@ fn symbol_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     }
 }
 
+fn number_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+    if let [ref arg] = args.as_slice() {
+        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+            Value::Integer(_) => true,
+            _                 => false
+        })))
+    } else {
+        Err("Bad arguments".to_string())
+    }
+}
+
 fn number_equal(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
@@ -321,6 +332,7 @@ pub fn define_primitives(env: &mut Environment, act: &mut ActivationPtr) {
     define_primitive(env, act, "atom?", atom_question);
     define_primitive(env, act, "eq?", eq_question);
     define_primitive(env, act, "symbol?", symbol_question);
+    define_primitive(env, act, "number?", number_question);
 
     define_primitive(env, act, "=", number_equal);
     define_primitive(env, act, ">", gt);
@@ -512,6 +524,18 @@ mod tests {
     fn test_primitives_symbol_question() {
         let heap = &mut Heap::new();
         let result = evaluate_file(heap, "./tests/test_primitives_symbol_question.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        let pair = result.to_pair(heap)
+            .expect("Result should be a pair");
+        assert_eq!(*pair.car(heap), Value::new_boolean(true));
+        assert_eq!(*pair.cdr(heap), Value::new_boolean(false));
+    }
+
+    #[test]
+    fn test_primitives_number_question() {
+        let heap = &mut Heap::new();
+        let result = evaluate_file(heap, "./tests/test_primitives_number_question.scm")
             .ok()
             .expect("Should be able to eval a file.");
         let pair = result.to_pair(heap)
