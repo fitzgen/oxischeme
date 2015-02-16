@@ -20,7 +20,7 @@ use std::iter::{Peekable};
 use std::old_io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
 
 use heap::{Heap, Rooted};
-use value::{list, SchemeResult, Value};
+use value::{list, RootedValue, SchemeResult, Value};
 
 /// `CharReader` reads characters one at a time from the given input `Reader`.
 struct CharReader<R> {
@@ -112,6 +112,12 @@ impl Location {
             line: 1,
             column: 0,
         }
+    }
+
+    /// Create a placeholder `Location` object for when the actual location is
+    /// unknown.
+    pub fn unknown() -> Location {
+        Location::new("<unknown source location>".to_string())
     }
 }
 
@@ -264,9 +270,20 @@ impl<'a, R: Reader> Read<R> {
         self.report_failure("Unterminated string literal".to_string())
     }
 
-    /// Given a value, root it and wrap it for returning.
+    /// Register the given value as having originated form the given location,
+    /// and wrap it up for returning from the iterator.
+    fn enlocate(&self,
+                location: Location,
+                val: RootedValue) -> Option<SchemeResultAndLocation> {
+        if let Some(pair) = val.to_pair(self.heap()) {
+            self.heap().enlocate(location.clone(), pair);
+        }
+        Some((location, Ok(val)))
+    }
+
+    /// Given a value, root it and wrap it for returning from the iterator.
     fn root(&self, loc: Location, val: Value) -> Option<SchemeResultAndLocation> {
-        Some((loc, Ok(Rooted::new(self.heap(), val))))
+        self.enlocate(loc, Rooted::new(self.heap(), val))
     }
 
     /// Read a character value, after the starting '#' and '\' characters have
@@ -421,10 +438,9 @@ impl<'a, R: Reader> Read<R> {
                             return Some(e);
                         }
 
-                        return Some((loc,
-                                     Ok(Value::new_pair(self.heap(),
-                                                        &car,
-                                                        &cdr))));
+                        return self.enlocate(loc, Value::new_pair(self.heap(),
+                                                                  &car,
+                                                                  &cdr));
                     },
 
                     // Proper list.
@@ -434,10 +450,9 @@ impl<'a, R: Reader> Read<R> {
                             err => return err,
                         };
 
-                        return Some((loc,
-                                     Ok(Value::new_pair(self.heap(),
-                                                        &car,
-                                                        &cdr))));
+                        return self.enlocate(loc, Value::new_pair(self.heap(),
+                                                                  &car,
+                                                                  &cdr));
                     },
                 };
             },
@@ -455,9 +470,8 @@ impl<'a, R: Reader> Read<R> {
         loop {
             match self.next_char() {
                 None       => return self.unterminated_string(),
-                Some('"')  => return Some((loc,
-                                           Ok(Value::new_string(self.heap(),
-                                                                str)))),
+                Some('"')  => return self.enlocate(loc, Value::new_string(self.heap(),
+                                                                          str)),
                 Some('\\') => {
                     match self.next_char() {
                         Some('n')  => str.push('\n'),
@@ -504,8 +518,7 @@ impl<'a, R: Reader> Read<R> {
             };
         }
 
-        return Some((loc,
-                     Ok(self.heap().get_or_create_symbol(str))));
+        return self.enlocate(loc, self.heap().get_or_create_symbol(str));
     }
 
     /// Read a quoted form from input, e.g. `'(1 2 3)`.
@@ -515,11 +528,11 @@ impl<'a, R: Reader> Read<R> {
         }
 
         return match self.next() {
-            Some((_, Ok(val))) => Some((loc,
-                                        Ok(list(self.heap(), &mut [
-                                            self.heap().get_or_create_symbol("quote".to_string()),
-                                            val
-                                        ])))),
+            Some((_, Ok(val))) => self.enlocate(loc,
+                                                list(self.heap(), &mut [
+                                                    self.heap().get_or_create_symbol("quote".to_string()),
+                                                    val
+                                                ])),
             err => err
         };
     }

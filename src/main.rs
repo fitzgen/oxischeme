@@ -45,14 +45,14 @@ pub fn repl(heap: &mut heap::Heap) {
         let reader = read::Read::new(stdin, heap, "stdin".to_string());
 
         print!("oxischeme> ");
-        for (_, read_result) in reader {
+        for (location, read_result) in reader {
             match read_result {
                 Err(msg) => {
                     println!("{}", msg);
                     break;
                 },
                 Ok(form) => {
-                    match eval::evaluate(heap, &form) {
+                    match eval::evaluate(heap, &form, location) {
                         Ok(val) => println!("{}", *val),
                         Err(e)  => println!("Error: {}", e),
                     };

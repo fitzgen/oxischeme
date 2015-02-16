@@ -70,11 +70,12 @@ use std::hash;
 
 use environment::{Activation, RootedActivationPtr};
 use heap::{Heap, Rooted};
+use read::{Location};
 use value::{RootedValue, SchemeResult, Value};
 
 /// Evaluate the given form in the global environment.
-pub fn evaluate(heap: &mut Heap, form: &RootedValue) -> SchemeResult {
-    let meaning = try!(analyze(heap, form));
+pub fn evaluate(heap: &mut Heap, form: &RootedValue, location: Location) -> SchemeResult {
+    let meaning = try!(analyze(heap, form, location));
     let mut act = heap.global_activation();
     meaning.evaluate(heap, &mut act)
 }
@@ -86,9 +87,9 @@ pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
         "Failed to read from file".to_string()));
 
     let mut result = Rooted::new(heap, Value::EmptyList);
-    for (_, read_result) in reader {
+    for (location, read_result) in reader {
         let form = try!(read_result);
-        result.emplace(*try!(evaluate(heap, &form)));
+        result.emplace(*try!(evaluate(heap, &form, location)));
     }
 
     return Ok(result);
@@ -360,73 +361,84 @@ fn evaluate_invocation(heap: &mut Heap,
 }
 
 /// The `Meaning` type is our intermediate language produced by syntactic
-/// analysis. It is a pair containing a `MeaningData` variant and its
-/// corresponding `MeaningEvaluatorFn`.
+/// analysis. It is a triple containing a `MeaningData` variant, its
+/// corresponding `MeaningEvaluatorFn`, and the source location this `Meaning`
+/// originates from.
 #[derive(Debug)]
 pub struct Meaning {
     data: Box<MeaningData>,
     evaluator: MeaningEvaluatorFn,
+    location: Location,
 }
 
 /// ## `Meaning` Constructors
 impl Meaning {
-    fn new_quotation(form: &RootedValue) -> Meaning {
+    fn new_quotation(form: &RootedValue, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Quotation((*form).clone())),
             evaluator: evaluate_quotation,
+            location: location
         }
     }
 
-    fn new_reference(i: u32, j: u32) -> Meaning {
+    fn new_reference(i: u32, j: u32, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Reference(i, j)),
             evaluator: evaluate_reference,
+            location: location
         }
     }
 
-    fn new_set_variable(i: u32, j: u32, val: Meaning) -> Meaning {
+    fn new_set_variable(i: u32, j: u32, val: Meaning, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::SetVariable(i, j, val)),
             evaluator: evaluate_set_variable,
+            location: location,
         }
     }
 
     fn new_conditional(condition: Meaning,
                        consquent: Meaning,
-                       alternative: Meaning) -> Meaning {
+                       alternative: Meaning,
+                       location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Conditional(condition,
                                                     consquent,
                                                     alternative)),
             evaluator: evaluate_conditional,
+            location: location,
         }
     }
 
-    fn new_sequence(first: Meaning, second: Meaning) -> Meaning {
+    fn new_sequence(first: Meaning, second: Meaning, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Sequence(first, second)),
             evaluator: evaluate_sequence,
+            location: location,
         }
     }
 
-    fn new_definition(i: u32, j: u32, defined: Meaning) -> Meaning {
+    fn new_definition(i: u32, j: u32, defined: Meaning, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Definition(i, j, defined)),
             evaluator: evaluate_definition,
+            location: location,
         }
     }
 
-    fn new_lambda(arity: u32, body: Meaning) -> Meaning {
+    fn new_lambda(arity: u32, body: Meaning, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Lambda(arity, body)),
-            evaluator: evaluate_lambda
+            evaluator: evaluate_lambda,
+            location: location,
         }
     }
 
-    fn new_invocation(procedure: Meaning, params: Vec<Meaning>) -> Meaning {
+    fn new_invocation(procedure: Meaning, params: Vec<Meaning>, location: Location) -> Meaning {
         Meaning {
             data: Box::new(MeaningData::Invocation(procedure, params)),
             evaluator: evaluate_invocation,
+            location: location
         }
     }
 }
@@ -456,6 +468,7 @@ impl Clone for Meaning {
         Meaning {
             data: self.data.clone(),
             evaluator: self.evaluator,
+            location: self.location.clone(),
         }
     }
 }
@@ -479,9 +492,10 @@ pub type MeaningResult = Result<Meaning, String>;
 
 /// The main entry point for syntactic analysis.
 pub fn analyze(heap: &mut Heap,
-               form: &RootedValue) -> MeaningResult {
+               form: &RootedValue,
+               location: Location) -> MeaningResult {
     if form.is_atom() {
-        return analyze_atom(heap, form);
+        return analyze_atom(heap, form, location);
     }
 
     let pair = form.to_pair(heap).expect(
@@ -517,20 +531,21 @@ fn is_auto_quoting(form: &RootedValue) -> bool {
 }
 
 fn analyze_atom(heap: &mut Heap,
-                form: &RootedValue) -> MeaningResult {
+                form: &RootedValue,
+                location: Location) -> MeaningResult {
     if is_auto_quoting(form) {
-        return Ok(Meaning::new_quotation(form));
+        return Ok(Meaning::new_quotation(form, location));
     }
 
     if let Some(sym) = form.to_symbol(heap) {
         if let Some((i, j)) = heap.environment.lookup(&**sym) {
-            return Ok(Meaning::new_reference(i, j));
+            return Ok(Meaning::new_reference(i, j, location));
         }
 
         // This is a reference to a global variable that hasn't been defined
         // yet.
         let (i, j) = heap.environment.define_global((**sym).clone());
-        return Ok(Meaning::new_reference(i, j));
+        return Ok(Meaning::new_reference(i, j, location));
     }
 
     return Err(format!("Static error: Cannot evaluate: {}", **form));
@@ -538,12 +553,18 @@ fn analyze_atom(heap: &mut Heap,
 
 fn analyze_quoted(heap: &mut Heap, form: &RootedValue) -> MeaningResult {
     if let Ok(2) = form.len() {
+        let pair = form.to_pair(heap).unwrap();
         return Ok(Meaning::new_quotation(
-            &form.cdr(heap).unwrap().car(heap).unwrap()));
+            &form.cdr(heap).unwrap().car(heap).unwrap(),
+            heap.locate(&pair)));
     }
 
-    return Err(
-        "Static error: Wrong number of parts in quoted form".to_string());
+    let msg = "Static error: Wrong number of parts in quoted form";
+    Err(if let Some(pair) = form.to_pair(heap) {
+        format!("{}: {}", heap.locate(&pair), msg)
+    } else {
+        msg.to_string()
+    })
 }
 
 fn analyze_definition(heap: &mut Heap,
@@ -553,18 +574,29 @@ fn analyze_definition(heap: &mut Heap,
             "If len = 3, then form must be a pair");
         let sym = try!(pair.cadr(heap));
 
+        let location = heap.locate(&pair);
+
         if let Some(str) = sym.to_symbol(heap) {
             let def_value_form = try!(pair.caddr(heap));
-            let def_value_meaning = try!(analyze(heap, &def_value_form));
+            let def_value_meaning = try!(analyze(heap,
+                                                 &def_value_form,
+                                                 location.clone()));
 
             let (i, j) = heap.environment.define((**str).clone());
-            return Ok(Meaning::new_definition(i, j, def_value_meaning));
+            return Ok(Meaning::new_definition(i, j, def_value_meaning, location));
         }
 
-        return Err("Static error: can only define symbols".to_string());
+        return Err(format!("{}: Static error: can only define symbols, found: {}",
+                           location,
+                           *sym));
     }
 
-    return Err("Static error: improperly formed definition".to_string());
+    let msg = "Static error: improperly formed definition";
+    Err(if let Some(pair) = form.to_pair(heap) {
+        format!("{}: {}: {}", heap.locate(&pair), msg, **form)
+    } else {
+        format!("{}: {}", msg, **form)
+    })
 }
 
 fn analyze_set(heap: &mut Heap,
@@ -574,33 +606,64 @@ fn analyze_set(heap: &mut Heap,
             "If len = 3, then form must be a pair");
         let sym = try!(pair.cadr(heap));
 
+        let location = heap.locate(&pair);
+
         if let Some(str) = sym.to_symbol(heap) {
             let set_value_form = try!(pair.caddr(heap));
-            let set_value_meaning = try!(analyze(heap, &set_value_form));
+            let set_value_meaning = try!(analyze(heap,
+                                                 &set_value_form,
+                                                 location.clone()));
             if let Some((i, j)) = heap.environment.lookup(&**str) {
-                return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
+                return Ok(Meaning::new_set_variable(i,
+                                                    j,
+                                                    set_value_meaning,
+                                                    location));
             }
 
             // This is setting a global variable that isn't defined yet, but
             // could be defined later. The check will happen at evaluation time.
             let (i, j) = heap.environment.define_global((**str).clone());
-            return Ok(Meaning::new_set_variable(i, j, set_value_meaning));
+            return Ok(Meaning::new_set_variable(i,
+                                                j,
+                                                set_value_meaning,
+                                                location));
         }
 
-        return Err("Static error: can only set! symbols".to_string());
+        return Err(format!("{}: Static error: can only set! symbols, found: {}",
+                           location,
+                           *sym));
     }
 
-    return Err("Static error: improperly formed set! expression".to_string());
+    let msg = "Static error: improperly formed set!";
+    Err(if let Some(pair) = form.to_pair(heap) {
+        format!("{}: {}: {}", heap.locate(&pair), msg, **form)
+    } else {
+        format!("{}: {}", msg, **form)
+    })
 }
 
 fn analyze_lambda(heap: &mut Heap,
                   form: &RootedValue) -> MeaningResult {
-    let length = try!(form.len().ok().ok_or("Bad lambda form".to_string()));
+    let length = try!(form.len().ok().ok_or_else(|| {
+        let msg = "Static error: improperly formed lambda";
+        if let Some(pair) = form.to_pair(heap) {
+            format!("{}: {}: {}", heap.locate(&pair), msg, **form)
+        } else {
+            format!("{}: {}", msg, **form)
+        }
+    }));
+
     if length < 3 {
-        return Err("Lambda is missing body".to_string());
+        let msg = "Static error: improperly formed lambda";
+        return Err(if let Some(pair) = form.to_pair(heap) {
+            format!("{}: {}: {}", heap.locate(&pair), msg, **form)
+        } else {
+            format!("{}: {}", msg, **form)
+        })
     }
 
     let pair = form.to_pair(heap).unwrap();
+    let location = heap.locate(&pair);
 
     let body = pair.cddr(heap)
         .ok().expect("Must be here since length >= 3");
@@ -611,12 +674,15 @@ fn analyze_lambda(heap: &mut Heap,
         "Must be here since length >= 3");
     for p in params_form.iter() {
         arity += 1;
-        params.push(try!(p.ok().ok_or("Bad lambda parameters".to_string())));
+        params.push(try!(p.ok().ok_or(format!("{}: Bad lambda parameters: {}",
+                                              location,
+                                              *params_form))));
     }
 
     let param_names = try!(params.into_iter().map(|p| {
         let sym = try!(p.to_symbol(heap)
-                       .ok_or(format!("Can only define symbol parameters, found {}",
+                       .ok_or(format!("{}: Can only define symbol parameters, found {}",
+                                      location,
                                       p)));
         Ok((**sym).clone())
     }).collect());
@@ -625,7 +691,7 @@ fn analyze_lambda(heap: &mut Heap,
         make_meaning_sequence(heap, &body)
     }));
 
-    return Ok(Meaning::new_lambda(arity as u32, body_meaning));
+    return Ok(Meaning::new_lambda(arity as u32, body_meaning, location));
 }
 
 fn analyze_conditional(heap: &mut Heap,
@@ -633,46 +699,60 @@ fn analyze_conditional(heap: &mut Heap,
     if let Ok(4) = form.len() {
         let pair = form.to_pair(heap).expect(
             "If len = 4, then form must be a pair");
+        let location = heap.locate(&pair);
 
         let condition_form = try!(pair.cadr(heap));
-        let condition_meaning = try!(analyze(heap, &condition_form));
+        let condition_meaning = try!(analyze(heap,
+                                             &condition_form,
+                                             location.clone()));
 
         let consequent_form = try!(pair.caddr(heap));
-        let consequent_meaning = try!(analyze(heap, &consequent_form));
+        let consequent_meaning = try!(analyze(heap,
+                                              &consequent_form,
+                                              location.clone()));
 
         let alternative_form = try!(pair.cadddr(heap));
-        let alternative_meaning = try!(analyze(heap, &alternative_form));
+        let alternative_meaning = try!(analyze(heap,
+                                               &alternative_form,
+                                               location.clone()));
 
         return Ok(Meaning::new_conditional(condition_meaning,
                                            consequent_meaning,
-                                           alternative_meaning));
+                                           alternative_meaning,
+                                           location));
     }
 
-    return Err("Static error: improperly formed if expression".to_string());
+    let msg = "Static error: improperly if expression";
+    Err(if let Some(pair) = form.to_pair(heap) {
+        format!("{}: {}: {}", heap.locate(&pair), msg, **form)
+    } else {
+        format!("{}: {}", msg, **form)
+    })
 }
 
 fn make_meaning_sequence(heap: &mut Heap,
                          forms: &RootedValue) -> MeaningResult {
     if let Some(ref cons) = forms.to_pair(heap) {
         let first_form = cons.car(heap);
-        let first = try!(analyze(heap, &first_form));
+        let location = heap.locate(cons);
+        let first = try!(analyze(heap, &first_form, location.clone()));
 
         if *cons.cdr(heap) == Value::EmptyList {
             return Ok(first);
         } else {
             let rest_forms = cons.cdr(heap);
             let rest = try!(make_meaning_sequence(heap, &rest_forms));
-            return Ok(Meaning::new_sequence(first, rest));
+            return Ok(Meaning::new_sequence(first, rest, location));
         }
     }
 
-    return Err("Static error: improperly formed sequence".to_string());
+    Err(format!("Static error: improperly formed sequence: {}", **forms))
 }
 
 fn analyze_sequence(heap: &mut Heap,
                     form: &RootedValue) -> MeaningResult {
     let forms = try!(form.cdr(heap).ok_or(
-        "Static error: improperly formed sequence".to_string()));
+        format!("Static error: improperly formed sequence: {}", **form)));
     make_meaning_sequence(heap, &forms)
 }
 
@@ -680,12 +760,16 @@ fn make_meaning_vector(heap: &mut Heap,
                        forms: &RootedValue,
                        mut meanings: Vec<Meaning>) -> Result<Vec<Meaning>, String> {
     match **forms {
-        Value::EmptyList => { return Ok(meanings) },
+        Value::EmptyList => Ok(meanings),
         Value::Pair(ref cons) => {
             let car = cons.car(heap);
-            meanings.push(try!(analyze(heap, &car)));
             let rest = cons.cdr(heap);
-            return make_meaning_vector(heap, &rest, meanings);
+            let pair = forms.to_pair(heap).unwrap();
+            let location = heap.locate(&pair);
+            meanings.push(try!(analyze(heap,
+                                       &car,
+                                       location)));
+            make_meaning_vector(heap, &rest, meanings)
         },
         _ => {
             panic!("Passed improper list to `make_meaning_vector`!");
@@ -696,8 +780,9 @@ fn make_meaning_vector(heap: &mut Heap,
 fn analyze_invocation(heap: &mut Heap,
                       form: &RootedValue) -> MeaningResult {
     if let Some(ref cons) = form.to_pair(heap) {
+        let location = heap.locate(cons);
         let proc_form = cons.car(heap);
-        let proc_meaning = try!(analyze(heap, &proc_form));
+        let proc_meaning = try!(analyze(heap, &proc_form, location.clone()));
 
         let params_form = cons.cdr(heap);
         let arity = try!(params_form.len().ok().ok_or(
@@ -705,10 +790,10 @@ fn analyze_invocation(heap: &mut Heap,
         let params_meaning = try!(make_meaning_vector(
             heap, &params_form, Vec::with_capacity(arity as usize)));
 
-        return Ok(Meaning::new_invocation(proc_meaning, params_meaning));
+        return Ok(Meaning::new_invocation(proc_meaning, params_meaning, location));
     }
 
-    return Err("Static error: improperly formed invocation".to_string());
+    return Err(format!("Static error: improperly formed invocation: {}", **form));
 }
 
 // TESTS -----------------------------------------------------------------------
@@ -717,6 +802,7 @@ fn analyze_invocation(heap: &mut Heap,
 mod tests {
     use super::*;
     use heap::{Heap, Rooted};
+    use read::{Location};
     use value::{list, Value};
 
     #[test]
@@ -787,12 +873,12 @@ mod tests {
             Rooted::new(heap, Value::new_integer(2))
         ];
         let def_form = list(heap, &mut def_items);
-        evaluate(heap, &def_form).ok()
+        evaluate(heap, &def_form, Location::unknown()).ok()
             .expect("Should be able to define");
 
         let foo_symbol_ = heap.get_or_create_symbol("foo".to_string());
 
-        let def_val = evaluate(heap, &foo_symbol_).ok()
+        let def_val = evaluate(heap, &foo_symbol_, Location::unknown()).ok()
             .expect("Should be able to get a defined symbol's value");
         assert_eq!(*def_val, Value::new_integer(2));
 
@@ -802,12 +888,12 @@ mod tests {
             Rooted::new(heap, Value::new_integer(1))
         ];
         let set_form = list(heap, &mut set_items);
-        evaluate(heap, &set_form).ok()
+        evaluate(heap, &set_form, Location::unknown()).ok()
             .expect("Should be able to define");
 
         let foo_symbol__ = heap.get_or_create_symbol("foo".to_string());
 
-        let set_val = evaluate(heap, &foo_symbol__).ok()
+        let set_val = evaluate(heap, &foo_symbol__, Location::unknown()).ok()
             .expect("Should be able to get a defined symbol's value");
         assert_eq!(*set_val, Value::new_integer(1));
     }
@@ -863,6 +949,7 @@ mod bench {
     use super::*;
     use super::test::{Bencher};
     use heap::{Heap, Rooted};
+    use read::{Location};
     use value::{list, Value};
 
     #[bench]
@@ -878,7 +965,7 @@ mod bench {
                 Rooted::new(&mut heap, Value::new_integer(10000))
             ];
             let call = list(&mut heap, &mut call_items);
-            evaluate(&mut heap, &call).ok()
+            evaluate(&mut heap, &call, Location::unknown()).ok()
                 .expect("Should be able to call our function");
         });
     }
@@ -901,7 +988,7 @@ mod bench {
                 list(&mut heap, &mut [quote.clone(), empty_list.clone()])
             ];
             let call = list(&mut heap, &mut call_items);
-            match evaluate(&mut heap, &call) {
+            match evaluate(&mut heap, &call, Location::unknown()) {
                 Err(msg) => panic!(msg),
                 _ => { }
             };

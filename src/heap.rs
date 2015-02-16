@@ -138,6 +138,7 @@ use std::vec::{IntoIter};
 
 use environment::{Activation, ActivationPtr, RootedActivationPtr, Environment};
 use primitives::{define_primitives};
+use read::{Location};
 use value::{Cons, ConsPtr, Procedure, ProcedurePtr, RootedConsPtr,
             RootedProcedurePtr, RootedValue, Value};
 
@@ -478,6 +479,8 @@ pub struct Heap {
     symbol_table: HashMap<String, StringPtr>,
     global_activation: ActivationPtr,
     allocations: usize,
+
+    locations: HashMap<ConsPtr, Location>,
 }
 
 /// The default capacity of cons cells per arena.
@@ -524,6 +527,8 @@ impl Heap {
             roots: vec!(),
             symbol_table: HashMap::new(),
             allocations: 0,
+
+            locations: HashMap::new()
         }
     }
 }
@@ -668,6 +673,10 @@ impl Heap {
             roots.push(*root);
         }
 
+        for cons in self.locations.keys() {
+            roots.push(GcThing::from_cons_ptr(*cons));
+        }
+
         roots
     }
 
@@ -689,7 +698,7 @@ impl Heap {
     }
 }
 
-/// ## `Heap` Methods and Accessors.
+/// ## `Heap` Environment Methods
 impl Heap {
     /// Get the global activation.
     pub fn global_activation(&mut self) -> RootedActivationPtr {
@@ -707,7 +716,26 @@ impl Heap {
         self.environment.pop();
         result
     }
+}
 
+/// ## `Heap` Methods for Source Locations
+impl Heap {
+    /// Register the given pair as having originated from the given location.
+    pub fn enlocate(&mut self, loc: Location, cons: RootedConsPtr) {
+        self.locations.insert(*cons, loc);
+    }
+
+    /// Get the registered source location of the given pair. If the pair was
+    /// not created by the reader, then None is returned.
+    pub fn locate(&self, cons: &RootedConsPtr) -> Location {
+        self.locations.get(&**cons)
+            .map(|loc| loc.clone())
+            .unwrap_or_else(Location::unknown)
+    }
+}
+
+/// ## `Heap` Methods for Symbols
+impl Heap {
     /// Ensure that there is an interned symbol extant for the given `String`
     /// and return it.
     pub fn get_or_create_symbol(&mut self, str: String) -> RootedValue {
@@ -723,10 +751,7 @@ impl Heap {
         self.symbol_table.insert(str, *symbol);
         return Value::new_symbol(self, symbol);
     }
-}
 
-/// ## Getters for well known symbols.
-impl Heap {
     pub fn quote_symbol(&mut self) -> RootedValue {
         self.get_or_create_symbol("quote".to_string())
     }
