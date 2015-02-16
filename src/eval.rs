@@ -115,11 +115,14 @@ impl Trampoline {
                 let mut a = act;
                 let mut m = meaning;
                 loop {
-                    match try!(m.evaluate_to_thunk(heap, &mut a)) {
-                        Trampoline::Value(v) => {
+                    match m.evaluate_to_thunk(heap, &mut a) {
+                        Err(msg) => return Err(format!("{}: {}",
+                                                       m.location,
+                                                       msg)),
+                        Ok(Trampoline::Value(v)) => {
                             return Ok(v);
                         },
-                        Trampoline::Thunk(aa, mm) => {
+                        Ok(Trampoline::Thunk(aa, mm)) => {
                             a = aa;
                             m = mm;
                         },
