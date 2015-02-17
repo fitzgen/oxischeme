@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `ActivationPtr` type in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, ActivationPtr">
+    <meta name="description" content="API documentation for the Rust `SchemeResultAndLocation` type in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, SchemeResultAndLocation">
 
-    <title>oxischeme::environment::ActivationPtr - Rust</title>
+    <title>oxischeme::read::SchemeResultAndLocation - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Activation.html' title='An `Activation` represents a runtime instance of a lexical block (either a lambda or the global top-level).'>Activation</a><a class='struct ' href='struct.Environment.html' title='The `Environment` represents what we know about bindings statically, during syntactic analysis.'>Environment</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>read</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Location.html' title='TODO FITZGEN'>Location</a><a class='struct ' href='struct.Read.html' title='`Read` iteratively parses values from the input `Reader`.'>Read</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.read_from_bytes.html' title='Create a `Read` instance from a byte vector.'>read_from_bytes</a><a class='fn ' href='fn.read_from_file.html' title='Create a `Read` instance from the file at `path_name`.'>read_from_file</a><a class='fn ' href='fn.read_from_str.html' title='Create a `Read` instance from a `&amp;str`.'>read_from_str</a><a class='fn ' href='fn.read_from_string.html' title='Create a `Read` instance from a `String`.'>read_from_string</a></div>
     </section>
 
     <nav class="sub">
@@ -41,11 +41,11 @@
     </nav>
 
     <section id='main' class="content type">
-<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>environment</a>::<wbr><a class='type' href=''>ActivationPtr</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+<h1 class='fqn'><span class='in-band'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>read</a>::<wbr><a class='type' href=''>SchemeResultAndLocation</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-660' href='../../src/oxischeme/environment.rs.html#178'>[src]</a></span></h1>
-<pre class='rust typedef'>type ActivationPtr = <a class='struct' href='../../oxischeme/heap/struct.ArenaPtr.html' title='oxischeme::heap::ArenaPtr'>ArenaPtr</a>&lt;<a class='struct' href='../../oxischeme/environment/struct.Activation.html' title='oxischeme::environment::Activation'>Activation</a>&gt;;</pre><div class='docblock'><p>A pointer to an <code>Activation</code> on the heap.</p>
+        </span><a id='src-12818' href='../../src/oxischeme/read.rs.html#143'>[src]</a></span></h1>
+<pre class='rust typedef'>type SchemeResultAndLocation = <a href='http://doc.rust-lang.org/nightly/std/primitive.tuple.html'>(<a class='struct' href='../../oxischeme/read/struct.Location.html' title='oxischeme::read::Location'>Location</a>, <a class='type' href='../../oxischeme/value/type.SchemeResult.html' title='oxischeme::value::SchemeResult'>SchemeResult</a>)</a>;</pre><div class='docblock'><p>TODO FITZGEN</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 

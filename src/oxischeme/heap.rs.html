@@ -910,6 +910,35 @@
 <span id="868">868</span>
 <span id="869">869</span>
 <span id="870">870</span>
+<span id="871">871</span>
+<span id="872">872</span>
+<span id="873">873</span>
+<span id="874">874</span>
+<span id="875">875</span>
+<span id="876">876</span>
+<span id="877">877</span>
+<span id="878">878</span>
+<span id="879">879</span>
+<span id="880">880</span>
+<span id="881">881</span>
+<span id="882">882</span>
+<span id="883">883</span>
+<span id="884">884</span>
+<span id="885">885</span>
+<span id="886">886</span>
+<span id="887">887</span>
+<span id="888">888</span>
+<span id="889">889</span>
+<span id="890">890</span>
+<span id="891">891</span>
+<span id="892">892</span>
+<span id="893">893</span>
+<span id="894">894</span>
+<span id="895">895</span>
+<span id="896">896</span>
+<span id="897">897</span>
+<span id="898">898</span>
+<span id="899">899</span>
 </pre><pre class='rust '>
 <span class='comment'>// Copyright 2014 Nick Fitzgerald</span>
 <span class='comment'>//</span>
@@ -1051,6 +1080,7 @@
 
 <span class='kw'>use</span> <span class='ident'>environment</span>::{<span class='ident'>Activation</span>, <span class='ident'>ActivationPtr</span>, <span class='ident'>RootedActivationPtr</span>, <span class='ident'>Environment</span>};
 <span class='kw'>use</span> <span class='ident'>primitives</span>::{<span class='ident'>define_primitives</span>};
+<span class='kw'>use</span> <span class='ident'>read</span>::{<span class='ident'>Location</span>};
 <span class='kw'>use</span> <span class='ident'>value</span>::{<span class='ident'>Cons</span>, <span class='ident'>ConsPtr</span>, <span class='ident'>Procedure</span>, <span class='ident'>ProcedurePtr</span>, <span class='ident'>RootedConsPtr</span>,
             <span class='ident'>RootedProcedurePtr</span>, <span class='ident'>RootedValue</span>, <span class='ident'>Value</span>};
 
@@ -1348,7 +1378,7 @@
 }
 
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>Copy</span> <span class='op'>+</span> <span class='ident'>ToGcThing</span><span class='op'>&gt;</span> <span class='ident'>Clone</span> <span class='kw'>for</span> <span class='ident'>Rooted</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
-    <span class='kw'>fn</span> <span class='ident'>clone</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>Self</span> {
+    <span class='kw'>fn</span> <span class='ident'>clone</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='kw'>Self</span> {
         <span class='kw'>unsafe</span> {
             <span class='kw'>let</span> <span class='ident'>heap</span> <span class='op'>=</span> <span class='self'>self</span>.<span class='ident'>heap</span>.<span class='ident'>as_mut</span>()
                 .<span class='ident'>expect</span>(<span class='string'>&quot;Rooted&lt;T&gt;::clone should always have a Heap&quot;</span>);
@@ -1358,7 +1388,7 @@
 }
 
 <span class='kw'>impl</span><span class='op'>&lt;</span><span class='ident'>T</span>: <span class='ident'>PartialEq</span><span class='op'>&gt;</span> <span class='ident'>PartialEq</span> <span class='kw'>for</span> <span class='ident'>Rooted</span><span class='op'>&lt;</span><span class='ident'>T</span><span class='op'>&gt;</span> {
-    <span class='kw'>fn</span> <span class='ident'>eq</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>rhs</span>: <span class='kw-2'>&amp;</span><span class='ident'>Self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
+    <span class='kw'>fn</span> <span class='ident'>eq</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>rhs</span>: <span class='kw-2'>&amp;</span><span class='kw'>Self</span>) <span class='op'>-&gt;</span> <span class='ident'>bool</span> {
         <span class='op'>*</span><span class='op'>*</span><span class='self'>self</span> <span class='op'>==</span> <span class='op'>*</span><span class='op'>*</span><span class='ident'>rhs</span>
     }
 }
@@ -1391,6 +1421,8 @@
     <span class='ident'>symbol_table</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>String</span>, <span class='ident'>StringPtr</span><span class='op'>&gt;</span>,
     <span class='ident'>global_activation</span>: <span class='ident'>ActivationPtr</span>,
     <span class='ident'>allocations</span>: <span class='ident'>usize</span>,
+
+    <span class='ident'>locations</span>: <span class='ident'>HashMap</span><span class='op'>&lt;</span><span class='ident'>ConsPtr</span>, <span class='ident'>Location</span><span class='op'>&gt;</span>,
 }
 
 <span class='doccomment'>/// The default capacity of cons cells per arena.</span>
@@ -1437,6 +1469,8 @@
             <span class='ident'>roots</span>: <span class='macro'>vec</span><span class='macro'>!</span>(),
             <span class='ident'>symbol_table</span>: <span class='ident'>HashMap</span>::<span class='ident'>new</span>(),
             <span class='ident'>allocations</span>: <span class='number'>0</span>,
+
+            <span class='ident'>locations</span>: <span class='ident'>HashMap</span>::<span class='ident'>new</span>()
         }
     }
 }
@@ -1488,7 +1522,7 @@
     }
 }
 
-<span class='doccomment'>/// The maximum number of things to allocate before triggering a garbage</span>
+<span class='doccomment'>/// The maximum number of GC things to allocate before triggering a garbage</span>
 <span class='doccomment'>/// collection.</span>
 <span class='kw'>const</span> <span class='ident'>MAX_GC_PRESSURE</span> : <span class='ident'>usize</span> <span class='op'>=</span> <span class='number'>1</span> <span class='op'>&lt;&lt;</span> <span class='number'>9</span>;
 
@@ -1515,12 +1549,10 @@
                 }
             }
 
-            <span class='kw'>for</span> <span class='ident'>thing</span> <span class='kw'>in</span> <span class='ident'>newly_pending_trace</span>.<span class='ident'>drain</span>() {
-                <span class='ident'>pending_trace</span>.<span class='ident'>push</span>(<span class='ident'>thing</span>);
-            }
+            <span class='ident'>pending_trace</span>.<span class='ident'>append</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='ident'>newly_pending_trace</span>);
         }
 
-        <span class='comment'>// Second, sweep each arena.</span>
+        <span class='comment'>// Second, sweep each `ArenaSet`.</span>
 
         <span class='self'>self</span>.<span class='ident'>strings</span>.<span class='ident'>sweep</span>();
         <span class='self'>self</span>.<span class='ident'>activations</span>.<span class='ident'>sweep</span>();
@@ -1583,6 +1615,10 @@
             <span class='ident'>roots</span>.<span class='ident'>push</span>(<span class='op'>*</span><span class='ident'>root</span>);
         }
 
+        <span class='kw'>for</span> <span class='ident'>cons</span> <span class='kw'>in</span> <span class='self'>self</span>.<span class='ident'>locations</span>.<span class='ident'>keys</span>() {
+            <span class='ident'>roots</span>.<span class='ident'>push</span>(<span class='ident'>GcThing</span>::<span class='ident'>from_cons_ptr</span>(<span class='op'>*</span><span class='ident'>cons</span>));
+        }
+
         <span class='ident'>roots</span>
     }
 
@@ -1604,7 +1640,7 @@
     }
 }
 
-<span class='doccomment'>/// ## `Heap` Methods and Accessors.</span>
+<span class='doccomment'>/// ## `Heap` Environment Methods</span>
 <span class='kw'>impl</span> <span class='ident'>Heap</span> {
     <span class='doccomment'>/// Get the global activation.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>global_activation</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>RootedActivationPtr</span> {
@@ -1622,7 +1658,26 @@
         <span class='self'>self</span>.<span class='ident'>environment</span>.<span class='ident'>pop</span>();
         <span class='ident'>result</span>
     }
+}
 
+<span class='doccomment'>/// ## `Heap` Methods for Source Locations</span>
+<span class='kw'>impl</span> <span class='ident'>Heap</span> {
+    <span class='doccomment'>/// Register the given pair as having originated from the given location.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>enlocate</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>loc</span>: <span class='ident'>Location</span>, <span class='ident'>cons</span>: <span class='ident'>RootedConsPtr</span>) {
+        <span class='self'>self</span>.<span class='ident'>locations</span>.<span class='ident'>insert</span>(<span class='op'>*</span><span class='ident'>cons</span>, <span class='ident'>loc</span>);
+    }
+
+    <span class='doccomment'>/// Get the registered source location of the given pair. If the pair was</span>
+    <span class='doccomment'>/// not created by the reader, then None is returned.</span>
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>locate</span>(<span class='kw-2'>&amp;</span><span class='self'>self</span>, <span class='ident'>cons</span>: <span class='kw-2'>&amp;</span><span class='ident'>RootedConsPtr</span>) <span class='op'>-&gt;</span> <span class='ident'>Location</span> {
+        <span class='self'>self</span>.<span class='ident'>locations</span>.<span class='ident'>get</span>(<span class='kw-2'>&amp;</span><span class='op'>*</span><span class='op'>*</span><span class='ident'>cons</span>)
+            .<span class='ident'>map</span>(<span class='op'>|</span><span class='ident'>loc</span><span class='op'>|</span> <span class='ident'>loc</span>.<span class='ident'>clone</span>())
+            .<span class='ident'>unwrap_or_else</span>(<span class='ident'>Location</span>::<span class='ident'>unknown</span>)
+    }
+}
+
+<span class='doccomment'>/// ## `Heap` Methods for Symbols</span>
+<span class='kw'>impl</span> <span class='ident'>Heap</span> {
     <span class='doccomment'>/// Ensure that there is an interned symbol extant for the given `String`</span>
     <span class='doccomment'>/// and return it.</span>
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>get_or_create_symbol</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>, <span class='ident'>str</span>: <span class='ident'>String</span>) <span class='op'>-&gt;</span> <span class='ident'>RootedValue</span> {
@@ -1638,10 +1693,7 @@
         <span class='self'>self</span>.<span class='ident'>symbol_table</span>.<span class='ident'>insert</span>(<span class='ident'>str</span>, <span class='op'>*</span><span class='ident'>symbol</span>);
         <span class='kw'>return</span> <span class='ident'>Value</span>::<span class='ident'>new_symbol</span>(<span class='self'>self</span>, <span class='ident'>symbol</span>);
     }
-}
 
-<span class='doccomment'>/// ## Getters for well known symbols.</span>
-<span class='kw'>impl</span> <span class='ident'>Heap</span> {
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>quote_symbol</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>RootedValue</span> {
         <span class='self'>self</span>.<span class='ident'>get_or_create_symbol</span>(<span class='string'>&quot;quote&quot;</span>.<span class='ident'>to_string</span>())
     }
@@ -1668,6 +1720,12 @@
 
     <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>lambda_symbol</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>RootedValue</span> {
         <span class='self'>self</span>.<span class='ident'>get_or_create_symbol</span>(<span class='string'>&quot;lambda&quot;</span>.<span class='ident'>to_string</span>())
+    }
+
+    <span class='kw'>pub</span> <span class='kw'>fn</span> <span class='ident'>eof_symbol</span>(<span class='kw-2'>&amp;</span><span class='kw-2'>mut</span> <span class='self'>self</span>) <span class='op'>-&gt;</span> <span class='ident'>RootedValue</span> {
+        <span class='comment'>// Per R4RS, the EOF object must be something that is impossible to</span>
+        <span class='comment'>// read. We fulfill that contract by having spaces in a symbol.</span>
+        <span class='self'>self</span>.<span class='ident'>get_or_create_symbol</span>(<span class='string'>&quot;&lt; END OF FILE &gt;&quot;</span>.<span class='ident'>to_string</span>())
     }
 }
 

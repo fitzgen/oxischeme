@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>read</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Read.html' title='`Read` iteratively parses values from the input `Reader`.'>Read</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.read_from_bytes.html' title='Create a `Read` instance from a byte vector.'>read_from_bytes</a><a class='fn ' href='fn.read_from_file.html' title='Create a `Read` instance from the file at `path_name`.'>read_from_file</a><a class='fn current' href='fn.read_from_str.html' title='Create a `Read` instance from a `&amp;str`.'>read_from_str</a><a class='fn ' href='fn.read_from_string.html' title='Create a `Read` instance from a `String`.'>read_from_string</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>read</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Location.html' title='TODO FITZGEN'>Location</a><a class='struct ' href='struct.Read.html' title='`Read` iteratively parses values from the input `Reader`.'>Read</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.read_from_bytes.html' title='Create a `Read` instance from a byte vector.'>read_from_bytes</a><a class='fn ' href='fn.read_from_file.html' title='Create a `Read` instance from the file at `path_name`.'>read_from_file</a><a class='fn current' href='fn.read_from_str.html' title='Create a `Read` instance from a `&amp;str`.'>read_from_str</a><a class='fn ' href='fn.read_from_string.html' title='Create a `Read` instance from a `String`.'>read_from_string</a></div>
     </section>
 
     <nav class="sub">
@@ -44,8 +44,8 @@
 <h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>read</a>::<wbr><a class='fn' href=''>read_from_str</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-11353' href='../../src/oxischeme/read.rs.html#496-498'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn read_from_str(str: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>, heap: *mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>) -&gt; <a class='struct' href='../../oxischeme/read/struct.Read.html' title='oxischeme::read::Read'>Read</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/old_io/mem/struct.MemReader.html' title='std::old_io::mem::MemReader'>MemReader</a>&gt;</pre><div class='docblock'><p>Create a <code>Read</code> instance from a <code>&amp;str</code>.</p>
+        </span><a id='src-14401' href='../../src/oxischeme/read.rs.html#597-601'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn read_from_str(str: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>, heap: *mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, file_name: &amp;<a href='http://doc.rust-lang.org/nightly/std/primitive.str.html'>str</a>) -&gt; <a class='struct' href='../../oxischeme/read/struct.Read.html' title='oxischeme::read::Read'>Read</a>&lt;<a class='struct' href='http://doc.rust-lang.org/nightly/std/old_io/mem/struct.MemReader.html' title='std::old_io::mem::MemReader'>MemReader</a>&gt;</pre><div class='docblock'><p>Create a <code>Read</code> instance from a <code>&amp;str</code>.</p>
 </div></section>
     <section id='search' class="content hidden"></section>
 

@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Module <a href='../index.html'>oxischeme</a>::<wbr><a class='mod' href=''>eval</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-996' href='../../src/oxischeme/eval.rs.html#15-838'>[src]</a></span></h1>
+        </span><a id='src-1014' href='../../src/oxischeme/eval.rs.html#15-1055'>[src]</a></span></h1>
 <div class='docblock'><p>Oxischeme is an interpreter, but it is not a naiive AST walking
 interpreter. In contrast to an AST walking interpreter, syntactic analysis
 is separated from execution, so that no matter how many times an expression
@@ -101,8 +101,9 @@ Queinnec</p></li>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='struct' href='struct.Meaning.html'
                                title='oxischeme::eval::Meaning'>Meaning</a></td>
                         <td class='docblock short'><p>The <code>Meaning</code> type is our intermediate language produced by syntactic
-analysis. It is a pair containing a <code>MeaningData</code> variant and its
-corresponding <code>MeaningEvaluatorFn</code>.</p>
+analysis. It is a triple containing a <code>MeaningData</code> variant, its
+corresponding <code>MeaningEvaluatorFn</code>, and the source location this <code>Meaning</code>
+originates from.</p>
 </td>
                     </tr>
                 </table><h2 id='enums' class='section-header'><a href="#enums">Enums</a></h2>
@@ -110,8 +111,9 @@ corresponding <code>MeaningEvaluatorFn</code>.</p>
                     <tr>
                         <td><a class='stability Unmarked' title='No stability level'></a><a class='enum' href='enum.Trampoline.html'
                                title='oxischeme::eval::Trampoline'>Trampoline</a></td>
-                        <td class='docblock short'><p>To optimize tail calls and eliminate the stack frames used by them, we
-trampoline thunks in a while loop and encode that process in this type.</p>
+                        <td class='docblock short'><p>To optimize tail calls and eliminate the stack frames that would otherwise
+be used by them, we trampoline thunks in a loop and encode that process in
+this type.</p>
 </td>
                     </tr>
                 </table><h2 id='functions' class='section-header'><a href="#functions">Functions</a></h2>
@@ -121,6 +123,12 @@ trampoline thunks in a while loop and encode that process in this type.</p>
                                title='oxischeme::eval::analyze'>analyze</a></td>
                         <td class='docblock short'><p>The main entry point for syntactic analysis.</p>
 </td>
+                    </tr>
+                
+                    <tr>
+                        <td><a class='stability Unmarked' title='No stability level'></a><a class='fn' href='fn.apply_invocation.html'
+                               title='oxischeme::eval::apply_invocation'>apply_invocation</a></td>
+                        <td class='docblock short'></td>
                     </tr>
                 
                     <tr>

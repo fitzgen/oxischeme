@@ -44,7 +44,7 @@
 <h1 class='fqn'><span class='in-band'>Enum <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>value</a>::<wbr><a class='enum' href=''>Value</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-12104' href='../../src/oxischeme/value.rs.html#193-223'>[src]</a></span></h1>
+        </span><a id='src-15165' href='../../src/oxischeme/value.rs.html#193-223'>[src]</a></span></h1>
 <pre class='rust enum'>pub enum Value {
     EmptyList,
     Pair(<a class='type' href='../../oxischeme/value/type.ConsPtr.html' title='oxischeme::value::ConsPtr'>ConsPtr</a>),
@@ -52,7 +52,7 @@
     Symbol(<a class='type' href='../../oxischeme/heap/type.StringPtr.html' title='oxischeme::heap::StringPtr'>StringPtr</a>),
     Integer(<a href='http://doc.rust-lang.org/nightly/std/primitive.i64.html'>i64</a>),
     Boolean(<a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>),
-    Character(<a href='http://doc.rust-lang.org/nightly/core/primitive.char.html'>char</a>),
+    Character(<a href='http://doc.rust-lang.org/nightly/std/primitive.char.html'>char</a>),
     Procedure(<a class='type' href='../../oxischeme/value/type.ProcedurePtr.html' title='oxischeme::value::ProcedurePtr'>ProcedurePtr</a>),
     Primitive(<a class='struct' href='../../oxischeme/value/struct.Primitive.html' title='oxischeme::value::Primitive'>Primitive</a>),
 }</pre><div class='docblock'><p><code>Value</code> represents a scheme value of any type.</p>
@@ -78,7 +78,7 @@ function pointer.</p>
 <div class='docblock'><p>Create a new integer value.</p>
 </div><h4 id='method.new_boolean' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_boolean' class='fnname'>new_boolean</a>(b: <a href='http://doc.rust-lang.org/nightly/std/primitive.bool.html'>bool</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
 <div class='docblock'><p>Create a new boolean value.</p>
-</div><h4 id='method.new_character' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_character' class='fnname'>new_character</a>(c: <a href='http://doc.rust-lang.org/nightly/core/primitive.char.html'>char</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
+</div><h4 id='method.new_character' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_character' class='fnname'>new_character</a>(c: <a href='http://doc.rust-lang.org/nightly/std/primitive.char.html'>char</a>) -&gt; <a class='enum' href='../../oxischeme/value/enum.Value.html' title='oxischeme::value::Value'>Value</a></code></h4>
 <div class='docblock'><p>Create a new character value.</p>
 </div><h4 id='method.new_pair' class='method'><a class='stability Unmarked' title='No stability level'></a><code>fn <a href='#method.new_pair' class='fnname'>new_pair</a>(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, car: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, cdr: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>) -&gt; <a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a></code></h4>
 <div class='docblock'><p>Create a new cons pair value with the given car and cdr.</p>

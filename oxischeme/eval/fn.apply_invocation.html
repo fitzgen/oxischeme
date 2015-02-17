@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="generator" content="rustdoc">
-    <meta name="description" content="API documentation for the Rust `evaluate` fn in crate `oxischeme`.">
-    <meta name="keywords" content="rust, rustlang, rust-lang, evaluate">
+    <meta name="description" content="API documentation for the Rust `apply_invocation` fn in crate `oxischeme`.">
+    <meta name="keywords" content="rust, rustlang, rust-lang, apply_invocation">
 
-    <title>oxischeme::eval::evaluate - Rust</title>
+    <title>oxischeme::eval::apply_invocation - Rust</title>
 
     <link rel="stylesheet" type="text/css" href="../../main.css">
 
@@ -26,7 +26,7 @@
 
     <section class="sidebar">
         
-        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html' title='The `Meaning` type is our intermediate language produced by syntactic analysis. It is a triple containing a `MeaningData` variant, its corresponding `MeaningEvaluatorFn`, and the source location this `Meaning` originates from.'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html' title='To optimize tail calls and eliminate the stack frames that would otherwise be used by them, we trampoline thunks in a loop and encode that process in this type.'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.analyze.html' title='The main entry point for syntactic analysis.'>analyze</a><a class='fn ' href='fn.apply_invocation.html' title=''>apply_invocation</a><a class='fn current' href='fn.evaluate.html' title='Evaluate the given form in the global environment.'>evaluate</a><a class='fn ' href='fn.evaluate_file.html' title='Evaluate the file at the given path and return the value of the last form.'>evaluate_file</a></div>
+        <p class='location'><a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a></p><div class='block struct'><h2>Structs</h2><a class='struct ' href='struct.Meaning.html' title='The `Meaning` type is our intermediate language produced by syntactic analysis. It is a triple containing a `MeaningData` variant, its corresponding `MeaningEvaluatorFn`, and the source location this `Meaning` originates from.'>Meaning</a></div><div class='block enum'><h2>Enums</h2><a class='enum ' href='enum.Trampoline.html' title='To optimize tail calls and eliminate the stack frames that would otherwise be used by them, we trampoline thunks in a loop and encode that process in this type.'>Trampoline</a></div><div class='block fn'><h2>Functions</h2><a class='fn ' href='fn.analyze.html' title='The main entry point for syntactic analysis.'>analyze</a><a class='fn current' href='fn.apply_invocation.html' title=''>apply_invocation</a><a class='fn ' href='fn.evaluate.html' title='Evaluate the given form in the global environment.'>evaluate</a><a class='fn ' href='fn.evaluate_file.html' title='Evaluate the file at the given path and return the value of the last form.'>evaluate_file</a></div>
     </section>
 
     <nav class="sub">
@@ -41,12 +41,11 @@
     </nav>
 
     <section id='main' class="content fn">
-<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='fn' href=''>evaluate</a><wbr></span><span class='out-of-band'><span id='render-detail'>
+<h1 class='fqn'><span class='in-band'>Function <a href='../index.html'>oxischeme</a>::<wbr><a href='index.html'>eval</a>::<wbr><a class='fn' href=''>apply_invocation</a><wbr></span><span class='out-of-band'><span id='render-detail'>
             <a id="collapse-all" href="#">[-]
             </a>&nbsp;<a id="expand-all" href="#">[+]</a>
-        </span><a id='src-1033' href='../../src/oxischeme/eval.rs.html#77-81'>[src]</a></span></h1>
-<pre class='rust fn'>pub fn evaluate(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, form: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, location: <a class='struct' href='../../oxischeme/read/struct.Location.html' title='oxischeme::read::Location'>Location</a>) -&gt; <a class='type' href='../../oxischeme/value/type.SchemeResult.html' title='oxischeme::value::SchemeResult'>SchemeResult</a></pre><div class='docblock'><p>Evaluate the given form in the global environment.</p>
-</div></section>
+        </span><a id='src-3759' href='../../src/oxischeme/eval.rs.html#318-354'>[src]</a></span></h1>
+<pre class='rust fn'>pub fn apply_invocation(heap: &amp;mut <a class='struct' href='../../oxischeme/heap/struct.Heap.html' title='oxischeme::heap::Heap'>Heap</a>, proc_val: &amp;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>, args: <a class='struct' href='http://doc.rust-lang.org/nightly/collections/vec/struct.Vec.html' title='collections::vec::Vec'>Vec</a>&lt;<a class='type' href='../../oxischeme/value/type.RootedValue.html' title='oxischeme::value::RootedValue'>RootedValue</a>&gt;) -&gt; <a class='type' href='../../oxischeme/eval/type.TrampolineResult.html' title='oxischeme::eval::TrampolineResult'>TrampolineResult</a></pre></section>
     <section id='search' class="content hidden"></section>
 
     <section class="footer"></section>
