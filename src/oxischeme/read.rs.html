@@ -1059,7 +1059,7 @@
     <span class='ident'>is_symbol_initial</span>(<span class='ident'>c</span>) <span class='op'>||</span> <span class='ident'>c</span>.<span class='ident'>is_digit</span>(<span class='number'>10</span>) <span class='op'>||</span> <span class='op'>*</span><span class='ident'>c</span> <span class='op'>==</span> <span class='string'>&#39;.&#39;</span> <span class='op'>||</span> <span class='op'>*</span><span class='ident'>c</span> <span class='op'>==</span> <span class='string'>&#39;+&#39;</span> <span class='op'>||</span> <span class='op'>*</span><span class='ident'>c</span> <span class='op'>==</span> <span class='string'>&#39;-&#39;</span>
 }
 
-<span class='doccomment'>/// TODO FITZGEN</span>
+<span class='doccomment'>/// A source location.</span>
 <span class='attribute'>#[<span class='ident'>derive</span>(<span class='ident'>Debug</span>)]</span>
 <span class='kw'>pub</span> <span class='kw'>struct</span> <span class='ident'>Location</span> {
     <span class='doccomment'>/// The source file.</span>
@@ -1105,7 +1105,7 @@
     }
 }
 
-<span class='doccomment'>/// TODO FITZGEN</span>
+<span class='doccomment'>/// A pair of `SchemeResult` and `Location`.</span>
 <span class='kw'>pub</span> <span class='kw'>type</span> <span class='ident'>SchemeResultAndLocation</span> <span class='op'>=</span> (<span class='ident'>Location</span>, <span class='ident'>SchemeResult</span>);
 
 <span class='doccomment'>/// `Read` iteratively parses values from the input `Reader`.</span>
