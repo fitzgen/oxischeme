@@ -1036,4 +1036,20 @@ mod bench {
             };
         });
     }
+
+    #[bench]
+    fn bench_eval_metacircular(b: &mut Bencher) {
+        let heap = &mut Heap::new();
+        let eval_fib_call = match evaluate_file(heap, "./tests/bench_eval_metacircular.scm") {
+            Ok(v) => v,
+            Err(msg) => panic!(msg)
+        };
+
+        b.iter(|| {
+            match evaluate(heap, &eval_fib_call.clone(), Location::unknown()) {
+                Err(msg) => panic!(msg),
+                _ => { },
+            };
+        });
+    }
 }
