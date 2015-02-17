@@ -93,7 +93,7 @@ fn is_symbol_subsequent(c: &char) -> bool {
     is_symbol_initial(c) || c.is_digit(10) || *c == '.' || *c == '+' || *c == '-'
 }
 
-/// TODO FITZGEN
+/// A source location.
 #[derive(Debug)]
 pub struct Location {
     /// The source file.
@@ -139,7 +139,7 @@ impl Clone for Location {
     }
 }
 
-/// TODO FITZGEN
+/// A pair of `SchemeResult` and `Location`.
 pub type SchemeResultAndLocation = (Location, SchemeResult);
 
 /// `Read` iteratively parses values from the input `Reader`.
