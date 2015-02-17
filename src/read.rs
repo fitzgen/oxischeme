@@ -100,7 +100,7 @@ pub struct Location {
     pub file: String,
     /// 1-based line number.
     pub line: u64,
-    /// 0-based column number.
+    /// 1-based column number.
     pub column: u64
 }
 
@@ -110,14 +110,17 @@ impl Location {
         Location {
             file: file,
             line: 1,
-            column: 0,
+            column: 1,
         }
     }
 
     /// Create a placeholder `Location` object for when the actual location is
     /// unknown.
     pub fn unknown() -> Location {
-        Location::new("<unknown source location>".to_string())
+        let mut loc = Location::new("<unknown source location>".to_string());
+        loc.line = 0;
+        loc.column = 0;
+        loc
     }
 }
 
@@ -184,7 +187,7 @@ impl<'a, R: Reader> Read<R> {
             match **c {
                 '\n' => {
                     self.current_location.line += 1;
-                    self.current_location.column = 0;
+                    self.current_location.column = 1;
                 },
                 _ => self.current_location.column += 1,
             };
@@ -887,8 +890,8 @@ mod tests {
 
     #[test]
     fn test_read_locations() {
-        //           0         1         2
-        //           012345678901234567890
+        //                    1         2
+        //           12345678901234567890
         let input = "    -1     'quoted  \n\
                      (on a new line) twice";
 
@@ -903,18 +906,18 @@ mod tests {
 
         assert_eq!(results[0].file, file_str);
         assert_eq!(results[0].line, 1);
-        assert_eq!(results[0].column, 4);
+        assert_eq!(results[0].column, 5);
 
         assert_eq!(results[1].file, file_str);
         assert_eq!(results[1].line, 1);
-        assert_eq!(results[1].column, 11);
+        assert_eq!(results[1].column, 12);
 
         assert_eq!(results[2].file, file_str);
         assert_eq!(results[2].line, 2);
-        assert_eq!(results[2].column, 0);
+        assert_eq!(results[2].column, 1);
 
         assert_eq!(results[3].file, file_str);
         assert_eq!(results[3].line, 2);
-        assert_eq!(results[3].column, 16);
+        assert_eq!(results[3].column, 17);
     }
 }

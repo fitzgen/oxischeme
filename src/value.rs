@@ -14,12 +14,13 @@
 
 //! Scheme value implementation.
 
+use std::collections::{HashSet};
 use std::default::{Default};
 use std::fmt;
 use std::hash;
 
 use environment::{ActivationPtr, RootedActivationPtr};
-use eval::{Meaning};
+use eval::{Meaning, TrampolineResult};
 use heap::{ArenaPtr, GcThing, Heap, IterGcThing, Rooted, RootedStringPtr,
            StringPtr, ToGcThing, Trace};
 use primitives::{PrimitiveFunction};
@@ -173,9 +174,8 @@ impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Primitive {
 
 impl Primitive {
     #[inline]
-    pub fn call(&self, heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
-        let f = self.function;
-        f(heap, args)
+    pub fn call(&self, heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
+        (self.function)(heap, args)
     }
 }
 

@@ -15,80 +15,82 @@
 //! Implementation of primitive procedures.
 
 use environment::{ActivationPtr, Environment};
-use eval::{apply_invocation};
+use eval::{apply_invocation, Trampoline, TrampolineResult};
 use heap::{Heap, Rooted};
 use read::{Read};
-use value::{RootedValue, SchemeResult, Value};
+use value::{RootedValue, Value};
 
 /// The function signature for primitives.
-pub type PrimitiveFunction = fn(&mut Heap, Vec<RootedValue>) -> SchemeResult;
+pub type PrimitiveFunction = fn(&mut Heap, Vec<RootedValue>) -> TrampolineResult;
 
-fn cons(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn cons(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref car, ref cdr] = args.as_slice() {
-        Ok(Value::new_pair(heap, car, cdr))
+        Ok(Trampoline::Value(Value::new_pair(heap, car, cdr)))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `cons`".to_string())
     }
 }
 
-fn car(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn car(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        arg.car(heap).ok_or(
-            format!("Cannot take car of non-cons: {}", **arg))
+        arg.car(heap)
+            .ok_or(format!("Error: cannot take car of non-cons: {}", **arg))
+            .map(|v| Trampoline::Value(v))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `car`".to_string())
     }
 }
 
-fn set_car_bang(heap: &mut Heap, mut args: Vec<RootedValue>) -> SchemeResult {
+fn set_car_bang(heap: &mut Heap, mut args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref mut cons, ref val] = args.as_mut_slice() {
         if let &mut Value::Pair(ref mut cons) = &mut **cons {
             cons.set_car(val);
-            return Ok(heap.unspecified_symbol());
+            return Ok(Trampoline::Value(heap.unspecified_symbol()));
         }
         return Err(format!("Can't set-car! on non-cons: {}", **cons));
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `set-car!`".to_string())
     }
 }
 
-fn cdr(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn cdr(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        arg.cdr(heap).ok_or(
-            format!("Cannot take cdr of non-cons: {}", **arg))
+        arg.cdr(heap)
+            .ok_or(format!("Error: cannot take cdr of non-cons: {}", **arg))
+            .map(|v| Trampoline::Value(v))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `cdr`".to_string())
     }
 }
 
-fn set_cdr_bang(heap: &mut Heap, mut args: Vec<RootedValue>) -> SchemeResult {
+fn set_cdr_bang(heap: &mut Heap, mut args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref mut cons, ref val] = args.as_mut_slice() {
         if let &mut Value::Pair(ref mut cons) = &mut **cons {
             cons.set_cdr(val);
-            return Ok(heap.unspecified_symbol());
+            return Ok(Trampoline::Value(heap.unspecified_symbol()));
         }
         return Err(format!("Can't set-cdr! on non-cons: {}", **cons));
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `set-cdr!`".to_string())
     }
 }
 
-fn list(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn list(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     use value;
-    return Ok(value::list(heap, args.as_slice()));
+    Ok(Trampoline::Value(value::list(heap, args.as_slice())))
 }
 
-fn length(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn length(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
         let len = try!(arg.len().ok().ok_or(
-            format!("Can only take length of proper lists, got {}", **arg)));
-        Ok(Rooted::new(heap, Value::new_integer(len as i64)))
+            format!("Error: can only take length of proper lists, got {}", **arg)));
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_integer(len as i64))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `length`".to_string())
     }
 }
 
-fn apply(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn apply(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     // Note: we don't support concatenating many argument lists yet:
     //
     //     (apply f '(1 2) '(3 4)) == (apply f '(1 2 3 4))
@@ -102,14 +104,13 @@ fn apply(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
                     .map_err(|_| "Must pass a proper list to `apply`".to_string())
             })
             .collect());
-        let thunk = try!(apply_invocation(heap, proc_val, v));
-        thunk.run(heap)
+        apply_invocation(heap, proc_val, v)
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `apply`".to_string())
     }
 }
 
-fn error(_: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn error(_: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     let mut string = String::from_str("ERROR!");
     for val in args.iter() {
         string.push_str(format!("\n\t{}", **val).as_slice());
@@ -117,14 +118,14 @@ fn error(_: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     Err(string)
 }
 
-fn print(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn print(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     for val in args.iter() {
         println!("{}", **val);
     }
-    Ok(heap.unspecified_symbol())
+    Ok(Trampoline::Value(heap.unspecified_symbol()))
 }
 
-fn read(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn read(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     // Only supports reading from stdin right now.
 
     use std::old_io;
@@ -137,178 +138,186 @@ fn read(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
     let reader = Read::new(stdin, heap, "stdin".to_string());
     for (_, read_result) in reader {
         let form = try!(read_result);
-        return Ok(form);
+        return Ok(Trampoline::Value(form));
     }
 
-    Ok(heap.eof_symbol())
+    Ok(Trampoline::Value(heap.eof_symbol()))
 }
 
-fn not(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn not(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::Boolean(b) if b == false => true,
             _                               => false,
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `not`".to_string())
     }
 }
 
-fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn null_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(**arg == Value::EmptyList)))
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_boolean(**arg == Value::EmptyList))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `null?`".to_string())
     }
 }
 
-fn pair_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn pair_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::Pair(_) => true,
             _              => false,
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `pair?`".to_string())
     }
 }
 
-fn atom_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn atom_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::Pair(_) => false,
             _              => true,
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `atom?`".to_string())
     }
 }
 
-fn eq_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn eq_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(*a == *b)))
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(*a == *b))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `eq?`".to_string())
     }
 }
 
-fn symbol_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn symbol_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::Symbol(_) => true,
             _                => false
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `symbol?`".to_string())
     }
 }
 
-fn number_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn number_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::Integer(_) => true,
             _                 => false
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `number?`".to_string())
     }
 }
 
-fn string_question(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn string_question(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref arg] = args.as_slice() {
-        Ok(Rooted::new(heap, Value::new_boolean(match **arg {
+        Ok(Trampoline::Value(Rooted::new(heap, Value::new_boolean(match **arg {
             Value::String(_) => true,
             _                => false
-        })))
+        }))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `string?`".to_string())
     }
 }
 
-fn number_equal(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn number_equal(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use = with non-numbers".to_string()));
+            "Error: cannot use `=` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use = with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_boolean(first == second)))
+            "Error: cannot use `=` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_boolean(first == second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `=`".to_string())
     }
 }
 
-fn gt(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn gt(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use > with non-numbers".to_string()));
+            "Error: cannot use `>` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use > with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_boolean(first > second)))
+            "Error: cannot use `>` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_boolean(first > second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `>`".to_string())
     }
 }
 
-fn lt(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn lt(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use < with non-numbers".to_string()));
+            "Error: cannot use `<` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use < with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_boolean(first < second)))
+            "Error: cannot use `<` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_boolean(first < second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `<`".to_string())
     }
 }
 
-fn add(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn add(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use + with non-numbers".to_string()));
+            "Error: cannot use `+` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use + with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_integer(first + second)))
+            "Error: cannot use `+` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_integer(first + second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `+`".to_string())
     }
 }
 
-fn subtract(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn subtract(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use - with non-numbers".to_string()));
+            "Error: cannot use `-` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use - with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_integer(first - second)))
+            "Error: cannot use `-` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_integer(first - second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `-`".to_string())
     }
 }
 
-fn divide(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn divide(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use / with non-numbers".to_string()));
+            "Error: cannot use `/` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use / with non-numbers".to_string()));
+            "Error: cannot use `/` with non-numbers".to_string()));
         if second == 0 {
-            return Err("Divide by zero".to_string());
+            return Err("Error: divide by zero".to_string());
         }
-        Ok(Rooted::new(heap, Value::new_integer(first / second)))
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_integer(first / second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `/`".to_string())
     }
 }
 
-fn multiply(heap: &mut Heap, args: Vec<RootedValue>) -> SchemeResult {
+fn multiply(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     if let [ref a, ref b] = args.as_slice() {
         let first = try!(a.to_integer().ok_or(
-            "Cannot use * with non-numbers".to_string()));
+            "Error: cannot use `*` with non-numbers".to_string()));
         let second = try!(b.to_integer().ok_or(
-            "Cannot use * with non-numbers".to_string()));
-        Ok(Rooted::new(heap, Value::new_integer(first * second)))
+            "Error: cannot use `*` with non-numbers".to_string()));
+        Ok(Trampoline::Value(
+            Rooted::new(heap, Value::new_integer(first * second))))
     } else {
-        Err("Bad arguments".to_string())
+        Err("Error: bad arguments to `*`".to_string())
     }
 }
 
@@ -460,7 +469,7 @@ mod tests {
         let error = evaluate_file(heap, "./tests/test_primitives_error.scm")
             .err()
             .expect("Should get an error evaluating this file.");
-        assert_eq!(error, "./tests/test_primitives_error.scm:1:0:\n\
+        assert_eq!(error, "./tests/test_primitives_error.scm:1:1:\n\
                            ERROR!\n\
                            \t\"got an error:\"\n\
                            \t(1 2)");

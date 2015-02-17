@@ -320,17 +320,16 @@ pub fn apply_invocation(heap: &mut Heap,
                         args: Vec<RootedValue>) -> TrampolineResult {
     match **proc_val {
         Value::Primitive(primitive) => {
-            let result = try!(primitive.call(heap, args));
-            return Ok(Trampoline::Value(result));
+            return primitive.call(heap, args);
         },
 
         Value::Procedure(proc_ptr) => {
             match proc_ptr.arity.cmp(&(args.len() as u32)) {
                 Ordering::Less => {
-                    return Err("Too many arguments passed".to_string());
+                    return Err("Error: too many arguments passed".to_string());
                 },
                 Ordering::Greater => {
-                    return Err("Too few arguments passed".to_string());
+                    return Err("Error: too few arguments passed".to_string());
                 },
                 _ => {
                     let proc_act = proc_ptr.act.as_ref()
@@ -348,7 +347,7 @@ pub fn apply_invocation(heap: &mut Heap,
         },
 
         _ => {
-            return Err(format!("Expected a procedure, found {}",
+            return Err(format!("Error: expected a procedure to call, found {}",
                                **proc_val));
         }
     }

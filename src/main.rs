@@ -54,7 +54,7 @@ pub fn repl(heap: &mut heap::Heap) {
                 Ok(form) => {
                     match eval::evaluate(heap, &form, location) {
                         Ok(val) => println!("{}", *val),
-                        Err(e)  => println!("Error: {}", e),
+                        Err(e)  => println!("{}", e),
                     };
 
                 }
@@ -80,7 +80,7 @@ pub fn main() {
             Ok(_) => { },
             Err(msg) => {
                 let mut stderr = old_io::stdio::stderr();
-                (write!(&mut stderr, "Error: {}", msg)).ok().expect("IO ERROR!");
+                (write!(&mut stderr, "{}", msg)).ok().expect("IO ERROR!");
                 return;
             }
         }
