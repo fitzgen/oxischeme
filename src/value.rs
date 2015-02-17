@@ -382,18 +382,63 @@ impl ToGcThing for Value {
     }
 }
 
+fn print(f: &mut fmt::Formatter, val: &Value, seen: &mut HashSet<ConsPtr>) -> fmt::Result {
+    match *val {
+        Value::EmptyList        => write!(f, "()"),
+        Value::Pair(ref cons)   => {
+            try!(write!(f, "("));
+            try!(print_pair(f, cons, seen));
+            write!(f, ")")
+        },
+        Value::String(ref str)  => {
+            try!(write!(f, "\""));
+            try!(write!(f, "{}", **str));
+            write!(f, "\"")
+        },
+        Value::Symbol(ref s)    => write!(f, "{}", **s),
+        Value::Integer(ref i)   => write!(f, "{}", i),
+        Value::Boolean(ref b)   => {
+            write!(f, "{}", if *b {
+                "#t"
+            } else {
+                "#f"
+            })
+        },
+        Value::Character(ref c) => match *c {
+            '\n' => write!(f, "#\\newline"),
+            '\t' => write!(f, "#\\tab"),
+            ' '  => write!(f, "#\\space"),
+            _    => write!(f, "#\\{}", c),
+        },
+        Value::Procedure(ref p) => write!(f, "#<procedure {:?}>", p),
+        Value::Primitive(ref p) => write!(f, "#<procedure {:?}>", p),
+    }
+}
+
 /// Print the given cons pair, without the containing "(" and ")".
-fn print_pair(f: &mut fmt::Formatter, cons: &ConsPtr) -> fmt::Result {
-    try!(write!(f, "{}", &cons.car));
+fn print_pair(f: &mut fmt::Formatter, cons: &ConsPtr, seen: &mut HashSet<ConsPtr>) -> fmt::Result {
+    if seen.contains(cons) {
+        return write!(f, "<cyclic value>");
+    }
+    seen.insert(*cons);
+
+    try!(print(f, &cons.car, seen));
+
+    if let Value::Pair(rest) = cons.cdr {
+        if seen.contains(&rest) {
+            return write!(f, " . <cyclic value>");
+        }
+    }
+
     match cons.cdr {
         Value::EmptyList => Ok(()),
         Value::Pair(ref cdr) => {
             try!(write!(f, " "));
-            print_pair(f, cdr)
+            print_pair(f, cdr, seen)
         },
         ref val => {
             try!(write!(f, " . "));
-            write!(f, "{}", val)
+            print(f, val, seen)
         },
     }
 }
@@ -402,36 +447,7 @@ impl fmt::Display for Value {
     /// Print the given value's text representation to the given writer. This is
     /// the opposite of `Read`.
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Value::EmptyList        => write!(f, "()"),
-            Value::Pair(ref cons)   => {
-                try!(write!(f, "("));
-                try!(print_pair(f, cons));
-                write!(f, ")")
-            },
-            Value::String(ref str)  => {
-                try!(write!(f, "\""));
-                try!(write!(f, "{}", **str));
-                write!(f, "\"")
-            },
-            Value::Symbol(ref s)    => write!(f, "{}", **s),
-            Value::Integer(ref i)   => write!(f, "{}", i),
-            Value::Boolean(ref b)   => {
-                write!(f, "{}", if *b {
-                    "#t"
-                } else {
-                    "#f"
-                })
-            },
-            Value::Character(ref c) => match *c {
-                '\n' => write!(f, "#\\newline"),
-                '\t' => write!(f, "#\\tab"),
-                ' '  => write!(f, "#\\space"),
-                _    => write!(f, "#\\{}", c),
-            },
-            Value::Procedure(ref p) => write!(f, "#<procedure {:?}>", p),
-            Value::Primitive(ref p) => write!(f, "#<procedure {:?}>", p),
-        }
+        print(f, self, &mut HashSet::new())
     }
 }
 
@@ -514,3 +530,17 @@ impl Cons {
     // TODO FITZGEN ...
 }
 
+#[cfg(test)]
+mod tests {
+    use eval::{evaluate_file};
+    use heap::{Heap};
+
+    #[test]
+    fn test_print_cycle() {
+        let heap = &mut Heap::new();
+        evaluate_file(heap, "./tests/test_print_cycle.scm")
+            .ok()
+            .expect("Should be able to eval a file.");
+        assert!(true, "Shouldn't get stuck in an infinite loop printing a cyclic value");
+    }
+}
