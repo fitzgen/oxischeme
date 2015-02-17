@@ -460,7 +460,10 @@ mod tests {
         let error = evaluate_file(heap, "./tests/test_primitives_error.scm")
             .err()
             .expect("Should get an error evaluating this file.");
-        assert_eq!(error, "ERROR!\n\t\"got an error:\"\n\t(1 2)");
+        assert_eq!(error, "./tests/test_primitives_error.scm:1:0:\n\
+                           ERROR!\n\
+                           \t\"got an error:\"\n\
+                           \t(1 2)");
     }
 
     #[test]

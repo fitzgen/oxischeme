@@ -83,8 +83,14 @@ pub fn evaluate(heap: &mut Heap, form: &RootedValue, location: Location) -> Sche
 /// Evaluate the file at the given path and return the value of the last form.
 pub fn evaluate_file(heap: &mut Heap, file_path: &str) -> SchemeResult {
     use read::read_from_file;
-    let reader = try!(read_from_file(file_path, heap).ok().ok_or(
-        "Failed to read from file".to_string()));
+    let reader = match read_from_file(file_path, heap) {
+        Ok(r) => r,
+        Err(e) => {
+            return Err(format!("Error: evaluate_file could not read {}: {}",
+                               file_path,
+                               e));
+        },
+    };
 
     let mut result = Rooted::new(heap, Value::EmptyList);
     for (location, read_result) in reader {
@@ -115,14 +121,11 @@ impl Trampoline {
                 let mut a = act;
                 let mut m = meaning;
                 loop {
-                    match m.evaluate_to_thunk(heap, &mut a) {
-                        Err(msg) => return Err(format!("{}: {}",
-                                                       m.location,
-                                                       msg)),
-                        Ok(Trampoline::Value(v)) => {
+                    match try!(m.evaluate_to_thunk(heap, &mut a)) {
+                        Trampoline::Value(v) => {
                             return Ok(v);
                         },
-                        Ok(Trampoline::Thunk(aa, mm)) => {
+                        Trampoline::Thunk(aa, mm) => {
                             a = aa;
                             m = mm;
                         },
@@ -453,7 +456,12 @@ impl Meaning {
     fn evaluate_to_thunk(&self,
                          heap: &mut Heap,
                          act: &mut RootedActivationPtr) -> TrampolineResult {
-        (self.evaluator)(heap, &*self.data, act)
+        match (self.evaluator)(heap, &*self.data, act) {
+            // Add this location to the error message. These stack up and give a
+            // backtrace.
+            Err(e) => Err(format!("{}:\n{}", self.location, e)),
+            ok => ok
+        }
     }
 
     /// Evaluate this form completely, trampolining all thunks until a value is
