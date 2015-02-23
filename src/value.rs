@@ -126,8 +126,8 @@ impl Trace for Procedure {
     }
 }
 
-impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Procedure {
-    fn hash(&self, state: &mut S) {
+impl hash::Hash for Procedure {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.arity.hash(state);
         self.act.hash(state);
         self.body.as_ref()
@@ -165,8 +165,8 @@ impl PartialEq for Primitive {
 
 impl Eq for Primitive { }
 
-impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Primitive {
-    fn hash(&self, state: &mut S) {
+impl hash::Hash for Primitive {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         let u = self.function as usize;
         u.hash(state);
     }

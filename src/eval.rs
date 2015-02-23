@@ -489,8 +489,8 @@ impl fmt::Display for Meaning {
     }
 }
 
-impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Meaning {
-    fn hash(&self, state: &mut S) {
+impl hash::Hash for Meaning {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         let u = self.evaluator as usize;
         u.hash(state);
         self.data.hash(state);

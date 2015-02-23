@@ -124,8 +124,8 @@ impl Activation {
     }
 }
 
-impl<S: hash::Writer + hash::Hasher> hash::Hash<S> for Activation {
-    fn hash(&self, state: &mut S) {
+impl hash::Hash for Activation {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.parent.hash(state);
         for v in self.vals.iter() {
             v.hash(state);

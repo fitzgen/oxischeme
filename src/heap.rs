@@ -130,7 +130,7 @@
 //! * When in doubt, Just Root It!
 
 use std::cmp;
-use std::collections::{Bitv, HashMap};
+use std::collections::{BitVec, HashMap};
 use std::default::{Default};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
@@ -156,7 +156,7 @@ pub struct Arena<T> {
 
     /// During a GC, if the nth bit of `marked` is set, that means that the nth
     /// object in `pool` has been marked as reachable.
-    marked: Bitv,
+    marked: BitVec,
 }
 
 impl<T: Default> Arena<T> {
@@ -167,7 +167,7 @@ impl<T: Default> Arena<T> {
         Box::new(Arena {
             pool: range(0, capacity).map(|_| Default::default()).collect(),
             free: range(0, capacity).collect(),
-            marked: Bitv::from_elem(capacity, false),
+            marked: BitVec::from_elem(capacity, false),
         })
     }
 
