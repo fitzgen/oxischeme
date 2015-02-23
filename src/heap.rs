@@ -479,6 +479,7 @@ pub struct Heap {
     symbol_table: HashMap<String, StringPtr>,
     global_activation: ActivationPtr,
     allocations: usize,
+    allocations_threshold: usize,
 
     locations: HashMap<ConsPtr, Location>,
 }
@@ -515,7 +516,7 @@ impl Heap {
         let mut env = Environment::new();
         define_primitives(&mut env, &mut global_act);
 
-        Heap {
+        let mut h = Heap {
             environment: env,
 
             cons_cells: cons_cells,
@@ -527,9 +528,14 @@ impl Heap {
             roots: vec!(),
             symbol_table: HashMap::new(),
             allocations: 0,
+            allocations_threshold: 0,
 
             locations: HashMap::new()
-        }
+        };
+
+        h.reset_gc_pressure();
+
+        h
     }
 }
 
@@ -579,10 +585,6 @@ impl Heap {
         Rooted::new(self, p)
     }
 }
-
-/// The maximum number of GC things to allocate before triggering a garbage
-/// collection.
-const MAX_GC_PRESSURE : usize = 1 << 9;
 
 /// ## `Heap` Methods for Garbage Collection
 impl Heap {
@@ -688,13 +690,19 @@ impl Heap {
     /// Returns true when we have built up too much GC pressure, and it is time
     /// to collect garbage. False otherwise.
     fn is_too_much_pressure(&mut self) -> bool {
-        self.allocations > MAX_GC_PRESSURE
+        self.allocations > self.allocations_threshold
     }
 
     /// Resets the GC pressure, so that it must build all the way back up to the
     /// max again before a GC is triggered.
+    #[inline]
     fn reset_gc_pressure(&mut self) {
         self.allocations = 0;
+        self.allocations_threshold =
+            ((self.cons_cells.capacity / 2) * self.cons_cells.arenas.len())
+            + ((self.strings.capacity / 2) * self.strings.arenas.len())
+            + ((self.activations.capacity / 2) * self.activations.arenas.len())
+            + ((self.procedures.capacity / 2) * self.procedures.arenas.len());
     }
 }
 
