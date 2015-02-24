@@ -150,24 +150,24 @@ enum MeaningData {
 
     /// Push a new binding to the current activation with the value of the given
     /// meaning.
-    Definition(u32, u32, Meaning),
+    Definition(u32, u32, Box<Meaning>),
 
     /// Set the (i'th activation, j'th binding) to the value of the given
     /// meaning.
-    SetVariable(u32, u32, Meaning),
+    SetVariable(u32, u32, Box<Meaning>),
 
     /// Condition, consequent, and alternative.
-    Conditional(Meaning, Meaning, Meaning),
+    Conditional(Box<Meaning>, Box<Meaning>, Box<Meaning>),
 
     /// Evaluate the first meaning (presumable for side-effects, before
     /// evaluating and returning the second meaning.
-    Sequence(Meaning, Meaning),
+    Sequence(Box<Meaning>, Box<Meaning>),
 
     /// Arity and body.
-    Lambda(u32, Meaning),
+    Lambda(u32, Box<Meaning>),
 
     /// Procedure and parameters.
-    Invocation(Meaning, Vec<Meaning>),
+    Invocation(Box<Meaning>, Vec<Box<Meaning>>),
 }
 
 impl fmt::Display for MeaningData {
@@ -284,9 +284,9 @@ fn evaluate_conditional(heap: &mut Heap,
         let val = try!(condition.evaluate(heap, act));
         return Ok(Trampoline::Thunk(Rooted::new(heap, **act),
                                     if *val == Value::new_boolean(false) {
-                                        (*alternative).clone()
+                                        (**alternative).clone()
                                     } else {
-                                        (*consequent).clone()
+                                        (**consequent).clone()
                                     }));
     }
 
@@ -298,7 +298,7 @@ fn evaluate_sequence(heap: &mut Heap,
                      act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Sequence(ref first, ref second) = *data {
         try!(first.evaluate(heap, act));
-        return Ok(Trampoline::Thunk(Rooted::new(heap, **act), second.clone()));
+        return Ok(Trampoline::Thunk(Rooted::new(heap, **act), (**second).clone()));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -309,7 +309,7 @@ fn evaluate_lambda(heap: &mut Heap,
                    act: &mut RootedActivationPtr) -> TrampolineResult {
     if let MeaningData::Lambda(arity, ref body) = *data {
         return Ok(Trampoline::Value(
-            Value::new_procedure(heap, arity, act, (*body).clone())));
+            Value::new_procedure(heap, arity, act, (**body).clone())));
     }
 
     panic!("unsynchronized MeaningData and MeaningEvaluatorFn");
@@ -371,7 +371,7 @@ fn evaluate_invocation(heap: &mut Heap,
 /// originates from.
 #[derive(Debug)]
 pub struct Meaning {
-    data: Box<MeaningData>,
+    data: MeaningData,
     evaluator: MeaningEvaluatorFn,
     location: Location,
 }
@@ -380,7 +380,7 @@ pub struct Meaning {
 impl Meaning {
     fn new_quotation(form: &RootedValue, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Quotation((*form).clone())),
+            data: MeaningData::Quotation((*form).clone()),
             evaluator: evaluate_quotation,
             location: location
         }
@@ -388,7 +388,7 @@ impl Meaning {
 
     fn new_reference(i: u32, j: u32, name: String, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Reference(i, j, name)),
+            data: MeaningData::Reference(i, j, name),
             evaluator: evaluate_reference,
             location: location
         }
@@ -396,7 +396,7 @@ impl Meaning {
 
     fn new_set_variable(i: u32, j: u32, val: Meaning, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::SetVariable(i, j, val)),
+            data: MeaningData::SetVariable(i, j, Box::new(val)),
             evaluator: evaluate_set_variable,
             location: location,
         }
@@ -407,9 +407,9 @@ impl Meaning {
                        alternative: Meaning,
                        location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Conditional(condition,
-                                                    consquent,
-                                                    alternative)),
+            data: MeaningData::Conditional(Box::new(condition),
+                                           Box::new(consquent),
+                                           Box::new(alternative)),
             evaluator: evaluate_conditional,
             location: location,
         }
@@ -417,7 +417,7 @@ impl Meaning {
 
     fn new_sequence(first: Meaning, second: Meaning, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Sequence(first, second)),
+            data: MeaningData::Sequence(Box::new(first), Box::new(second)),
             evaluator: evaluate_sequence,
             location: location,
         }
@@ -425,7 +425,7 @@ impl Meaning {
 
     fn new_definition(i: u32, j: u32, defined: Meaning, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Definition(i, j, defined)),
+            data: MeaningData::Definition(i, j, Box::new(defined)),
             evaluator: evaluate_definition,
             location: location,
         }
@@ -433,7 +433,7 @@ impl Meaning {
 
     fn new_lambda(arity: u32, body: Meaning, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Lambda(arity, body)),
+            data: MeaningData::Lambda(arity, Box::new(body)),
             evaluator: evaluate_lambda,
             location: location,
         }
@@ -441,7 +441,8 @@ impl Meaning {
 
     fn new_invocation(procedure: Meaning, params: Vec<Meaning>, location: Location) -> Meaning {
         Meaning {
-            data: Box::new(MeaningData::Invocation(procedure, params)),
+            data: MeaningData::Invocation(Box::new(procedure),
+                                          params.into_iter().map(|p| Box::new(p)).collect()),
             evaluator: evaluate_invocation,
             location: location
         }
@@ -455,7 +456,7 @@ impl Meaning {
     fn evaluate_to_thunk(&self,
                          heap: &mut Heap,
                          act: &mut RootedActivationPtr) -> TrampolineResult {
-        match (self.evaluator)(heap, &*self.data, act) {
+        match (self.evaluator)(heap, &self.data, act) {
             // Add this location to the error message. These stack up and give a
             // backtrace.
             Err(e) => Err(format!("{}:\n{}", self.location, e)),
@@ -485,7 +486,7 @@ impl Clone for Meaning {
 
 impl fmt::Display for Meaning {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", *self.data)
+        write!(f, "{}", self.data)
     }
 }
 
