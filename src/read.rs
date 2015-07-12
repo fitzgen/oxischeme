@@ -16,44 +16,13 @@
 
 use std::cell::{RefCell};
 use std::fmt;
+use std::fs;
 use std::iter::{Peekable};
-use std::old_io::{BufferedReader, File, IoError, IoErrorKind, IoResult, MemReader};
+use std::io;
+use std::path;
 
 use heap::{Heap, Rooted};
 use value::{list, RootedValue, SchemeResult, Value};
-
-/// `CharReader` reads characters one at a time from the given input `Reader`.
-struct CharReader<R> {
-    reader: BufferedReader<R>,
-}
-
-impl<R: Reader> CharReader<R> {
-    /// Create a new `CharReader` instance.
-    pub fn new(reader: R) -> CharReader<R> {
-        CharReader {
-            reader: BufferedReader::new(reader)
-        }
-    }
-}
-
-impl<R: Reader> Iterator for CharReader<R> {
-    type Item = char;
-
-    /// Returns `Some(c)` for each character `c` from the input reader. Upon
-    /// reaching EOF, returns `None`.
-    fn next(&mut self) -> Option<char> {
-        match self.reader.read_char() {
-            Ok(c)                   => Some(c),
-            Err(ref e) if is_eof(e) => None,
-            Err(e)                  => panic!("IO ERROR! {}", e),
-        }
-    }
-}
-
-/// Return true if the error is reaching the end of file, false otherwise.
-fn is_eof(err : &IoError) -> bool {
-    err.kind == IoErrorKind::EndOfFile
-}
 
 /// Return true if the character is the start of a comment, false otherwise.
 fn is_comment(c: &char) -> bool {
@@ -142,20 +111,20 @@ impl Clone for Location {
 /// A pair of `SchemeResult` and `Location`.
 pub type SchemeResultAndLocation = (Location, SchemeResult);
 
-/// `Read` iteratively parses values from the input `Reader`.
-pub struct Read<R: Reader> {
-    chars: RefCell<Peekable<CharReader<R>>>,
+/// `Read` iteratively parses values from the input `io::Read`.
+pub struct Read<R: io::Read> {
+    chars: RefCell<Peekable<io::Chars<R>>>,
     current_location: Location,
     result: Result<(), String>,
     heap_ptr: *mut Heap,
     had_error: bool
 }
 
-impl<'a, R: Reader> Read<R> {
-    /// Create a new `Read` instance from the given `Reader` input source.
+impl<'a, R: io::Read> Read<R> {
+    /// Create a new `Read` instance from the given `io::Read` input source.
     pub fn new(reader: R, heap: *mut Heap, file_name: String) -> Read<R> {
         Read {
-            chars: RefCell::new(CharReader::new(reader).peekable()),
+            chars: RefCell::new(reader.chars().peekable()),
             current_location: Location::new(file_name),
             result: Ok(()),
             heap_ptr: heap,
@@ -174,17 +143,15 @@ impl<'a, R: Reader> Read<R> {
     /// Peek at the next character in our input stream.
     fn peek_char(&self) -> Option<char> {
         match self.chars.borrow_mut().peek() {
-            None    => None,
-            Some(c) => Some(*c)
+            Some(&Ok(c)) => Some(c),
+            _            => None,
         }
     }
 
     /// Take the next character from the input stream.
     fn next_char(&mut self) -> Option<char> {
-        let opt_c = self.chars.borrow_mut().next();
-
-        if let Some(ref c) = opt_c.as_ref() {
-            match **c {
+        if let Some(Ok(c)) = self.chars.borrow_mut().next() {
+            match c {
                 '\n' => {
                     self.current_location.line += 1;
                     self.current_location.column = 1;
@@ -193,7 +160,7 @@ impl<'a, R: Reader> Read<R> {
             };
         }
 
-        opt_c
+        None
     }
 
     /// Skip to after the next newline character.
@@ -541,7 +508,7 @@ impl<'a, R: Reader> Read<R> {
     }
 }
 
-impl<R: Reader> Iterator for Read<R> {
+impl<R: io::Read> Iterator for Read<R> {
     type Item = SchemeResultAndLocation;
 
     fn next(&mut self) -> Option<SchemeResultAndLocation> {
@@ -579,6 +546,23 @@ impl<R: Reader> Iterator for Read<R> {
     }
 }
 
+/// TODO FITZGEN
+pub struct MemReader {
+    bytes: Vec<u8>
+}
+
+impl MemReader {
+    fn new(bytes: Vec<u8>) -> Self {
+        MemReader { bytes: bytes }
+    }
+}
+
+impl io::Read for MemReader {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        self.bytes.as_slice().read(buf)
+    }
+}
+
 /// Create a `Read` instance from a byte vector.
 pub fn read_from_bytes(bytes: Vec<u8>,
                        heap: *mut Heap,
@@ -601,10 +585,10 @@ pub fn read_from_str(str: &str,
 }
 
 /// Create a `Read` instance from the file at `path_name`.
-pub fn read_from_file(path_name: &str, heap: *mut Heap) -> IoResult<Read<File>> {
+pub fn read_from_file(path_name: &str, heap: *mut Heap) -> io::Result<Read<fs::File>> {
     let file_name = path_name.clone().to_string();
-    let path = Path::new(path_name);
-    let file = try!(File::open(&path));
+    let path = path::Path::new(path_name);
+    let file = try!(fs::File::open(&path));
     Ok(Read::new(file, heap, file_name))
 }
 

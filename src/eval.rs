@@ -218,12 +218,6 @@ type MeaningEvaluatorFn = fn(&mut Heap,
                              &MeaningData,
                              &mut RootedActivationPtr) -> TrampolineResult;
 
-impl fmt::Debug for MeaningEvaluatorFn {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "0x{:x}", *self as usize)
-    }
-}
-
 #[allow(unused_variables)]
 fn evaluate_quotation(heap: &mut Heap,
                       data: &MeaningData,
@@ -369,11 +363,19 @@ fn evaluate_invocation(heap: &mut Heap,
 /// analysis. It is a triple containing a `MeaningData` variant, its
 /// corresponding `MeaningEvaluatorFn`, and the source location this `Meaning`
 /// originates from.
-#[derive(Debug)]
 pub struct Meaning {
     data: MeaningData,
     evaluator: MeaningEvaluatorFn,
     location: Location,
+}
+
+impl fmt::Debug for Meaning {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(f, "Meaning ( data: {:?}, evaluator: 0x{:x}, location: {:?} )",
+               self.data,
+               self.evaluator as usize,
+               self.location)
+    }
 }
 
 /// ## `Meaning` Constructors
@@ -690,13 +692,20 @@ fn analyze_lambda(heap: &mut Heap,
                                               *params_form))));
     }
 
-    let mut param_names : Vec<String> = try!(params.into_iter().map(|p| {
+    let param_name_results : Vec<Result<String, String>> = params.into_iter().map(|p| {
         let sym = try!(p.to_symbol(heap)
                        .ok_or(format!("{}: Can only define symbol parameters, found {}",
                                       location,
                                       p)));
         Ok((**sym).clone())
-    }).collect());
+    }).collect();
+    let mut param_names : Vec<String> = vec!();
+    for p in param_name_results {
+        match p {
+            Ok(name) => param_names.push(name),
+            Err(why) => return Err(why),
+        };
+    }
 
     // Find any definitions in the body, so we can add them to the extended
     // environment.

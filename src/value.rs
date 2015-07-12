@@ -29,7 +29,7 @@ use primitives::{PrimitiveFunction};
 /// cells, daisy chained together via the `cdr`. A list is "proper" if the last
 /// `cdr` is `Value::EmptyList`, or the scheme value `()`. Otherwise, it is
 /// "improper".
-#[derive(Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct Cons {
     car: Value,
     cdr: Value,
@@ -149,13 +149,23 @@ impl ToGcThing for ProcedurePtr {
 pub type RootedProcedurePtr = Rooted<ProcedurePtr>;
 
 /// A primitive procedure, such as Scheme's `+` or `cons`.
-#[derive(Copy)]
 pub struct Primitive {
     /// The function implementing the primitive.
     function: PrimitiveFunction,
     /// The name of the primitive.
     name: &'static str,
 }
+
+impl Clone for Primitive {
+    fn clone(&self) -> Self {
+        Primitive {
+            function: self.function,
+            name: self.name,
+        }
+    }
+}
+
+impl ::std::marker::Copy for Primitive { }
 
 impl PartialEq for Primitive {
     fn eq(&self, rhs: &Self) -> bool {
@@ -189,7 +199,7 @@ impl fmt::Debug for Primitive {
 ///
 /// Note that `Eq` and `PartialEq` are object identity, not structural
 /// comparison, same as with [`ArenaPtr`](struct.ArenaPtr.html).
-#[derive(Copy, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug)]
 pub enum Value {
     /// The empty list: `()`.
     EmptyList,
@@ -273,7 +283,7 @@ impl Value {
     pub fn new_string(heap: &mut Heap, str: String) -> RootedValue {
         let mut value = heap.allocate_string();
         value.clear();
-        value.push_str(str.as_slice());
+        value.push_str(&*str);
         Rooted::new(heap, Value::String(*value))
     }
 
@@ -463,7 +473,7 @@ pub type SchemeResult = Result<RootedValue, String>;
 /// For example: the list `(1 2 3)` would yield `Ok(1)`, `Ok(2)`, `Ok(3)`,
 /// `None`, while the improper list `(1 2 . 3)` would yield `Ok(1)`, `Ok(2)`,
 /// `Err`.
-#[derive(Copy)]
+#[derive(Clone, Copy)]
 pub struct ConsIterator {
     val: Value
 }

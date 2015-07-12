@@ -111,9 +111,9 @@ fn apply(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
 }
 
 fn error(_: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
-    let mut string = String::from_str("ERROR!");
+    let mut string = String::from("ERROR!");
     for val in args.iter() {
-        string.push_str(format!("\n\t{}", **val).as_slice());
+        string.push_str(&*format!("\n\t{}", **val));
     }
     Err(string)
 }
@@ -128,13 +128,13 @@ fn print(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
 fn read(heap: &mut Heap, args: Vec<RootedValue>) -> TrampolineResult {
     // Only supports reading from stdin right now.
 
-    use std::old_io;
+    use std::io;
 
     if args.len() != 0 {
         return Err("`read` called with too many parameters".to_string());
     }
 
-    let stdin = old_io::stdio::stdin();
+    let stdin = io::stdin();
     let reader = Read::new(stdin, heap, "stdin".to_string());
     for (_, read_result) in reader {
         let form = try!(read_result);

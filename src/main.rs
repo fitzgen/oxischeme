@@ -14,16 +14,17 @@
 
 //! A Scheme implementation, in Rust.
 
-#![feature(collections)]
-#![feature(core)]
-#![feature(env)]
-#![feature(old_io)]
-#![feature(old_path)]
+#![feature(append)]
+#![feature(convert)]
+#![feature(drain)]
+#![feature(io)]
+#![feature(ptr_as_ref)]
+#![feature(slice_patterns)]
 #![feature(test)]
-#![feature(unicode)]
-#![feature(unsafe_destructor)]
 
-use std::old_io;
+extern crate bit_vec;
+
+use std::io;
 use std::env;
 
 pub mod environment;
@@ -40,7 +41,7 @@ pub fn repl(heap: &mut heap::Heap) {
     println!("");
 
     loop {
-        let stdin = old_io::stdio::stdin();
+        let stdin = io::stdin();
         let reader = read::Read::new(stdin, heap, "stdin".to_string());
 
         print!("oxischeme> ");
@@ -75,11 +76,10 @@ pub fn main() {
     for file_path in env::args().skip(1) {
         args_were_passed = true;
 
-        match eval::evaluate_file(heap, file_path.as_slice()) {
+        match eval::evaluate_file(heap, &*file_path) {
             Ok(_) => { },
             Err(msg) => {
-                let mut stderr = old_io::stdio::stderr();
-                (write!(&mut stderr, "{}", msg)).ok().expect("IO ERROR!");
+                println!("{}", msg);
                 return;
             }
         }

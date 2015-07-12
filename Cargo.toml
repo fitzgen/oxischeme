@@ -12,3 +12,6 @@ documentation="https://fitzgen.github.io/oxischeme/oxischeme/index.html"
 readme="README.md"
 
 keywords=["scheme", "language", "gc"]
+
+[dependencies]
+bit-vec = "0.4.0"

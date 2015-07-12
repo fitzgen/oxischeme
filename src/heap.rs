@@ -130,11 +130,13 @@
 //! * When in doubt, Just Root It!
 
 use std::cmp;
-use std::collections::{BitVec, HashMap};
+use std::collections::{HashMap};
 use std::default::{Default};
 use std::fmt;
 use std::ops::{Deref, DerefMut};
 use std::vec::{IntoIter};
+
+use bit_vec::BitVec;
 
 use environment::{Activation, ActivationPtr, RootedActivationPtr, Environment};
 use primitives::{define_primitives};
@@ -165,8 +167,8 @@ impl<T: Default> Arena<T> {
     pub fn new(capacity: usize) -> Box<Arena<T>> {
         assert!(capacity > 0);
         Box::new(Arena {
-            pool: range(0, capacity).map(|_| Default::default()).collect(),
-            free: range(0, capacity).collect(),
+            pool: (0..capacity).map(|_| Default::default()).collect(),
+            free: (0..capacity).collect(),
             marked: BitVec::from_elem(capacity, false),
         })
     }
@@ -204,7 +206,7 @@ impl<T: Default> Arena<T> {
 
     /// Sweep the arena and add any reclaimed objects back to the free list.
     pub fn sweep(&mut self) {
-        self.free = range(0, self.capacity())
+        self.free = (0..self.capacity())
             .filter(|&n| {
                 !self.marked.get(n)
                     .expect("`marked` should always have length == self.capacity()")
@@ -271,10 +273,18 @@ pub struct ArenaPtr<T> {
     index: usize,
 }
 
-// XXX: We have to manually declare that ArenaPtr<T> is copy-able because if we
-// use `#[derive(Copy)]` it wants T to be copy-able as well, despite the fact
-// that we only need to copy our pointer to the Arena<T>, not any T or the Arena
-// itself.
+// XXX: We have to manually declare that ArenaPtr<T> is clone-able and copy-able
+// because if we use `#[derive(Copy)]` it wants T to be copy-able as well,
+// despite the fact that we only need to copy our pointer to the Arena<T>, not
+// any T or the Arena itself.
+impl<T> Clone for ArenaPtr<T> {
+    fn clone(&self) -> Self {
+        ArenaPtr {
+            arena: self.arena,
+            index: self.index,
+        }
+    }
+}
 impl<T> ::std::marker::Copy for ArenaPtr<T> { }
 
 impl<T: Default> ArenaPtr<T> {
@@ -364,7 +374,7 @@ pub trait ToGcThing: fmt::Debug {
 /// the module level documentation about rooting.
 #[allow(raw_pointer_derive)]
 #[derive(Hash, Debug)]
-pub struct Rooted<T> {
+pub struct Rooted<T: ToGcThing> {
     heap: *mut Heap,
     ptr: T,
 }
@@ -415,20 +425,19 @@ impl<T: ToGcThing> ToGcThing for Rooted<T> {
     }
 }
 
-impl<T> Deref for Rooted<T> {
+impl<T: ToGcThing> Deref for Rooted<T> {
     type Target = T;
     fn deref<'a>(&'a self) -> &'a T {
         &self.ptr
     }
 }
 
-impl<T> DerefMut for Rooted<T> {
+impl<T: ToGcThing> DerefMut for Rooted<T> {
     fn deref_mut<'a>(&'a mut self) -> &'a mut T {
         &mut self.ptr
     }
 }
 
-#[unsafe_destructor]
 impl<T: ToGcThing> Drop for Rooted<T> {
     fn drop(&mut self) {
         self.drop_root();
@@ -445,12 +454,12 @@ impl<T: Copy + ToGcThing> Clone for Rooted<T> {
     }
 }
 
-impl<T: PartialEq> PartialEq for Rooted<T> {
+impl<T: PartialEq + ToGcThing> PartialEq for Rooted<T> {
     fn eq(&self, rhs: &Self) -> bool {
         **self == **rhs
     }
 }
-impl<T: PartialEq + Eq> Eq for Rooted<T> { }
+impl<T: PartialEq + Eq + ToGcThing> Eq for Rooted<T> { }
 
 /// A pointer to a string on the heap.
 pub type StringPtr = ArenaPtr<String>;
@@ -599,7 +608,7 @@ impl Heap {
         while !pending_trace.is_empty() {
             let mut newly_pending_trace = vec!();
 
-            for thing in pending_trace.drain() {
+            for thing in pending_trace.drain(..) {
                 if !thing.is_marked() {
                     thing.mark();
 
@@ -748,14 +757,14 @@ impl Heap {
     /// and return it.
     pub fn get_or_create_symbol(&mut self, str: String) -> RootedValue {
         if self.symbol_table.contains_key(&str) {
-            let sym_ptr = self.symbol_table[str];
+            let sym_ptr = self.symbol_table[&str];
             let rooted_sym_ptr = Rooted::new(self, sym_ptr);
             return Value::new_symbol(self, rooted_sym_ptr);
         }
 
         let mut symbol = self.allocate_string();
         symbol.clear();
-        symbol.push_str(str.as_slice());
+        symbol.push_str(&*str);
         self.symbol_table.insert(str, *symbol);
         return Value::new_symbol(self, symbol);
     }
@@ -828,7 +837,7 @@ pub trait Trace {
 }
 
 /// The union of the various types that are GC things.
-#[derive(Copy, Eq, Hash, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq, Debug)]
 pub enum GcThing {
     Cons(ConsPtr),
     String(StringPtr),
