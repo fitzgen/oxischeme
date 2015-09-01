@@ -36,8 +36,8 @@ fn is_delimiter(c: &char) -> bool {
 
 /// Return true if we have EOF (`None`) or a delimiting character, false
 /// otherwise.
-fn is_eof_or_delimiter(oc: &Option<char>) -> bool {
-    match *oc {
+fn is_eof_or_delimiter(opt_char: &Option<char>) -> bool {
+    match *opt_char {
         None                           => true,
         Some(ref c) if is_delimiter(c) => true,
         _                              => false,
@@ -115,7 +115,6 @@ pub type SchemeResultAndLocation = (Location, SchemeResult);
 pub struct Read<R: io::Read> {
     chars: RefCell<Peekable<io::Chars<R>>>,
     current_location: Location,
-    result: Result<(), String>,
     heap_ptr: *mut Heap,
     had_error: bool
 }
@@ -126,7 +125,6 @@ impl<'a, R: io::Read> Read<R> {
         Read {
             chars: RefCell::new(reader.chars().peekable()),
             current_location: Location::new(file_name),
-            result: Ok(()),
             heap_ptr: heap,
             had_error: false,
         }
@@ -158,6 +156,7 @@ impl<'a, R: io::Read> Read<R> {
                 },
                 _ => self.current_location.column += 1,
             };
+            return Some(c);
         }
 
         None
@@ -190,12 +189,6 @@ impl<'a, R: io::Read> Read<R> {
                 self.next_char();
             }
         }
-    }
-
-    /// Get the results of parsing thus far. If there was an error parsing, a
-    /// diagnostic message will be the value of the error.
-    pub fn get_result(&'a self) -> &'a Result<(), String> {
-        &self.result
     }
 
     /// Report a failure reading values.
@@ -327,19 +320,34 @@ impl<'a, R: io::Read> Read<R> {
 
         // Deterimine if this is a boolean or a character.
         match [self.next_char(), self.peek_char()] {
-            [Some('t'), d] if is_eof_or_delimiter(&d)  => {
-                self.root(loc, Value::new_boolean(true))
+            [Some('t'), d]  => {
+                println!("FITZGEN: 1");
+                if is_eof_or_delimiter(&d) {
+                    self.root(loc, Value::new_boolean(true))
+                } else {
+                    self.unexpected_character(&d.unwrap())
+                }
             },
-            [Some('f'), d] if is_eof_or_delimiter(&d)  => {
-                self.root(loc, Value::new_boolean(false))
+            [Some('f'), d]  => {
+                println!("FITZGEN: 2");
+                if is_eof_or_delimiter(&d) {
+                    self.root(loc, Value::new_boolean(false))
+                } else {
+                    self.unexpected_character(&d.unwrap())
+                }
             },
-            [Some('\\'), _]                            => {
+            [Some('\\'), _] => {
+                println!("FITZGEN: 3");
                 self.read_character(loc)
             },
-            [Some(c), _]                               => {
+            [Some(c), _]    => {
+                println!("FITZGEN: 4");
                 self.unexpected_character(&c)
             },
-            _                                          => None,
+            _               => {
+                println!("FITZGEN: 5");
+                self.unexpected_eof()
+            },
         }
     }
 
@@ -581,7 +589,7 @@ pub fn read_from_string(string: String,
 pub fn read_from_str(str: &str,
                      heap: *mut Heap,
                      file_name: &str) -> Read<MemReader> {
-    read_from_string(str.to_string(), heap, file_name)
+    read_from_string(str.into(), heap, file_name)
 }
 
 /// Create a `Read` instance from the file at `path_name`.

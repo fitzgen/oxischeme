@@ -25,6 +25,7 @@
 extern crate bit_vec;
 
 use std::io;
+use std::io::Write;
 use std::env;
 
 pub mod environment;
@@ -33,6 +34,11 @@ pub mod heap;
 pub mod primitives;
 pub mod read;
 pub mod value;
+
+fn prompt() {
+    print!("oxischeme> ");
+    io::stdout().flush().ok().expect("flush error");
+}
 
 /// Start a Read -> Evaluate -> Print loop.
 pub fn repl(heap: &mut heap::Heap) {
@@ -44,7 +50,8 @@ pub fn repl(heap: &mut heap::Heap) {
         let stdin = io::stdin();
         let reader = read::Read::new(stdin, heap, "stdin".to_string());
 
-        print!("oxischeme> ");
+        prompt();
+
         for (location, read_result) in reader {
             match read_result {
                 Err(msg) => {
@@ -61,7 +68,7 @@ pub fn repl(heap: &mut heap::Heap) {
             }
 
             heap.collect_garbage();
-            print!("oxischeme> ");
+            prompt();
         }
     }
 }
@@ -79,7 +86,7 @@ pub fn main() {
         match eval::evaluate_file(heap, &*file_path) {
             Ok(_) => { },
             Err(msg) => {
-                println!("{}", msg);
+                write!(&mut io::stderr(), "{}", msg).ok().expect("IO ERROR");
                 return;
             }
         }
